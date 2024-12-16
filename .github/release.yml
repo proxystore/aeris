@@ -1,0 +1,45 @@
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+    authors:
+      - pre-commit-ci
+  categories:
+    # Provide steps for upgrading the package and adjusting for
+    # breaking changes. No PRs included here.
+    - title: Upgrade Steps
+      exclude:
+        labels:
+          - "*"
+    # All PRs tagged as "breaking"
+    - title: Breaking Changes
+      labels:
+        - breaking
+    # All PRs tagged as "enhancement"
+    - title: New Features
+      labels:
+        - enhancement
+    # All PRs tagged as "bug"
+    - title: Bug Fixes
+      labels:
+        - bug
+    # All PRs not tagged as the above or below
+    - title: Improvements
+      labels:
+        - refactor
+      exclude:
+        labels:
+          - dependencies
+          - documentation
+    # All PRs tagged as documentation
+    - title: Improvements
+      labels:
+        - documentation
+    # All PRs tagged "dependencies"
+    - title: Dependencies
+      labels:
+        - dependencies
+    # All PRs not tagged as the above
+    - title: Other Changes
+      labels:
+        - "*"

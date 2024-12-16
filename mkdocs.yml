@@ -1,0 +1,162 @@
+site_name: Python Template
+site_url: https://gpauloski.github.io/python-template
+site_author: FooBar Author
+site_description: Documentation for FooBar.
+
+repo_name: gpauloski/python-template
+repo_url: https://github.com/gpauloski/python-template
+
+copyright: Copyright &copy; 2023—Present FooBar Authors
+
+theme:
+  name: material
+  features:
+    - content.code.annotate
+    - content.code.copy
+    - navigation.path
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+  font:
+    text: Open Sans
+    code: Roboto Mono
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      scheme: default
+      primary: red
+      accent: blue
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: red
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: red
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  overrides: docs/_overrides
+  # favicon: static/favicon.png
+  # icon:
+  #   logo: logo
+
+watch:
+  - mkdocs.yml
+  - README.md
+  - docs/
+  - foobar/
+
+extra:
+  version:
+    default: latest
+    provider: mike
+
+extra_css:
+  - css/mkdocstrings.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: foobar-author
+      repo: foobar
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+nav:
+  - Home:
+      - Overview: index.md
+      - Installation: installation.md
+      - Get Started: get-started.md
+      - Examples: examples.md
+      - Known Issues: known-issues.md
+      - Changelog (GitHub): https://github.com/gpauloski/python-template/releases
+  - Guides:
+      - guides/index.md
+      - Example: guides/example.md
+  - API Reference: api/
+  - Contributing:
+      - contributing/index.md
+      - Style Guide: contributing/style-guide.md
+      - Issues and Pull Requests: contributing/issues-pull-requests.md
+      - Releases: contributing/releases.md
+
+plugins:
+  - mike:
+      alias_type: symlink
+      canonical_version: latest
+  - gen-files:
+      scripts:
+        - docs/generate_api.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - mkdocstrings:
+      custom_templates: docs/templates
+      enable_inventory: true
+      handlers:
+        python:
+          setup_commands:
+            - import pytkdocs_tweaks
+            - pytkdocs_tweaks.main()
+          import:
+            - https://docs.python.org/3/objects.inv
+          options:
+            annotations_path: brief
+            docstring_section_style: list
+            docstring_style: google
+            inherited_members: yes
+            line_length: 60
+            members_order: source
+            merge_init_into_class: yes
+            separate_signature: yes
+            show_object_full_path: no
+            show_root_full_path: yes
+            show_root_heading: no
+            show_root_members_full_path: no
+            show_root_toc_entry: yes
+            show_signature_annotations: yes
+            show_submodules: no
+            show_symbol_type_heading: yes
+            show_symbol_type_toc: yes
+            signature_crossrefs: yes
+  - search
+  - section-index

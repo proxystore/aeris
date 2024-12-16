@@ -1,0 +1,49 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  docs:
+    timeout-minutes: 10
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Get pip cache dir
+        id: pip-cache-dir
+        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
+
+      - name: Use pip cache
+        id: pip-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: docs-ubuntu-latest-pip-3.11-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            docs-ubuntu-latest-pip-3.11-
+
+      - name: Install Packages
+        run: |
+          pip install --upgrade setuptools pip
+          pip install .[docs]
+
+      - name: Configure git
+        run: |
+          git config --local user.name "GitHub Actions Bot"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Deploy docs for main:latest to gh-pages branch
+        run: |
+          mike deploy --push --update-aliases main

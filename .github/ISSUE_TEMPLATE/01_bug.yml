@@ -1,0 +1,42 @@
+name: Bug Report
+description: Report errors or unexpected results.
+labels: ["bug"]
+assignees:
+  - foobar-bug-assign-dev
+body:
+  - type: textarea
+    id: install
+    attributes:
+      label: How did you install foobar?
+      description: >
+        E.g., install via pip, install from source, etc. **Note:** this will
+        be rendered as console text automatically.
+      placeholder: |
+        $ pip install foobar
+        Collecting foobar
+        ...
+        Successfully installed foobar...
+      render: console
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: What version of foobar are you using?
+      description: >
+        Package version if installed via Pip or commit ID if installed
+        from source.
+      placeholder: v1.2.3
+    validations:
+      required: true
+
+  - type: textarea
+    id: freeform
+    attributes:
+      label: Describe the problem.
+      description: >
+        Please provide sample code and directions for reproducing
+        your problem and what you expected to happen.
+    validations:
+      required: true

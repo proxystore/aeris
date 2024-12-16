@@ -1,0 +1,45 @@
+# This workflow just verifies that the docs build without any
+# warnings (as configured in the tox recipe). This is only run on
+# the test-me-* branches and PRs as pushes to main will trigger the docs
+# workflow.
+name: check-docs
+
+on:
+  push:
+    branches: [test-me-*]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check-docs:
+    timeout-minutes: 10
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Get pip cache dir
+        id: pip-cache-dir
+        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
+
+      - name: Use pip cache
+        id: pip-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: docs-ubuntu-latest-pip-3.11-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            docs-ubuntu-latest-pip-3.11-
+
+      - name: Install Packages
+        run: pip install --upgrade setuptools pip tox virtualenv
+
+      - name: Run Tox to build docs
+        run: tox -e docs

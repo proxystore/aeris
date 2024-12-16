@@ -1,0 +1,62 @@
+name: publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract package version from pyproject.toml
+        run: |
+          echo "PACKAGE_VERSION=$(grep -Po '^version\s*=\s*\"\K.*?(?=\")' pyproject.toml)" >> $GITHUB_ENV
+          echo "Found version in pyproject.toml: ${{ env.PACKAGE_VERSION }}"
+
+      - name: Check package version is PEP440 compliant
+        # This is only a partial PEP440 match, it just checks the major, minor
+        # patch, but not any optional suffixes.
+        run: echo "${{ env.PACKAGE_VERSION }}" | grep -P "^\d+\.\d+\.\d+.*$"
+
+      - name: Check version matches release tag
+        run: |
+          if [ "${{ format('v{0}', env.PACKAGE_VERSION) }}" != "${{ github.event.release.tag_name }}" ]
+          then
+            echo "v\$\{PACKAGE_VERSION\} = v${{ env.PACKAGE_VERSION }} does not match tag name: ${{ github.event.release.tag_name }}"
+            exit 1
+          fi
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pypa/build and build
+        run: |
+          pip install build
+          python -m build --sdist --wheel --outdir dist/ .
+
+      - name: Publish to PyPI
+        if: startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config --local user.name "GitHub Actions Bot"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Deploy docs for release version to gh-pages branch
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          pip install .[docs]
+          mike deploy --push --update-aliases "${{ env.PACKAGE_VERSION }}" latest
