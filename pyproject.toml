@@ -3,13 +3,16 @@ requires = ["setuptools>=64.0", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "foobar"
+name = "aeris"
 version = "0.1.0"
 authors = [
-    {name = "foobar author"},
-    {email = "foobar@foobar.com"},
+    {name = "Greg Pauloski", email = "jgpauloski@uchicago.edu"},
+    {name = "Globus Labs"},
 ]
-description = "Foobar example package."
+maintainers = [
+    {name = "Greg Pauloski", email = "jgpauloski@uchicago.edu"},
+]
+description = "Agentic Ecosystem for Resource Integration and Scalability."
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -19,14 +22,12 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: Implementation :: CPython",
 ]
-dependencies = [
-    "requests",
-]
+dependencies = []
 
 [project.urls]
-homepage = "https://github.com/foobar-author/foobar"
-documentation = "https://foobar.readthedocs.io"
-repository = "https://github.com/foobar-author/foobar"
+Homepage = "https://proxystore.dev"
+Documentation = "https://aeris.proxystore.dev"
+Source = "https://github.com/proxystore/aeris"
 
 [project.optional-dependencies]
 dev = [
@@ -39,17 +40,6 @@ dev = [
     "ruff>=0.2.0",
     "tox",
     "virtualenv",
-]
-docs = [
-    "black==24.4.2",
-    "mkdocs-click==0.8.1",
-    "mkdocs-gen-files==0.5.0",
-    "mkdocs-literate-nav==0.6.1",
-    "mkdocs-material==9.5.32",
-    "mkdocs-section-index==0.3.9",
-    "mkdocstrings==0.25.2",
-    "mkdocstrings-python==1.10.8",
-    "mike==2.1.3",
 ]
 
 [tool.codespell]
@@ -64,11 +54,12 @@ dist,
 
 [tool.coverage.run]
 plugins = ["covdefaults"]
-omit = ["examples"]
+omit = []
 
 [tool.mypy]
 python_version = "3.12"
 check_untyped_defs = true
+disable_error_code = "import-untyped"
 disallow_any_generics = true
 disallow_incomplete_defs = true
 disallow_untyped_defs = true
@@ -137,7 +128,13 @@ select = [
     # ruff-specific
     "RUF",
 ]
-extend-ignore = []
+extend-ignore = [
+    "D104",
+    # Do not require docstrings for magic methods
+    "D105",
+    # Do not require docstrings for __init__ methods
+    "D107",
+]
 
 [tool.ruff.lint.flake8-pytest-style]
 parametrize-values-type = "tuple"
@@ -148,7 +145,7 @@ multiline-quotes = "single"
 
 [tool.ruff.lint.isort]
 force-single-line = true
-known-first-party = ["foobar", "test", "testing"]
+known-first-party = ["aeris", "test", "testing"]
 order-by-type = false
 required-imports = ["from __future__ import annotations"]
 
