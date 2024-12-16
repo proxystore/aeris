@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import threading
+
+import pytest
+
 from aeris.agent import action
 from aeris.agent import Agent
 from aeris.agent import agent
@@ -7,7 +11,10 @@ from aeris.agent import loop
 
 
 @agent
-class SimpleAgent: ...
+class SimpleAgent:
+    def setup(self) -> None: ...
+
+    def shutdown(self) -> None: ...
 
 
 def test_simple_agent_decorator() -> None:
@@ -17,14 +24,8 @@ def test_simple_agent_decorator() -> None:
     instance.setup()
     instance.shutdown()
 
-    parsed_actions = set(instance.__agent_actions__.keys())
-    parsed_loops = set(instance.__agent_loops__.keys())
 
-    assert parsed_actions == set()
-    assert parsed_loops == set()
-
-
-@agent()
+@agent
 class ComplexAgent:
     def setup(self) -> None: ...
 
@@ -38,11 +39,10 @@ class ComplexAgent:
     def action2(self) -> None: ...
 
     @loop
-    def loop1(self) -> bool:
-        return True
+    def loop1(self, shutdown: threading.Event) -> None: ...
 
     @loop
-    def loop2(self) -> None: ...
+    def loop2(self, shutdown: threading.Event) -> None: ...
 
     def method(self) -> bool:
         return True
@@ -55,13 +55,19 @@ def test_complex_agent_decorator() -> None:
     instance.setup()
     instance.shutdown()
 
-    # Methods should still be callable and mypy should understand this
     assert instance.method()
     assert instance.action1()
-    assert instance.loop1()
+    instance.loop1(threading.Event())
 
-    parsed_actions = set(instance.__agent_actions__.keys())
-    parsed_loops = set(instance.__agent_loops__.keys())
 
-    assert parsed_actions == {'action1', 'action2'}
-    assert parsed_loops == {'loop1', 'loop2'}
+def test_invalid_loop_signature() -> None:
+    @agent
+    class BadAgent:
+        def setup(self) -> None: ...
+
+        def shutdown(self) -> None: ...
+
+        def loop(self) -> None: ...
+
+    with pytest.raises(TypeError, match='Signature of loop method "loop"'):
+        loop(BadAgent.loop)

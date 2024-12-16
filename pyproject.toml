@@ -58,6 +58,9 @@ omit = []
 
 [tool.mypy]
 python_version = "3.12"
+plugins = [
+    "mypy.plugins.proper_plugin",
+]
 check_untyped_defs = true
 disable_error_code = "import-untyped"
 disallow_any_generics = true
