@@ -4,29 +4,26 @@ import threading
 
 import pytest
 
-from aeris.agent import action
-from aeris.agent import Agent
-from aeris.agent import agent
-from aeris.agent import loop
+from aeris.behavior import action
+from aeris.behavior import Behavior
+from aeris.behavior import loop
 
 
-@agent
-class SimpleAgent:
+class BasicBehavior:
     def setup(self) -> None: ...
 
     def shutdown(self) -> None: ...
 
 
-def test_simple_agent_decorator() -> None:
-    instance = SimpleAgent()
-    assert isinstance(instance, Agent)
+def test_basic_behavior() -> None:
+    instance = BasicBehavior()
+    assert isinstance(instance, BasicBehavior)
 
     instance.setup()
     instance.shutdown()
 
 
-@agent
-class ComplexAgent:
+class ComplexBehavior:
     def setup(self) -> None: ...
 
     def shutdown(self) -> None: ...
@@ -48,9 +45,9 @@ class ComplexAgent:
         return True
 
 
-def test_complex_agent_decorator() -> None:
-    instance = ComplexAgent()
-    assert isinstance(instance, Agent)
+def test_complex_behavior() -> None:
+    instance = ComplexBehavior()
+    assert isinstance(instance, Behavior)
 
     instance.setup()
     instance.shutdown()
@@ -61,8 +58,7 @@ def test_complex_agent_decorator() -> None:
 
 
 def test_invalid_loop_signature() -> None:
-    @agent
-    class BadAgent:
+    class BadBehavior:
         def setup(self) -> None: ...
 
         def shutdown(self) -> None: ...
@@ -70,4 +66,4 @@ def test_invalid_loop_signature() -> None:
         def loop(self) -> None: ...
 
     with pytest.raises(TypeError, match='Signature of loop method "loop"'):
-        loop(BadAgent.loop)
+        loop(BadBehavior.loop)
