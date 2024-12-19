@@ -1,27 +1,68 @@
 from __future__ import annotations
 
 import queue
-from typing import Any
+import sys
+from typing import Union
 
+if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
+    from typing import TypeAlias
+else:  # pragma: <3.10 cover
+    from typing_extensions import TypeAlias
+
+from aeris.exchange import MailboxClosedError
 from aeris.handle import Handle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.identifier import Identifier
+from aeris.message import Message
+
+DEFAULT_PRIORITY = 0
+CLOSE_PRIORITY = DEFAULT_PRIORITY + 1
+CLOSE_SENTINAL = object()
+
+MailboxQueueItem: TypeAlias = tuple[int, Union[Message, object]]
+MailboxQueue: TypeAlias = queue.PriorityQueue[MailboxQueueItem]
 
 
 class ThreadMailbox:
     """Thread-safe queue-based mailbox."""
 
-    def __init__(self) -> None:
-        self._mail: queue.Queue[Any] = queue.Queue()
+    def __init__(self, queue: MailboxQueue) -> None:
+        self._queue = queue
+        self._closed = False
 
-    def send(self, message: Any) -> None:
-        """Send a message to this mailbox."""
-        self._mail.put(message)
+    def send(self, message: Message) -> None:
+        """Send a message to this mailbox.
 
-    def recv(self) -> Any:
-        """Get the next message from this mailbox."""
-        return self._mail.get(block=True)
+        Raises:
+            MailboxClosedError: if [`close()`][aeris.exchange.Mailbox.close]
+                has been called.
+        """
+        if self._closed:
+            raise MailboxClosedError
+        self._queue.put((DEFAULT_PRIORITY, message))
+
+    def recv(self) -> Message:
+        """Get the next message from this mailbox.
+
+        Raises:
+            MailboxClosedError: if [`close()`][aeris.exchange.Mailbox.close]
+                has been called.
+        """
+        if self._closed:
+            raise MailboxClosedError
+
+        _, message = self._queue.get(block=True)
+        if message is CLOSE_SENTINAL:
+            raise MailboxClosedError
+        assert isinstance(message, Message)
+        return message
+
+    def close(self) -> None:
+        """Close the mailbox."""
+        if not self._closed:
+            self._closed = True
+            self._queue.put((CLOSE_PRIORITY, CLOSE_SENTINAL))
 
 
 class ThreadExchange:
@@ -33,18 +74,18 @@ class ThreadExchange:
     """
 
     def __init__(self) -> None:
-        self.mailboxes: dict[Identifier, ThreadMailbox] = {}
+        self._queues: dict[Identifier, MailboxQueue] = {}
 
     def register_agent(self) -> AgentIdentifier:
         """Create a mailbox for a new agent in the system."""
         aid = AgentIdentifier.new()
-        self.mailboxes[aid] = ThreadMailbox()
+        self._queues[aid] = queue.PriorityQueue()
         return aid
 
     def register_client(self) -> ClientIdentifier:
         """Create a mailbox for a new client in the system."""
         cid = ClientIdentifier.new()
-        self.mailboxes[cid] = ThreadMailbox()
+        self._queues[cid] = queue.PriorityQueue()
         return cid
 
     def create_handle(self, aid: AgentIdentifier) -> Handle:
@@ -82,4 +123,8 @@ class ThreadExchange:
         Returns:
             Mailbox if the entity entity exists in the system otherwise `None`.
         """
-        return self.mailboxes.get(uid)
+        try:
+            queue = self._queues[uid]
+        except KeyError:
+            return None
+        return ThreadMailbox(queue)

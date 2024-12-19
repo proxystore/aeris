@@ -11,10 +11,15 @@ from aeris.handle import Handle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.identifier import Identifier
+from aeris.message import Message
 
 T = TypeVar('T')
 
 __all__ = ['Exchange', 'Mailbox']
+
+
+class MailboxClosedError(Exception):
+    pass
 
 
 @runtime_checkable
@@ -27,12 +32,26 @@ class Mailbox(Protocol):
     to an agent, a response to an action request, or a control message.
     """
 
-    def send(self, message: Any) -> None:
-        """Send a message to this mailbox."""
+    def send(self, message: Message) -> None:
+        """Send a message to this mailbox.
+
+        Raises:
+            MailboxClosedError: if [`close()`][aeris.exchange.Mailbox.close]
+                has been called.
+        """
         ...
 
-    def recv(self) -> Any:
+    def recv(self) -> Message:
         """Get the next message from this mailbox."""
+        ...
+
+    def close(self) -> None:
+        """Close the mailbox.
+
+        Raises:
+            MailboxClosedError: if [`close()`][aeris.exchange.Mailbox.close]
+                has been called.
+        """
         ...
 
 

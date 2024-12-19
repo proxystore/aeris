@@ -4,9 +4,11 @@ import pytest
 
 from aeris.exchange import Exchange
 from aeris.exchange import Mailbox
+from aeris.exchange import MailboxClosedError
 from aeris.exchange.thread import ThreadExchange
 from aeris.identifier import ClientIdentifier
 from aeris.identifier import Role
+from aeris.message import PingRequest
 
 
 def test_protocol() -> None:
@@ -31,8 +33,26 @@ def test_mailbox_send_recv() -> None:
     mailbox = exchange.get_mailbox(agent_id)
     assert mailbox is not None
 
-    mailbox.send('message')
-    assert mailbox.recv() == 'message'
+    message = PingRequest(
+        src=ClientIdentifier.new(),
+        dest=ClientIdentifier.new(),
+    )
+    mailbox.send(message)
+    assert mailbox.recv() == message
+
+    mailbox.close()
+    mailbox.close()
+
+    with pytest.raises(MailboxClosedError):
+        mailbox.send(message)
+    with pytest.raises(MailboxClosedError):
+        mailbox.recv()
+
+
+def test_get_mailbox_unknown_id() -> None:
+    exchange = ThreadExchange()
+    cid = ClientIdentifier.new()
+    assert exchange.get_mailbox(cid) is None
 
 
 def test_create_handle_to_client() -> None:
