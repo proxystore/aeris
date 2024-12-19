@@ -36,4 +36,4 @@ def test_launch_agents() -> None:
 
     time.sleep(5 * TEST_LOOP_SLEEP)
 
-    launcher.close()
+    launcher.shutdown()
