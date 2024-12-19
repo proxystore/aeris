@@ -12,21 +12,28 @@ else:  # pragma: <3.11 cover
 
 
 class Role(enum.Enum):
+    """Roles of entities in a multi-agent system."""
+
     AGENT = 'agent'
     CLIENT = 'client'
 
 
 class Identifier(abc.ABC):
+    """Unique identifier of an entity in a multi-agent system."""
+
     def __init__(self, uid: uuid.UUID) -> None:
         self._uid = uid
 
     @classmethod
     def new(cls) -> Self:
+        """Create a new entity identifier."""
         return cls(uuid.uuid4())
 
     @property
     @abc.abstractmethod
-    def role(self) -> Role: ...
+    def role(self) -> Role:
+        """Get the role of this entity."""
+        ...
 
     def __eq__(self, other: object, /) -> bool:
         if isinstance(other, Identifier):
@@ -39,12 +46,18 @@ class Identifier(abc.ABC):
 
 
 class AgentIdentifier(Identifier):
+    """Unique identifier of an agent in a multi-agent system."""
+
     @property
     def role(self) -> Role:
+        """Get the role of this entity."""
         return Role.AGENT
 
 
 class ClientIdentifier(Identifier):
+    """Unique identifier of a client in a multi-agent system."""
+
     @property
     def role(self) -> Role:
+        """Get the role of this entity."""
         return Role.CLIENT
