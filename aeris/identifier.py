@@ -32,22 +32,19 @@ class Identifier(abc.ABC):
         if isinstance(other, Identifier):
             return self._uid == other._uid and self.role == other.role
         else:
-            raise NotImplementedError
+            return False
+
+    def __hash__(self) -> int:
+        return hash(self.role) + hash(self._uid)
 
 
 class AgentIdentifier(Identifier):
-    def __init__(self, uid: uuid.UUID) -> None:
-        self._uid = uid
-
     @property
     def role(self) -> Role:
         return Role.AGENT
 
 
 class ClientIdentifier(Identifier):
-    def __init__(self, uid: uuid.UUID) -> None:
-        self._uid = uid
-
     @property
     def role(self) -> Role:
         return Role.CLIENT

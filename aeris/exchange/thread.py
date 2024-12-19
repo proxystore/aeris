@@ -17,7 +17,7 @@ class ThreadMailbox:
         self._mail.put(message)
 
     def recv(self) -> Any:
-        self._mail.get(block=True)
+        return self._mail.get(block=True)
 
 
 class ThreadExchange:
@@ -35,7 +35,12 @@ class ThreadExchange:
         return cid
 
     def create_handle(self, aid: AgentIdentifier) -> Handle:
+        if not isinstance(aid, AgentIdentifier):
+            raise TypeError(
+                f'Handle must be created from an {AgentIdentifier.__name__} '
+                f'but got identifier with type {type(aid).__name__}.',
+            )
         return Handle(aid, self)
 
-    def get_mailbox(self, uid: Identifier) -> ThreadMailbox:
-        return self.mailboxes[uid]
+    def get_mailbox(self, uid: Identifier) -> ThreadMailbox | None:
+        return self.mailboxes.get(uid)

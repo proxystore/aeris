@@ -5,43 +5,15 @@ from concurrent.futures import as_completed
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import wait
-from typing import Any
 from typing import Generic
 from typing import TypeVar
 
-from aeris.behavior import Action
 from aeris.behavior import Behavior
-from aeris.behavior import ControlLoop
+from aeris.behavior import get_loops
 from aeris.exchange import Exchange
 from aeris.identifier import AgentIdentifier
 
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
-
-
-def is_actor_method_type(obj: Any, kind: str) -> bool:
-    return (
-        callable(obj)
-        and hasattr(obj, '_actor_method_type')
-        and obj._actor_method_type == kind
-    )
-
-
-def get_actions(behavior: Behavior) -> dict[str, Action[Any, Any]]:
-    actions: dict[str, Action[Any, Any]] = {}
-    for name in dir(behavior):
-        attr = getattr(behavior, name)
-        if is_actor_method_type(attr, 'action'):
-            actions[name] = attr
-    return actions
-
-
-def get_loops(behavior: Behavior) -> dict[str, ControlLoop]:
-    loops: dict[str, ControlLoop] = {}
-    for name in dir(behavior):
-        attr = getattr(behavior, name)
-        if is_actor_method_type(attr, 'loop'):
-            loops[name] = attr
-    return loops
 
 
 class Agent(Generic[BehaviorT]):

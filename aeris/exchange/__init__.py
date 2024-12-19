@@ -4,6 +4,7 @@ import sys
 from concurrent.futures import Future
 from typing import Any
 from typing import Protocol
+from typing import runtime_checkable
 from typing import TypeVar
 
 from aeris.handle import Handle
@@ -16,12 +17,14 @@ T = TypeVar('T')
 __all__ = ['Exchange', 'Mailbox']
 
 
+@runtime_checkable
 class Mailbox(Protocol):
     def send(self, message: Any) -> None: ...
 
     def recv(self) -> Any: ...
 
 
+@runtime_checkable
 class Exchange(Protocol):
     def register_agent(self) -> AgentIdentifier: ...
 
@@ -29,4 +32,4 @@ class Exchange(Protocol):
 
     def create_handle(self, uid: AgentIdentifier) -> Handle: ...
 
-    def get_mailbox(self, uid: Identifier) -> Mailbox: ...
+    def get_mailbox(self, uid: Identifier) -> Mailbox | None: ...
