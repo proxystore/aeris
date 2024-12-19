@@ -6,6 +6,8 @@ import pytest
 
 from aeris.behavior import action
 from aeris.behavior import Behavior
+from aeris.behavior import get_actions
+from aeris.behavior import get_loops
 from aeris.behavior import loop
 
 
@@ -55,6 +57,12 @@ def test_complex_behavior() -> None:
     assert instance.method()
     assert instance.action1()
     instance.loop1(threading.Event())
+
+    actions = get_actions(instance)
+    assert set(actions) == {'action1', 'action2'}
+
+    loops = get_loops(instance)
+    assert set(loops) == {'loop1', 'loop2'}
 
 
 def test_invalid_loop_signature() -> None:
