@@ -9,11 +9,13 @@ from typing import Any
 from typing import Generic
 from typing import TypeVar
 
-from aeris.agent._protocol import Action
-from aeris.agent._protocol import Agent
-from aeris.agent._protocol import ControlLoop
+from aeris.behavior import Action
+from aeris.behavior import Behavior
+from aeris.behavior import ControlLoop
+from aeris.exchange import Exchange
+from aeris.identifier import AgentIdentifier
 
-AgentT = TypeVar('AgentT', bound=Agent)
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
 def is_actor_method_type(obj: Any, kind: str) -> bool:
@@ -24,27 +26,35 @@ def is_actor_method_type(obj: Any, kind: str) -> bool:
     )
 
 
-def get_actions(agent: AgentT) -> dict[str, Action[Any, Any]]:
+def get_actions(behavior: Behavior) -> dict[str, Action[Any, Any]]:
     actions: dict[str, Action[Any, Any]] = {}
-    for name in dir(agent):
-        attr = getattr(agent, name)
+    for name in dir(behavior):
+        attr = getattr(behavior, name)
         if is_actor_method_type(attr, 'action'):
             actions[name] = attr
     return actions
 
 
-def get_loops(agent: AgentT) -> dict[str, ControlLoop]:
+def get_loops(behavior: Behavior) -> dict[str, ControlLoop]:
     loops: dict[str, ControlLoop] = {}
-    for name in dir(agent):
-        attr = getattr(agent, name)
+    for name in dir(behavior):
+        attr = getattr(behavior, name)
         if is_actor_method_type(attr, 'loop'):
             loops[name] = attr
     return loops
 
 
-class AgentRunner(Generic[AgentT]):
-    def __init__(self, agent: AgentT) -> None:
-        self.agent = agent
+class Agent(Generic[BehaviorT]):
+    def __init__(
+        self,
+        behavior: BehaviorT,
+        *,
+        aid: AgentIdentifier | None = None,
+        exchange: Exchange | None = None,
+    ) -> None:
+        self.aid = aid
+        self.behavior = behavior
+        self.exchange = exchange
         self.done = threading.Event()
         self._futures: tuple[Future[None], ...] | None = None
         self._start_loops_lock = threading.Lock()
@@ -53,12 +63,12 @@ class AgentRunner(Generic[AgentT]):
         self.run()
 
     def run(self) -> None:
-        self.agent.setup()
+        self.behavior.setup()
 
         futures: list[Future[None]] = []
         with ThreadPoolExecutor() as pool:
             with self._start_loops_lock:
-                for method in get_loops(self.agent).values():
+                for method in get_loops(self.behavior).values():
                     futures.append(pool.submit(method, self.done))
 
                 self._futures = tuple(futures)
@@ -66,7 +76,7 @@ class AgentRunner(Generic[AgentT]):
             for future in as_completed(futures):
                 future.result()
 
-        self.agent.shutdown()
+        self.behavior.shutdown()
 
     def shutdown(self, timeout: float | None = None) -> None:
         self.done.set()

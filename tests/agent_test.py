@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import threading
 
-from aeris.agent import agent
-from aeris.agent import AgentRunner
-from aeris.agent import loop
+from aeris.agent import Agent
+from aeris.behavior import loop
 
 
-@agent
-class WaitingAgent:
+class Waiter:
     def __init__(self) -> None:
         self.setup_event = threading.Event()
         self.loop_event = threading.Event()
@@ -31,30 +29,30 @@ class WaitingAgent:
         shutdown.wait()
 
 
-def test_agent_runner_basic() -> None:
-    instance = WaitingAgent()
-    runner = AgentRunner(instance)
+def test_agent_run() -> None:
+    behavior = Waiter()
+    agent = Agent(behavior)
 
     def run() -> None:
-        runner()
+        agent()
 
     thread = threading.Thread(target=run)
     thread.start()
-    runner.agent.setup_event.wait()
-    runner.agent.loop_event.wait()
-    runner.shutdown()
+    agent.behavior.setup_event.wait()
+    agent.behavior.loop_event.wait()
+    agent.shutdown()
     thread.join(timeout=1)
 
-    assert instance.setup_event.is_set()
-    assert instance.shutdown_event.is_set()
+    assert agent.behavior.setup_event.is_set()
+    assert agent.behavior.shutdown_event.is_set()
 
 
-def test_agent_runner_shutdown() -> None:
-    instance = WaitingAgent()
-    runner = AgentRunner(instance)
+def test_agent_shutdown() -> None:
+    behavior = Waiter()
+    agent = Agent(behavior)
 
-    runner.shutdown()
-    runner.run()
+    agent.shutdown()
+    agent.run()
 
-    assert instance.setup_event.is_set()
-    assert instance.shutdown_event.is_set()
+    assert agent.behavior.setup_event.is_set()
+    assert agent.behavior.shutdown_event.is_set()
