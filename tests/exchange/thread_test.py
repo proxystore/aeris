@@ -24,7 +24,8 @@ def test_protocol() -> None:
     assert isinstance(exchange.get_mailbox(agent_id), Mailbox)
     assert isinstance(exchange.get_mailbox(client_id), Mailbox)
 
-    assert exchange.create_handle(agent_id) is not None
+    handle = exchange.create_handle(agent_id)
+    handle.close()
 
 
 def test_mailbox_send_recv() -> None:
