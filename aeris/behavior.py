@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import inspect
+import sys
 import threading
 from typing import Any
 from typing import Callable
 from typing import Generic
 from typing import Literal
-from typing import ParamSpec
 from typing import Protocol
 from typing import runtime_checkable
 from typing import TypeVar
+
+if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
+    from typing import ParamSpec
+else:  # pragma: <3.10 cover
+    from typing_extensions import ParamSpec
 
 T = TypeVar('T')
 P = ParamSpec('P')
@@ -130,13 +135,20 @@ def loop(method: Callable[P, R]) -> Callable[P, R]:
     """
     method._actor_method_type = 'loop'  # type: ignore[attr-defined]
 
-    found_sig = inspect.signature(method, eval_str=True)
-    expected_sig = inspect.signature(ControlLoop.__call__, eval_str=True)
+    if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
+        found_sig = inspect.signature(method, eval_str=True)
+        expected_sig = inspect.signature(ControlLoop.__call__, eval_str=True)
+    else:  # pragma: <3.10 cover
+        found_sig = inspect.signature(method)
+        expected_sig = inspect.signature(ControlLoop.__call__)
 
     if found_sig != expected_sig:
         raise TypeError(
             f'Signature of loop method "{method.__name__}" is {found_sig} '
-            f'but should be {expected_sig}.',
+            f'but should be {expected_sig}. If the signatures look the same '
+            'except that types are stringified, try importing '
+            '"from __future__ import annotations" at the top of the module '
+            'where the behavior is defined.',
         )
 
     return method

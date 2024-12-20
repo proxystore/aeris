@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import dataclasses
 import threading
 from typing import Any
 from typing import Generic
-from typing import NamedTuple
 from typing import TypeVar
 
 from aeris.agent import Agent
@@ -15,7 +15,8 @@ from aeris.identifier import AgentIdentifier
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
-class _RunningAgent(NamedTuple, Generic[BehaviorT]):
+@dataclasses.dataclass
+class _RunningAgent(Generic[BehaviorT]):
     agent: Agent[BehaviorT]
     thread: threading.Thread
 
