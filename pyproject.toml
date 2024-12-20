@@ -22,7 +22,10 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: Implementation :: CPython",
 ]
-dependencies = []
+dependencies = [
+    "pydantic>=2,<3",
+    "typing-extensions>=4.3.0 ; python_version<'3.11'",
+]
 
 [project.urls]
 Homepage = "https://proxystore.dev"
@@ -54,10 +57,16 @@ dist,
 
 [tool.coverage.run]
 plugins = ["covdefaults"]
+concurrency = ["multiprocessing", "thread"]
 omit = []
+parallel = true
 
 [tool.mypy]
 python_version = "3.12"
+plugins = [
+    "mypy.plugins.proper_plugin",
+    "pydantic.mypy",
+]
 check_untyped_defs = true
 disable_error_code = "import-untyped"
 disallow_any_generics = true
@@ -129,11 +138,9 @@ select = [
     "RUF",
 ]
 extend-ignore = [
-    "D104",
-    # Do not require docstrings for magic methods
-    "D105",
-    # Do not require docstrings for __init__ methods
-    "D107",
+    # Do not require: module (D100), package (D104), magic method (D105),
+    # or __init__ (D107) docstrings.
+    "D100", "D104", "D105", "D107",
 ]
 
 [tool.ruff.lint.flake8-pytest-style]
