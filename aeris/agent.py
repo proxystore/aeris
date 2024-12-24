@@ -14,6 +14,7 @@ from typing import TypeVar
 from aeris.behavior import Behavior
 from aeris.behavior import get_actions
 from aeris.behavior import get_loops
+from aeris.exception import BadIdentifierError
 from aeris.exception import BadMessageTypeError
 from aeris.exchange import Exchange
 from aeris.exchange import Mailbox
@@ -177,15 +178,16 @@ class Agent(Generic[BehaviorT]):
             response = self._message_handler(message)
 
             if response is not None:
-                dest = self.exchange.get_mailbox(response.dest)
-                if dest is not None:
-                    dest.send(response)
-                else:
-                    logger.warning(
+                try:
+                    dest = self.exchange.get_mailbox(response.dest)
+                except BadIdentifierError:
+                    logger.exception(
                         f'Failed to get mailbox of {response.dest} to '
                         f'send {response}. This likely means the '
                         'entity was unregistered from the exchange.',
                     )
+                else:
+                    dest.send(response)
 
     def run(self) -> None:
         """Run the agent.

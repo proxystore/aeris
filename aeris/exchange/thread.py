@@ -17,7 +17,8 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-from aeris.exchange import MailboxClosedError
+from aeris.exception import BadIdentifierError
+from aeris.exception import MailboxClosedError
 from aeris.handle import Handle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
@@ -189,19 +190,25 @@ class ThreadExchange:
             )
         return Handle(aid, self)
 
-    def get_mailbox(self, uid: Identifier) -> ThreadMailbox | None:
+    def get_mailbox(self, uid: Identifier) -> ThreadMailbox:
         """Get the mailbox for an entity in the system.
 
         Args:
             uid: Identifier of entity in the system.
 
         Returns:
-            Mailbox if the entity entity exists in the system otherwise `None`.
+            Mailbox for the entity.
+
+        Raises:
+            BadIdentifierError: if an entity with `uid` is not
+                registered with the exchange.
         """
         try:
             queue = self._queues[uid]
-        except KeyError:
-            return None
+        except KeyError as e:
+            raise BadIdentifierError(
+                f'{uid} is not registered with this exchange.',
+            ) from e
         mailbox = ThreadMailbox(queue)
         self._mailboxes[uid].append(mailbox)
         return mailbox

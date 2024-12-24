@@ -7,6 +7,7 @@ from typing import Protocol
 from typing import runtime_checkable
 from typing import TypeVar
 
+from aeris.exception import MailboxClosedError
 from aeris.handle import Handle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
@@ -16,10 +17,6 @@ from aeris.message import Message
 T = TypeVar('T')
 
 __all__ = ['Exchange', 'Mailbox']
-
-
-class MailboxClosedError(Exception):
-    pass
 
 
 @runtime_checkable
@@ -112,13 +109,17 @@ class Exchange(Protocol):
         """
         ...
 
-    def get_mailbox(self, uid: Identifier) -> Mailbox | None:
+    def get_mailbox(self, uid: Identifier) -> Mailbox:
         """Get the mailbox for an entity in the system.
 
         Args:
             uid: Identifier of entity in the system.
 
         Returns:
-            Mailbox if the entity entity exists in the system otherwise `None`.
+            Mailbox for the entity.
+
+        Raises:
+            BadIdentifierError: if an entity with `uid` is not
+                registered with the exchange.
         """
         ...

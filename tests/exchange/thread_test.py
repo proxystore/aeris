@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from aeris.exception import BadIdentifierError
 from aeris.exchange import Exchange
 from aeris.exchange import Mailbox
 from aeris.exchange import MailboxClosedError
@@ -61,7 +62,8 @@ def test_mailbox_send_recv() -> None:
 def test_get_mailbox_unknown_id() -> None:
     with ThreadExchange() as exchange:
         cid = ClientIdentifier.new()
-        assert exchange.get_mailbox(cid) is None
+        with pytest.raises(BadIdentifierError):
+            exchange.get_mailbox(cid)
 
 
 def test_create_handle_to_client() -> None:
@@ -80,8 +82,8 @@ def test_unregister_entity() -> None:
         assert mailbox is not None
 
         exchange.unregister(agent_id)
-        new_mailbox = exchange.get_mailbox(agent_id)
-        assert new_mailbox is None
+        with pytest.raises(BadIdentifierError):
+            exchange.get_mailbox(agent_id)
 
         with pytest.raises(MailboxClosedError):
             mailbox.recv()
