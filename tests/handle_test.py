@@ -33,12 +33,11 @@ class Counter:
 
 
 def test_create_and_close_handle() -> None:
-    exchange = ThreadExchange()
-    aid = exchange.register_agent()
-    handle = exchange.create_handle(aid)
-    assert isinstance(repr(handle), str)
-    assert isinstance(str(handle), str)
-    handle.close()
+    with ThreadExchange() as exchange:
+        aid = exchange.register_agent()
+        with exchange.create_handle(aid) as handle:
+            assert isinstance(repr(handle), str)
+            assert isinstance(str(handle), str)
 
 
 def test_handle_operations() -> None:
@@ -62,7 +61,8 @@ def test_handle_operations() -> None:
     handle.shutdown()
 
     handle.close()
-    launcher.shutdown()
+    launcher.close()
+    exchange.close()
 
 
 class Sleeper:
@@ -87,4 +87,5 @@ def test_cancel_futures() -> None:
     handle.close(wait_futures=False)
     assert future.cancelled()
 
-    launcher.shutdown()
+    launcher.close()
+    exchange.close()

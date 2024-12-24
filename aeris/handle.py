@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import sys
 import threading
 import time
 import uuid
 from concurrent.futures import Future
 from concurrent.futures import wait
+from types import TracebackType
 from typing import Any
 from typing import TYPE_CHECKING
 from typing import TypeVar
+
+if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
+    from typing import Self
+else:  # pragma: <3.11 cover
+    from typing_extensions import Self
 
 import aeris
 from aeris.identifier import AgentIdentifier
@@ -49,6 +56,17 @@ class Handle:
         self._futures: dict[uuid.UUID, Future[Any]] = {}
         self._listener_thread = threading.Thread(target=self._result_listener)
         self._listener_thread.start()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        exc_traceback: TracebackType | None,
+    ) -> None:
+        self.close()
 
     def __repr__(self) -> str:
         name = type(self).__name__

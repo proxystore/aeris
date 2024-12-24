@@ -19,6 +19,10 @@ class Launcher(Protocol):
     A launcher manages the create and execution of agents on remote resources.
     """
 
+    def close(self) -> None:
+        """Close the launcher and shutdown agents."""
+        ...
+
     def launch(self, behavior: Behavior) -> Handle:
         """Launch a new agent with a specified behavior.
 
@@ -28,8 +32,4 @@ class Launcher(Protocol):
         Returns:
             Handle to the agent.
         """
-        ...
-
-    def shutdown(self) -> None:
-        """Shutdown the launcher and agents."""
         ...

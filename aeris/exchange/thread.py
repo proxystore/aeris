@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import queue
 import sys
+from types import TracebackType
 from typing import Union
 
 if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
     from typing import TypeAlias
 else:  # pragma: <3.10 cover
     from typing_extensions import TypeAlias
+
+if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
+    from typing import Self
+else:  # pragma: <3.11 cover
+    from typing_extensions import Self
 
 from aeris.exchange import MailboxClosedError
 from aeris.handle import Handle
@@ -30,6 +36,17 @@ class ThreadMailbox:
     def __init__(self, queue: MailboxQueue) -> None:
         self._queue = queue
         self._closed = False
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        exc_traceback: TracebackType | None,
+    ) -> None:
+        self.close()
 
     def send(self, message: Message) -> None:
         """Send a message to this mailbox.
@@ -76,11 +93,26 @@ class ThreadExchange:
     def __init__(self) -> None:
         self._queues: dict[Identifier, MailboxQueue] = {}
 
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        exc_traceback: TracebackType | None,
+    ) -> None:
+        self.close()
+
     def __repr__(self) -> str:
         return f'{type(self).__name__}()'
 
     def __str__(self) -> str:
         return repr(self)
+
+    def close(self) -> None:
+        """Close the exchange."""
+        pass
 
     def register_agent(self, name: str | None = None) -> AgentIdentifier:
         """Create a mailbox for a new agent in the system.

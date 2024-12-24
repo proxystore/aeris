@@ -12,52 +12,59 @@ from aeris.message import PingRequest
 
 
 def test_protocol() -> None:
-    exchange = ThreadExchange()
-    assert isinstance(exchange, Exchange)
-    assert isinstance(str(exchange), str)
+    with ThreadExchange() as exchange:
+        assert isinstance(exchange, Exchange)
+        assert isinstance(str(exchange), str)
 
-    agent_id = exchange.register_agent()
-    client_id = exchange.register_client()
+        agent_id = exchange.register_agent()
+        client_id = exchange.register_client()
 
-    assert agent_id.role == Role.AGENT
-    assert client_id.role == Role.CLIENT
+        assert agent_id.role == Role.AGENT
+        assert client_id.role == Role.CLIENT
 
-    assert isinstance(exchange.get_mailbox(agent_id), Mailbox)
-    assert isinstance(exchange.get_mailbox(client_id), Mailbox)
+        mailbox = exchange.get_mailbox(agent_id)
+        assert isinstance(mailbox, Mailbox)
+        with mailbox:
+            pass
 
-    handle = exchange.create_handle(agent_id)
-    handle.close()
+        mailbox = exchange.get_mailbox(client_id)
+        assert isinstance(mailbox, Mailbox)
+        with mailbox:
+            pass
+
+        handle = exchange.create_handle(agent_id)
+        handle.close()
 
 
 def test_mailbox_send_recv() -> None:
-    exchange = ThreadExchange()
-    agent_id = exchange.register_agent()
-    mailbox = exchange.get_mailbox(agent_id)
-    assert mailbox is not None
+    with ThreadExchange() as exchange:
+        agent_id = exchange.register_agent()
+        mailbox = exchange.get_mailbox(agent_id)
+        assert mailbox is not None
 
-    message = PingRequest(
-        src=ClientIdentifier.new(),
-        dest=ClientIdentifier.new(),
-    )
-    mailbox.send(message)
-    assert mailbox.recv() == message
-
-    mailbox.close()
-    mailbox.close()
-
-    with pytest.raises(MailboxClosedError):
+        message = PingRequest(
+            src=ClientIdentifier.new(),
+            dest=ClientIdentifier.new(),
+        )
         mailbox.send(message)
-    with pytest.raises(MailboxClosedError):
-        mailbox.recv()
+        assert mailbox.recv() == message
+
+        mailbox.close()
+        mailbox.close()
+
+        with pytest.raises(MailboxClosedError):
+            mailbox.send(message)
+        with pytest.raises(MailboxClosedError):
+            mailbox.recv()
 
 
 def test_get_mailbox_unknown_id() -> None:
-    exchange = ThreadExchange()
-    cid = ClientIdentifier.new()
-    assert exchange.get_mailbox(cid) is None
+    with ThreadExchange() as exchange:
+        cid = ClientIdentifier.new()
+        assert exchange.get_mailbox(cid) is None
 
 
 def test_create_handle_to_client() -> None:
-    exchange = ThreadExchange()
-    with pytest.raises(TypeError, match='Handle must be created from an'):
-        exchange.create_handle(ClientIdentifier.new())  # type: ignore[arg-type]
+    with ThreadExchange() as exchange:
+        with pytest.raises(TypeError, match='Handle must be created from an'):
+            exchange.create_handle(ClientIdentifier.new())  # type: ignore[arg-type]

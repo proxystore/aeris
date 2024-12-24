@@ -63,6 +63,10 @@ class Exchange(Protocol):
     client) in a multi-agent system.
     """
 
+    def close(self) -> None:
+        """Close the exchange."""
+        ...
+
     def register_agent(self, name: str | None = None) -> AgentIdentifier:
         """Create a mailbox for a new agent in the system.
 
