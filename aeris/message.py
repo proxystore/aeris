@@ -38,6 +38,10 @@ class Message(BaseModel):
     src: Identifier
     dest: Identifier
 
+    def __str__(self) -> str:
+        name = type(self).__name__
+        return f'{name}<from {self.src}; to {self.dest}; {self.mid}>'
+
 
 class ActionRequest(Message):
     """Action request message."""

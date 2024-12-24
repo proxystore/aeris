@@ -141,6 +141,8 @@ extend-ignore = [
     # Do not require: module (D100), package (D104), magic method (D105),
     # or __init__ (D107) docstrings.
     "D100", "D104", "D105", "D107",
+    # Allow nested with statements.
+    "SIM117",
 ]
 
 [tool.ruff.lint.flake8-pytest-style]

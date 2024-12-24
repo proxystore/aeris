@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import enum
+import logging
 import threading
 from concurrent.futures import as_completed
 from concurrent.futures import Future
@@ -12,6 +14,8 @@ from typing import TypeVar
 from aeris.behavior import Behavior
 from aeris.behavior import get_actions
 from aeris.behavior import get_loops
+from aeris.exception import BadIdentifierError
+from aeris.exception import BadMessageTypeError
 from aeris.exchange import Exchange
 from aeris.exchange import Mailbox
 from aeris.exchange import MailboxClosedError
@@ -21,7 +25,22 @@ from aeris.message import Message
 from aeris.message import PingRequest
 from aeris.message import ShutdownRequest
 
+logger = logging.getLogger(__name__)
+
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
+
+
+class _AgentMode(enum.Enum):
+    INDIVIDUAL = 'individual'
+    SYSTEM = 'system'
+
+
+class _AgentStatus(enum.Enum):
+    INITIALIZED = 'initialized'
+    STARTING = 'starting'
+    RUNNING = 'running'
+    TERMINTATING = 'terminating'
+    SHUTDOWN = 'shutdown'
 
 
 class Agent(Generic[BehaviorT]):
@@ -49,6 +68,11 @@ class Agent(Generic[BehaviorT]):
         self.exchange = exchange
         self.done = threading.Event()
 
+        if self.aid is None and self.exchange is None:
+            self._mode = _AgentMode.INDIVIDUAL
+        else:
+            self._mode = _AgentMode.SYSTEM
+
         self._actions = get_actions(behavior)
         self._loops = get_loops(behavior)
 
@@ -56,9 +80,39 @@ class Agent(Generic[BehaviorT]):
         self._start_loops_lock = threading.Lock()
         self._mailbox: Mailbox | None = None
 
+        self._status = _AgentStatus.INITIALIZED
+
     def __call__(self) -> None:
         """Alias for [run()][aeris.agent.Agent.run]."""
         self.run()
+
+    def __repr__(self) -> str:
+        name = type(self).__name__
+        behavior = type(self.behavior).__name__
+        if self._mode == _AgentMode.INDIVIDUAL:
+            return f'{name}({behavior})'
+        else:
+            return (
+                f'{name}'
+                f'({behavior}, aid={self.aid!r}, exchange={self.exchange!r})'
+            )
+
+    def __str__(self) -> str:
+        name = type(self).__name__
+        behavior = type(self.behavior).__name__
+        status = self._status.value
+        if self._mode == _AgentMode.INDIVIDUAL:
+            return f'{name}[{behavior}]<{status}>'
+        else:
+            return f'{name}[{behavior}]<{status}; {self.aid}; {self.exchange}>'
+
+    def _log_prefix(self) -> str:
+        name = type(self).__name__
+        behavior = type(self.behavior).__name__
+        if self._mode == _AgentMode.INDIVIDUAL:
+            return f'{name}[{behavior}]'
+        else:
+            return f'{name}[{behavior};{self.aid}]'
 
     def action(self, action: str, args: Any, kwargs: Any) -> Any:
         """Invoke an action of the agent.
@@ -72,11 +126,12 @@ class Agent(Generic[BehaviorT]):
             Result of the action.
 
         Raises:
-            RuntimeError: if an action with this name is not implemented by
+            TypeError: if an action with this name is not implemented by
                 the behavior of the agent.
         """
+        logger.debug(f'{self._log_prefix()} executing "{action}"')
         if action not in self._actions:
-            raise RuntimeError(
+            raise TypeError(
                 f'Agent[{type(self.behavior).__name__}] does not have an '
                 f'action named "{action}".',
             )
@@ -95,13 +150,15 @@ class Agent(Generic[BehaviorT]):
             else:
                 return message.response(result=result)
         elif isinstance(message, PingRequest):
+            logger.info(f'{self._log_prefix()} received ping')
             return message.response()
         elif isinstance(message, ShutdownRequest):
             self.shutdown()
             return None
         else:
-            # TODO: log this?
-            raise AssertionError(f'Unexpected message type: {message}')
+            raise BadMessageTypeError(
+                f'Agent cannot handle message type: {message}',
+            )
 
     def _message_listener(self) -> None:
         if self._mailbox is None:
@@ -109,6 +166,8 @@ class Agent(Generic[BehaviorT]):
                 'Message listener started without initializing mailbox.',
             )
         assert self.exchange is not None
+
+        logger.info(f'{self._log_prefix()} is listening for incoming messages')
 
         while True:
             try:
@@ -119,9 +178,16 @@ class Agent(Generic[BehaviorT]):
             response = self._message_handler(message)
 
             if response is not None:
-                dest = self.exchange.get_mailbox(response.dest)
-                assert dest is not None
-                dest.send(response)
+                try:
+                    dest = self.exchange.get_mailbox(response.dest)
+                except BadIdentifierError:
+                    logger.exception(
+                        f'Failed to get mailbox of {response.dest} to '
+                        f'send {response}. This likely means the '
+                        'entity was unregistered from the exchange.',
+                    )
+                else:
+                    dest.send(response)
 
     def run(self) -> None:
         """Run the agent.
@@ -133,7 +199,12 @@ class Agent(Generic[BehaviorT]):
            [`Exchange`][aeris.exchange.Exchange] (if provided).
         1. Waits for the threads to exit.
         1. Calls [`Behavior.shutdown()`][aeris.behavior.Behavior.shutdown].
+
+        Raises:
+            BadMessageTypeError: if the agent receives a message that is not
+                a valid request type.
         """
+        self._status = _AgentStatus.STARTING
         self.behavior.setup()
 
         futures: list[Future[None]] = []
@@ -147,11 +218,16 @@ class Agent(Generic[BehaviorT]):
                     futures.append(pool.submit(method, self.done))
 
                 self._futures = tuple(futures)
+                self._status = _AgentStatus.RUNNING
+
+            logger.info(f'{self._log_prefix()} started')
 
             for future in as_completed(futures):
                 future.result()
 
         self.behavior.shutdown()
+        self._status = _AgentStatus.SHUTDOWN
+        logger.info(f'{self._log_prefix()} shutdown')
 
     def shutdown(self) -> None:
         """Notify control loops to shutdown.
@@ -159,7 +235,9 @@ class Agent(Generic[BehaviorT]):
         Sets the shutdown event passed to each control loop method and closes
         the incoming messages mailbox.
         """
+        logger.info(f'{self._log_prefix()} shutdown requested')
         self.done.set()
+        self._status = _AgentStatus.TERMINTATING
 
         with self._start_loops_lock:
             if self._mailbox is not None:

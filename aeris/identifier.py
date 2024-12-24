@@ -19,15 +19,33 @@ class Role(enum.Enum):
 
 
 class Identifier(abc.ABC):
-    """Unique identifier of an entity in a multi-agent system."""
+    """Unique identifier of an entity in a multi-agent system.
 
-    def __init__(self, uid: uuid.UUID) -> None:
+    Internally an entity is represented by a UUID. An identify can also
+    have an optional name which is only used for human-readability in logging.
+
+    Args:
+        uuid: Unique identifier for the entity.
+        name: Optional human-readable name for the entity.
+    """
+
+    def __init__(self, uid: uuid.UUID, *, name: str | None = None) -> None:
         self._uid = uid
+        self._name = name
 
     @classmethod
-    def new(cls) -> Self:
-        """Create a new entity identifier."""
-        return cls(uuid.uuid4())
+    def new(cls, name: str | None = None) -> Self:
+        """Create a new entity identifier.
+
+        Args:
+            name: Optional human-readable name for the entity.
+        """
+        return cls(uuid.uuid4(), name=name)
+
+    @property
+    def name(self) -> str | None:
+        """Human-readable name of entity."""
+        return self._name
 
     @property
     @abc.abstractmethod
@@ -43,6 +61,22 @@ class Identifier(abc.ABC):
 
     def __hash__(self) -> int:
         return hash(self.role) + hash(self._uid)
+
+    def __repr__(self) -> str:
+        if self.name is not None:
+            return (
+                f'{type(self).__name__}(uid={self._uid!s}, name={self.name})'
+            )
+        else:
+            return f'{type(self).__name__}(uid={self._uid!s})'
+
+    def __str__(self) -> str:
+        kind = f'{self.role.name.title()}ID'
+        if self.name is not None:
+            uid_bits = str(self._uid)[:8]
+            return f'{kind}<{uid_bits}.., name={self.name}>'
+        else:
+            return f'{kind}<{self._uid}>'
 
 
 class AgentIdentifier(Identifier):

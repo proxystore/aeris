@@ -30,15 +30,16 @@ class SimpleBehavior:
 def test_launch_agents() -> None:
     behavior = SimpleBehavior()
     exchange = ThreadExchange()
-    launcher = ThreadLauncher(exchange)
-    assert isinstance(launcher, Launcher)
 
-    handle1 = launcher.launch(behavior)
-    handle2 = launcher.launch(behavior)
+    with ThreadLauncher(exchange) as launcher:
+        assert isinstance(launcher, Launcher)
+        assert isinstance(repr(launcher), str)
+        assert isinstance(str(launcher), str)
 
-    time.sleep(5 * TEST_LOOP_SLEEP)
+        handle1 = launcher.launch(behavior)
+        handle2 = launcher.launch(behavior)
 
-    launcher.shutdown()
+        time.sleep(5 * TEST_LOOP_SLEEP)
 
-    handle1.close()
-    handle2.close()
+        handle1.close()
+        handle2.close()

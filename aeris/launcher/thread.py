@@ -1,16 +1,26 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
+import sys
 import threading
+from types import TracebackType
 from typing import Any
 from typing import Generic
 from typing import TypeVar
+
+if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
+    from typing import Self
+else:  # pragma: <3.11 cover
+    from typing_extensions import Self
 
 from aeris.agent import Agent
 from aeris.behavior import Behavior
 from aeris.exchange import Exchange
 from aeris.handle import Handle
 from aeris.identifier import AgentIdentifier
+
+logger = logging.getLogger(__name__)
 
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
@@ -33,6 +43,33 @@ class ThreadLauncher:
         self._agents: dict[AgentIdentifier, _RunningAgent[Any]] = {}
         self._exchange = exchange
 
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        exc_traceback: TracebackType | None,
+    ) -> None:
+        self.close()
+
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}(exchange={self._exchange!r})'
+
+    def __str__(self) -> str:
+        name = type(self).__name__
+        return f'{name}<{self._exchange}; {len(self._agents)} agents>'
+
+    def close(self) -> None:
+        """Close the launcher and shutdown agents."""
+        logger.debug(f'{self} shutting down all agents')
+        for aid in self._agents:
+            self._agents[aid].agent.shutdown()
+        for aid in self._agents:
+            self._agents[aid].thread.join()
+        logger.info(f'{self} is closed')
+
     def launch(self, behavior: Behavior) -> Handle:
         """Launch a new agent with a specified behavior.
 
@@ -48,12 +85,6 @@ class ThreadLauncher:
         thread = threading.Thread(target=agent)
         thread.start()
         self._agents[aid] = _RunningAgent(agent, thread)
+        logger.info(f'{self} launched {agent}')
 
         return self._exchange.create_handle(aid)
-
-    def shutdown(self) -> None:
-        """Shutdown the launcher and agents."""
-        for aid in self._agents:
-            self._agents[aid].agent.shutdown()
-        for aid in self._agents:
-            self._agents[aid].thread.join()
