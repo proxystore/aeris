@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pickle
+
 import pytest
 
 from aeris.exception import BadIdentifierError
@@ -87,3 +89,9 @@ def test_unregister_entity() -> None:
 
         with pytest.raises(MailboxClosedError):
             mailbox.recv()
+
+
+def test_non_pickleable() -> None:
+    with ThreadExchange() as exchange:
+        with pytest.raises(pickle.PicklingError):
+            pickle.dumps(exchange)

@@ -9,6 +9,7 @@ import pytest
 from aeris.behavior import action
 from aeris.exception import HandleClosedError
 from aeris.exchange.thread import ThreadExchange
+from aeris.handle import Handle
 from aeris.launcher.thread import ThreadLauncher
 from aeris.message import PingRequest
 from testing.constant import TEST_SLEEP
@@ -139,3 +140,15 @@ def test_cancel_futures() -> None:
 
     launcher.close()
     exchange.close()
+
+
+def test_create_new_handle_from_getnewargs() -> None:
+    with ThreadExchange() as exchange:
+        aid = exchange.register_agent()
+        handle = exchange.create_handle(aid)
+
+        args, kwargs = handle.__getnewargs_ex__()
+        new_handle = Handle(*args, **kwargs)
+
+        handle.close()
+        new_handle.close()

@@ -62,6 +62,13 @@ class Handle:
 
     A handle enables a client to invoke actions on an agent.
 
+    Note:
+        When a `Handle` instance is pickled and unpickled, such as when
+        communicated along with an agent dispatched to run in another
+        process, the `Handle` will register itself as a new client with the
+        exchange. In other words, every `Handle` instance is a unique client
+        of the exchange.
+
     Args:
         aid: Identifier of the agent.
         exchange: Message exchange used to communicate with agent.
@@ -98,6 +105,14 @@ class Handle:
         exc_traceback: TracebackType | None,
     ) -> None:
         self.close()
+
+    def __getnewargs_ex__(
+        self,
+    ) -> tuple[
+        tuple[AgentIdentifier, Exchange],
+        dict[str, Any],
+    ]:
+        return ((self.aid, self.exchange), {})
 
     def __repr__(self) -> str:
         name = type(self).__name__

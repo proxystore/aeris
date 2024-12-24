@@ -57,7 +57,13 @@ class Exchange(Protocol):
     """Message exchange protocol.
 
     A message exchange hosts the mailboxes for each entity (i.e., agent or
-    client) in a multi-agent system.
+    client) in a multi-agent system. The `Exchange` interface defines client
+    access to an exchange.
+
+    Warning:
+        Exchange implementations should be efficiently pickleable so that
+        agents and remote clients can establish client connections to the
+        same exchange.
     """
 
     def close(self) -> None:

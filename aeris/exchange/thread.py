@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import pickle
 import queue
 import sys
 from collections import defaultdict
@@ -118,6 +119,11 @@ class ThreadExchange:
         exc_traceback: TracebackType | None,
     ) -> None:
         self.close()
+
+    def __getstate__(self) -> None:
+        raise pickle.PicklingError(
+            f'{type(self).__name__} cannot be safely pickled.',
+        )
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}()'
