@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import threading
 
+import pytest
+
 from aeris.agent import Agent
 from aeris.behavior import action
 from aeris.behavior import loop
+from aeris.exception import BadMessageTypeError
 from aeris.exchange.thread import ThreadExchange
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
@@ -147,7 +150,7 @@ def test_agent_message_listener() -> None:
     agent_mailbox.send(request)
     message = client_mailbox.recv()
     assert isinstance(message, ActionResponse)
-    assert isinstance(message.exception, RuntimeError)
+    assert isinstance(message.exception, TypeError)
     assert 'foo' in str(message.exception)
 
     # Shutdown the agent
@@ -156,3 +159,25 @@ def test_agent_message_listener() -> None:
 
     thread.join(timeout=1)
     assert not thread.is_alive()
+
+
+def test_agent_listener_bad_message_type() -> None:
+    behavior = Counter()
+    exchange = ThreadExchange()
+
+    aid = exchange.register_agent()
+    cid = exchange.register_client()
+
+    agent_mailbox = exchange.get_mailbox(aid)
+    assert agent_mailbox is not None
+    client_mailbox = exchange.get_mailbox(cid)
+    assert client_mailbox is not None
+
+    agent = Agent(behavior, aid=aid, exchange=exchange)
+
+    agent_mailbox.send(PingResponse(src=cid, dest=aid))
+
+    with pytest.raises(BadMessageTypeError, match='PingResponse'):
+        agent.run()
+
+    exchange.close()

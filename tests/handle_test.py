@@ -3,9 +3,13 @@ from __future__ import annotations
 import time
 from concurrent.futures import Future
 
+import pytest
+
 from aeris.behavior import action
+from aeris.exception import HandleClosedError
 from aeris.exchange.thread import ThreadExchange
 from aeris.launcher.thread import ThreadLauncher
+from aeris.message import PingRequest
 from testing.constant import TEST_SLEEP
 
 
@@ -38,6 +42,34 @@ def test_create_and_close_handle() -> None:
         with exchange.create_handle(aid) as handle:
             assert isinstance(repr(handle), str)
             assert isinstance(str(handle), str)
+
+
+def test_handle_closed_error() -> None:
+    with ThreadExchange() as exchange:
+        aid = exchange.register_agent()
+        handle = exchange.create_handle(aid)
+        handle.close()
+
+        with pytest.raises(HandleClosedError):
+            handle.ping()
+
+
+def test_handle_bad_message() -> None:
+    with ThreadExchange() as exchange:
+        aid = exchange.register_agent()
+        handle = exchange.create_handle(aid)
+
+        handle._client_mailbox.send(
+            PingRequest(src=aid, dest=handle._cid),
+        )
+
+        time.sleep(TEST_SLEEP)
+
+        with pytest.raises(
+            RuntimeError,
+            match='This likely means the listener thread crashed.',
+        ):
+            handle.close()
 
 
 def test_handle_operations() -> None:

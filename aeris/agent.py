@@ -13,6 +13,7 @@ from typing import TypeVar
 from aeris.behavior import Behavior
 from aeris.behavior import get_actions
 from aeris.behavior import get_loops
+from aeris.exception import BadMessageTypeError
 from aeris.exchange import Exchange
 from aeris.exchange import Mailbox
 from aeris.exchange import MailboxClosedError
@@ -113,11 +114,11 @@ class Agent(Generic[BehaviorT]):
             Result of the action.
 
         Raises:
-            RuntimeError: if an action with this name is not implemented by
+            TypeError: if an action with this name is not implemented by
                 the behavior of the agent.
         """
         if action not in self._actions:
-            raise RuntimeError(
+            raise TypeError(
                 f'Agent[{type(self.behavior).__name__}] does not have an '
                 f'action named "{action}".',
             )
@@ -141,8 +142,9 @@ class Agent(Generic[BehaviorT]):
             self.shutdown()
             return None
         else:
-            # TODO: log this?
-            raise AssertionError(f'Unexpected message type: {message}')
+            raise BadMessageTypeError(
+                f'Agent cannot handle message type: {message}',
+            )
 
     def _message_listener(self) -> None:
         if self._mailbox is None:
@@ -174,6 +176,10 @@ class Agent(Generic[BehaviorT]):
            [`Exchange`][aeris.exchange.Exchange] (if provided).
         1. Waits for the threads to exit.
         1. Calls [`Behavior.shutdown()`][aeris.behavior.Behavior.shutdown].
+
+        Raises:
+            BadMessageTypeError: if the agent receives a message that is not
+                a valid request type.
         """
         self._status = _AgentStatus.STARTING
         self.behavior.setup()
