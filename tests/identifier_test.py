@@ -24,6 +24,19 @@ def tests_identifier_equality() -> None:
     cid1 = ClientIdentifier(uuid_)
 
     assert aid1 == aid2
+    assert repr(aid1) == repr(aid2)
+    assert str(aid1) == str(aid2)
     assert hash(aid1) == hash(aid2)
     assert aid1 != cid1
     assert hash(aid1) != hash(cid1)
+
+
+def tests_identifier_equality_ignore_name() -> None:
+    uuid_ = uuid.uuid4()
+    aid1 = AgentIdentifier(uuid_, name='aid1')
+    aid2 = AgentIdentifier(uuid_, name='aid2')
+
+    assert aid1 == aid2
+    assert repr(aid1) != repr(aid2)
+    assert str(aid1) != str(aid2)
+    assert hash(aid1) == hash(aid2)

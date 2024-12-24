@@ -39,6 +39,8 @@ class Waiter:
 def test_agent_run() -> None:
     behavior = Waiter()
     agent = Agent(behavior)
+    assert isinstance(repr(agent), str)
+    assert isinstance(str(agent), str)
 
     def run() -> None:
         agent()
@@ -99,6 +101,8 @@ def test_agent_message_listener() -> None:
     assert client_mailbox is not None
 
     agent = Agent(behavior, aid=aid, exchange=exchange)
+    assert isinstance(repr(agent), str)
+    assert isinstance(str(agent), str)
 
     thread = threading.Thread(target=agent)
     thread.start()

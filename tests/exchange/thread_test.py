@@ -14,6 +14,7 @@ from aeris.message import PingRequest
 def test_protocol() -> None:
     exchange = ThreadExchange()
     assert isinstance(exchange, Exchange)
+    assert isinstance(str(exchange), str)
 
     agent_id = exchange.register_agent()
     client_id = exchange.register_client()

@@ -49,6 +49,14 @@ class Handle:
         self._listener_thread = threading.Thread(target=self._result_listener)
         self._listener_thread.start()
 
+    def __repr__(self) -> str:
+        name = type(self).__name__
+        return f'{name}(aid={self.aid!r}, exchange={self.exchange!r})'
+
+    def __str__(self) -> str:
+        name = type(self).__name__
+        return f'{name}<{self.aid}; {self.exchange}>'
+
     def _result_listener(self) -> None:
         while True:
             try:

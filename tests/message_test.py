@@ -10,6 +10,16 @@ from aeris.message import PingRequest
 from aeris.message import PingResponse
 
 
+def test_message_repr() -> None:
+    request = ActionRequest(
+        src=ClientIdentifier.new(),
+        dest=AgentIdentifier.new(),
+        action='foo',
+    )
+    assert isinstance(repr(request), str)
+    assert isinstance(str(request), str)
+
+
 def test_construct_action_response() -> None:
     request = ActionRequest(
         src=ClientIdentifier.new(),

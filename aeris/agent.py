@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 import threading
 from concurrent.futures import as_completed
 from concurrent.futures import Future
@@ -22,6 +23,19 @@ from aeris.message import PingRequest
 from aeris.message import ShutdownRequest
 
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
+
+
+class _AgentMode(enum.Enum):
+    INDIVIDUAL = 'individual'
+    SYSTEM = 'system'
+
+
+class _AgentStatus(enum.Enum):
+    INITIALIZED = 'initialized'
+    STARTING = 'starting'
+    RUNNING = 'running'
+    TERMINTATING = 'terminating'
+    SHUTDOWN = 'shutdown'
 
 
 class Agent(Generic[BehaviorT]):
@@ -49,6 +63,11 @@ class Agent(Generic[BehaviorT]):
         self.exchange = exchange
         self.done = threading.Event()
 
+        if self.aid is None and self.exchange is None:
+            self._mode = _AgentMode.INDIVIDUAL
+        else:
+            self._mode = _AgentMode.SYSTEM
+
         self._actions = get_actions(behavior)
         self._loops = get_loops(behavior)
 
@@ -56,9 +75,31 @@ class Agent(Generic[BehaviorT]):
         self._start_loops_lock = threading.Lock()
         self._mailbox: Mailbox | None = None
 
+        self._status = _AgentStatus.INITIALIZED
+
     def __call__(self) -> None:
         """Alias for [run()][aeris.agent.Agent.run]."""
         self.run()
+
+    def __repr__(self) -> str:
+        name = type(self).__name__
+        behavior = type(self.behavior).__name__
+        if self._mode == _AgentMode.INDIVIDUAL:
+            return f'{name}({behavior})'
+        else:
+            return (
+                f'{name}'
+                f'({behavior}, aid={self.aid!r}, exchange={self.exchange!r})'
+            )
+
+    def __str__(self) -> str:
+        name = type(self).__name__
+        behavior = type(self.behavior).__name__
+        status = self._status.name
+        if self._mode == _AgentMode.SYSTEM:
+            return f'{name}[{behavior}]<{status}>'
+        else:
+            return f'{name}[{behavior}]<{status}; {self.aid}; {self.exchange}>'
 
     def action(self, action: str, args: Any, kwargs: Any) -> Any:
         """Invoke an action of the agent.
@@ -134,6 +175,7 @@ class Agent(Generic[BehaviorT]):
         1. Waits for the threads to exit.
         1. Calls [`Behavior.shutdown()`][aeris.behavior.Behavior.shutdown].
         """
+        self._status = _AgentStatus.STARTING
         self.behavior.setup()
 
         futures: list[Future[None]] = []
@@ -147,11 +189,13 @@ class Agent(Generic[BehaviorT]):
                     futures.append(pool.submit(method, self.done))
 
                 self._futures = tuple(futures)
+                self._status = _AgentStatus.RUNNING
 
             for future in as_completed(futures):
                 future.result()
 
         self.behavior.shutdown()
+        self._status = _AgentStatus.SHUTDOWN
 
     def shutdown(self) -> None:
         """Notify control loops to shutdown.
@@ -160,6 +204,7 @@ class Agent(Generic[BehaviorT]):
         the incoming messages mailbox.
         """
         self.done.set()
+        self._status = _AgentStatus.TERMINTATING
 
         with self._start_loops_lock:
             if self._mailbox is not None:

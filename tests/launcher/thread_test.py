@@ -32,6 +32,8 @@ def test_launch_agents() -> None:
     exchange = ThreadExchange()
     launcher = ThreadLauncher(exchange)
     assert isinstance(launcher, Launcher)
+    assert isinstance(repr(launcher), str)
+    assert isinstance(str(launcher), str)
 
     handle1 = launcher.launch(behavior)
     handle2 = launcher.launch(behavior)

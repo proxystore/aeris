@@ -63,12 +63,20 @@ class Exchange(Protocol):
     client) in a multi-agent system.
     """
 
-    def register_agent(self) -> AgentIdentifier:
-        """Create a mailbox for a new agent in the system."""
+    def register_agent(self, name: str | None = None) -> AgentIdentifier:
+        """Create a mailbox for a new agent in the system.
+
+        Args:
+            name: Optional human-readable name for the agent.
+        """
         ...
 
-    def register_client(self) -> ClientIdentifier:
-        """Create a mailbox for a new client in the system."""
+    def register_client(self, name: str | None = None) -> ClientIdentifier:
+        """Create a mailbox for a new client in the system.
+
+        Args:
+            name: Optional human-readable name for the client.
+        """
         ...
 
     def create_handle(self, aid: AgentIdentifier) -> Handle:

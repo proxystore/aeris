@@ -34,6 +34,8 @@ def test_create_and_close_handle() -> None:
     exchange = ThreadExchange()
     aid = exchange.register_agent()
     handle = exchange.create_handle(aid)
+    assert isinstance(repr(handle), str)
+    assert isinstance(str(handle), str)
     handle.close()
 
 

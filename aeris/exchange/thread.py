@@ -76,15 +76,29 @@ class ThreadExchange:
     def __init__(self) -> None:
         self._queues: dict[Identifier, MailboxQueue] = {}
 
-    def register_agent(self) -> AgentIdentifier:
-        """Create a mailbox for a new agent in the system."""
-        aid = AgentIdentifier.new()
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}()'
+
+    def __str__(self) -> str:
+        return repr(self)
+
+    def register_agent(self, name: str | None = None) -> AgentIdentifier:
+        """Create a mailbox for a new agent in the system.
+
+        Args:
+            name: Optional human-readable name for the agent.
+        """
+        aid = AgentIdentifier.new(name=name)
         self._queues[aid] = queue.PriorityQueue()
         return aid
 
-    def register_client(self) -> ClientIdentifier:
-        """Create a mailbox for a new client in the system."""
-        cid = ClientIdentifier.new()
+    def register_client(self, name: str | None = None) -> ClientIdentifier:
+        """Create a mailbox for a new client in the system.
+
+        Args:
+            name: Optional human-readable name for the client.
+        """
+        cid = ClientIdentifier.new(name=name)
         self._queues[cid] = queue.PriorityQueue()
         return cid
 

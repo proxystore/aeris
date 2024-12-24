@@ -33,6 +33,13 @@ class ThreadLauncher:
         self._agents: dict[AgentIdentifier, _RunningAgent[Any]] = {}
         self._exchange = exchange
 
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}(exchange={self._exchange!r})'
+
+    def __str__(self) -> str:
+        name = type(self).__name__
+        return f'{name}<{self._exchange}; {len(self._agents)} agents>'
+
     def launch(self, behavior: Behavior) -> Handle:
         """Launch a new agent with a specified behavior.
 
