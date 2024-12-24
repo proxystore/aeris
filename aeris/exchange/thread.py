@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import dataclasses
+import logging
 import queue
 import sys
 from types import TracebackType
-from typing import Union
 
 if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
     from typing import TypeAlias
@@ -22,12 +23,20 @@ from aeris.identifier import ClientIdentifier
 from aeris.identifier import Identifier
 from aeris.message import Message
 
+logger = logging.getLogger()
+
 DEFAULT_PRIORITY = 0
 CLOSE_PRIORITY = DEFAULT_PRIORITY + 1
 CLOSE_SENTINAL = object()
 
-MailboxQueueItem: TypeAlias = tuple[int, Union[Message, object]]
-MailboxQueue: TypeAlias = queue.PriorityQueue[MailboxQueueItem]
+
+@dataclasses.dataclass(order=True)
+class _MailboxQueueItem:
+    priority: int
+    message: Message | object = dataclasses.field(compare=False)
+
+
+MailboxQueue: TypeAlias = queue.PriorityQueue[_MailboxQueueItem]
 
 
 class ThreadMailbox:
@@ -57,7 +66,7 @@ class ThreadMailbox:
         """
         if self._closed:
             raise MailboxClosedError
-        self._queue.put((DEFAULT_PRIORITY, message))
+        self._queue.put(_MailboxQueueItem(DEFAULT_PRIORITY, message))
 
     def recv(self) -> Message:
         """Get the next message from this mailbox.
@@ -69,7 +78,8 @@ class ThreadMailbox:
         if self._closed:
             raise MailboxClosedError
 
-        _, message = self._queue.get(block=True)
+        item = self._queue.get(block=True)
+        message = item.message
         if message is CLOSE_SENTINAL:
             raise MailboxClosedError
         assert isinstance(message, Message)
@@ -79,7 +89,7 @@ class ThreadMailbox:
         """Close the mailbox."""
         if not self._closed:
             self._closed = True
-            self._queue.put((CLOSE_PRIORITY, CLOSE_SENTINAL))
+            self._queue.put(_MailboxQueueItem(CLOSE_PRIORITY, CLOSE_SENTINAL))
 
 
 class ThreadExchange:
@@ -108,7 +118,7 @@ class ThreadExchange:
         return f'{type(self).__name__}()'
 
     def __str__(self) -> str:
-        return repr(self)
+        return f'{type(self).__name__}<{id(self)}>'
 
     def close(self) -> None:
         """Close the exchange."""
@@ -122,6 +132,7 @@ class ThreadExchange:
         """
         aid = AgentIdentifier.new(name=name)
         self._queues[aid] = queue.PriorityQueue()
+        logger.info(f'{self} registered {aid}')
         return aid
 
     def register_client(self, name: str | None = None) -> ClientIdentifier:
@@ -132,6 +143,7 @@ class ThreadExchange:
         """
         cid = ClientIdentifier.new(name=name)
         self._queues[cid] = queue.PriorityQueue()
+        logger.info(f'{self} registered {cid}')
         return cid
 
     def create_handle(self, aid: AgentIdentifier) -> Handle:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 import sys
 import threading
 from types import TracebackType
@@ -18,6 +19,8 @@ from aeris.behavior import Behavior
 from aeris.exchange import Exchange
 from aeris.handle import Handle
 from aeris.identifier import AgentIdentifier
+
+logger = logging.getLogger(__name__)
 
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
@@ -60,10 +63,12 @@ class ThreadLauncher:
 
     def close(self) -> None:
         """Close the launcher and shutdown agents."""
+        logger.debug(f'{self} shutting down all agents')
         for aid in self._agents:
             self._agents[aid].agent.shutdown()
         for aid in self._agents:
             self._agents[aid].thread.join()
+        logger.info(f'{self} is closed')
 
     def launch(self, behavior: Behavior) -> Handle:
         """Launch a new agent with a specified behavior.
@@ -80,5 +85,6 @@ class ThreadLauncher:
         thread = threading.Thread(target=agent)
         thread.start()
         self._agents[aid] = _RunningAgent(agent, thread)
+        logger.info(f'{self} launched {agent}')
 
         return self._exchange.create_handle(aid)

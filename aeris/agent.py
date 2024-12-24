@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import logging
 import threading
 from concurrent.futures import as_completed
 from concurrent.futures import Future
@@ -22,6 +23,8 @@ from aeris.message import ActionRequest
 from aeris.message import Message
 from aeris.message import PingRequest
 from aeris.message import ShutdownRequest
+
+logger = logging.getLogger(__name__)
 
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
@@ -96,11 +99,19 @@ class Agent(Generic[BehaviorT]):
     def __str__(self) -> str:
         name = type(self).__name__
         behavior = type(self.behavior).__name__
-        status = self._status.name
-        if self._mode == _AgentMode.SYSTEM:
+        status = self._status.value
+        if self._mode == _AgentMode.INDIVIDUAL:
             return f'{name}[{behavior}]<{status}>'
         else:
             return f'{name}[{behavior}]<{status}; {self.aid}; {self.exchange}>'
+
+    def _log_prefix(self) -> str:
+        name = type(self).__name__
+        behavior = type(self.behavior).__name__
+        if self._mode == _AgentMode.INDIVIDUAL:
+            return f'{name}[{behavior}]'
+        else:
+            return f'{name}[{behavior};{self.aid}]'
 
     def action(self, action: str, args: Any, kwargs: Any) -> Any:
         """Invoke an action of the agent.
@@ -117,6 +128,7 @@ class Agent(Generic[BehaviorT]):
             TypeError: if an action with this name is not implemented by
                 the behavior of the agent.
         """
+        logger.debug(f'{self._log_prefix()} executing "{action}"')
         if action not in self._actions:
             raise TypeError(
                 f'Agent[{type(self.behavior).__name__}] does not have an '
@@ -137,6 +149,7 @@ class Agent(Generic[BehaviorT]):
             else:
                 return message.response(result=result)
         elif isinstance(message, PingRequest):
+            logger.info(f'{self._log_prefix()} received ping')
             return message.response()
         elif isinstance(message, ShutdownRequest):
             self.shutdown()
@@ -152,6 +165,8 @@ class Agent(Generic[BehaviorT]):
                 'Message listener started without initializing mailbox.',
             )
         assert self.exchange is not None
+
+        logger.info(f'{self._log_prefix()} is listening for incoming messages')
 
         while True:
             try:
@@ -197,11 +212,14 @@ class Agent(Generic[BehaviorT]):
                 self._futures = tuple(futures)
                 self._status = _AgentStatus.RUNNING
 
+            logger.info(f'{self._log_prefix()} started')
+
             for future in as_completed(futures):
                 future.result()
 
         self.behavior.shutdown()
         self._status = _AgentStatus.SHUTDOWN
+        logger.info(f'{self._log_prefix()} shutdown')
 
     def shutdown(self) -> None:
         """Notify control loops to shutdown.
@@ -209,6 +227,7 @@ class Agent(Generic[BehaviorT]):
         Sets the shutdown event passed to each control loop method and closes
         the incoming messages mailbox.
         """
+        logger.info(f'{self._log_prefix()} shutdown requested')
         self.done.set()
         self._status = _AgentStatus.TERMINTATING
 

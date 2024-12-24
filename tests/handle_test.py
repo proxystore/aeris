@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import Future
+from unittest import mock
 
 import pytest
 
@@ -56,14 +57,31 @@ def test_handle_closed_error() -> None:
 
 def test_handle_bad_message() -> None:
     with ThreadExchange() as exchange:
+        launcher = ThreadLauncher(exchange)
+
+        with launcher.launch(Counter()) as handle:
+            # Should log but not crash
+            handle._client_mailbox.send(
+                PingRequest(src=handle.aid, dest=handle._cid),
+            )
+
+            assert handle.ping() > 0
+
+        launcher.close()
+
+
+@pytest.mark.filterwarnings(
+    'ignore:.*:pytest.PytestUnhandledThreadExceptionWarning',
+)
+def test_listener_thread_crash() -> None:
+    with ThreadExchange() as exchange:
         aid = exchange.register_agent()
-        handle = exchange.create_handle(aid)
 
-        handle._client_mailbox.send(
-            PingRequest(src=aid, dest=handle._cid),
-        )
-
-        time.sleep(TEST_SLEEP)
+        with mock.patch(
+            'aeris.handle.Handle._result_listener',
+            side_effect=Exception(),
+        ):
+            handle = exchange.create_handle(aid)
 
         with pytest.raises(
             RuntimeError,

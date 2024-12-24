@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import logging
 import sys
 import threading
 import time
@@ -26,7 +27,6 @@ else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
 import aeris
-from aeris.exception import BadMessageTypeError
 from aeris.exception import HandleClosedError
 from aeris.identifier import AgentIdentifier
 from aeris.message import ActionRequest
@@ -37,6 +37,8 @@ from aeris.message import ShutdownRequest
 
 if TYPE_CHECKING:
     from aeris.exchange import Exchange
+
+logger = logging.getLogger(__name__)
 
 P = ParamSpec('P')
 R_co = TypeVar('R_co', covariant=True)
@@ -78,6 +80,8 @@ class Handle:
         assert client_mailbox is not None
         self._client_mailbox = client_mailbox
 
+        logger.info(f'Initialized handle to {self.aid} with {self._cid}')
+
         self._futures: dict[uuid.UUID, Future[Any]] = {}
         self._listener_thread = threading.Thread(target=self._result_listener)
         self._listener_thread.start()
@@ -101,9 +105,10 @@ class Handle:
 
     def __str__(self) -> str:
         name = type(self).__name__
-        return f'{name}<{self.aid}; {self.exchange}>'
+        return f'{name}<{self._cid}; {self.aid}; {self.exchange}>'
 
     def _result_listener(self) -> None:
+        logger.debug(f'{self._cid} listening for results from {self.aid}')
         while True:
             try:
                 message = self._client_mailbox.recv()
@@ -120,11 +125,9 @@ class Handle:
                 future = self._futures.pop(message.mid)
                 future.set_result(None)
             else:
-                # TODO: Should log this an exit gracefully. Update close error
-                # to say to inspect logs.
-                raise BadMessageTypeError(
-                    f'Handle did not receive valid message response type: '
-                    f'{message}',
+                logger.error(
+                    f'{self._cid} received invalid message response type '
+                    f'from {self.aid}: {message}',
                 )
 
     def close(
@@ -162,6 +165,8 @@ class Handle:
         self._client_mailbox.close()
         self._listener_thread.join()
 
+        logger.info(f'{self._cid} is closed')
+
     @_validate_state
     def action(
         self,
@@ -190,6 +195,7 @@ class Handle:
         future: Future[T] = Future()
         self._futures[request.mid] = future
         self._agent_mailbox.send(request)
+        logger.debug(f'{self} sent {request}')
         return future
 
     @_validate_state
@@ -214,9 +220,11 @@ class Handle:
         future: Future[None] = Future()
         self._futures[request.mid] = future
         self._agent_mailbox.send(request)
+        logger.debug(f'{self} sent {request}')
         future.result(timeout=timeout)
-        end = time.perf_counter()
-        return end - start
+        elapsed = time.perf_counter() - start
+        logger.debug(f'{self} received ping response in {elapsed/1000:.3f} ms')
+        return elapsed
 
     @_validate_state
     def shutdown(self) -> None:
@@ -226,3 +234,4 @@ class Handle:
         """
         request = ShutdownRequest(src=self._cid, dest=self.aid)
         self._agent_mailbox.send(request)
+        logger.debug(f'{self} sent {request}')
