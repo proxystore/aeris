@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import time
 from concurrent.futures import Future
 
 from aeris.behavior import action
 from aeris.exchange.thread import ThreadExchange
 from aeris.launcher.thread import ThreadLauncher
+from testing.constant import TEST_SLEEP
 
 
 class Counter:
@@ -60,4 +62,29 @@ def test_handle_operations() -> None:
     handle.shutdown()
 
     handle.close()
+    launcher.shutdown()
+
+
+class Sleeper:
+    def setup(self) -> None:
+        pass
+
+    def shutdown(self) -> None:
+        pass
+
+    @action
+    def sleep(self, sleep: float) -> None:
+        time.sleep(sleep)
+
+
+def test_cancel_futures() -> None:
+    exchange = ThreadExchange()
+    launcher = ThreadLauncher(exchange)
+    behavior = Sleeper()
+
+    handle = launcher.launch(behavior)
+    future: Future[None] = handle.action('sleep', TEST_SLEEP)
+    handle.close(wait_futures=False)
+    assert future.cancelled()
+
     launcher.shutdown()

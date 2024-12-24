@@ -4,6 +4,7 @@ import threading
 import time
 import uuid
 from concurrent.futures import Future
+from concurrent.futures import wait
 from typing import Any
 from typing import TYPE_CHECKING
 from typing import TypeVar
@@ -77,9 +78,25 @@ class Handle:
                 # TODO: log this better?
                 raise AssertionError('Unreachable.')
 
-    def close(self) -> None:
-        """Close this handle."""
-        # TODO: wait or cancel futures?
+    def close(
+        self,
+        wait_futures: bool = True,
+        *,
+        timeout: float | None = None,
+    ) -> None:
+        """Close this handle.
+
+        Args:
+            wait_futures: Wait to return until all pending futures are done
+                executing. If `False`, pending futures are cancelled.
+            timeout: Optional timeout used when `wait=True`.
+        """
+        if wait_futures:
+            wait(list(self._futures.values()), timeout=timeout)
+        else:
+            for future in self._futures:
+                self._futures[future].cancel()
+
         self._client_mailbox.close()
         self._listener_thread.join()
 
