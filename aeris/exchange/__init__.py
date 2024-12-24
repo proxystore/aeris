@@ -83,6 +83,14 @@ class Exchange(Protocol):
         """
         ...
 
+    def unregister(self, identifier: Identifier) -> None:
+        """Unregister the entity (either agent or client).
+
+        Args:
+            identifier: Identifier of the entity to unregister.
+        """
+        ...
+
     def create_handle(self, aid: AgentIdentifier) -> Handle:
         """Create a handle to an agent in the system.
 

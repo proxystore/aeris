@@ -164,6 +164,7 @@ class Handle:
 
         self._client_mailbox.close()
         self._listener_thread.join()
+        self.exchange.unregister(self._cid)
 
         logger.info(f'{self._cid} is closed')
 

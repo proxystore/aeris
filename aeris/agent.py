@@ -178,8 +178,14 @@ class Agent(Generic[BehaviorT]):
 
             if response is not None:
                 dest = self.exchange.get_mailbox(response.dest)
-                assert dest is not None
-                dest.send(response)
+                if dest is not None:
+                    dest.send(response)
+                else:
+                    logger.warning(
+                        f'Failed to get mailbox of {response.dest} to '
+                        f'send {response}. This likely means the '
+                        'entity was unregistered from the exchange.',
+                    )
 
     def run(self) -> None:
         """Run the agent.

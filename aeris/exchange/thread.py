@@ -4,6 +4,7 @@ import dataclasses
 import logging
 import queue
 import sys
+from collections import defaultdict
 from types import TracebackType
 
 if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
@@ -102,6 +103,9 @@ class ThreadExchange:
 
     def __init__(self) -> None:
         self._queues: dict[Identifier, MailboxQueue] = {}
+        self._mailboxes: dict[Identifier, list[ThreadMailbox]] = defaultdict(
+            list,
+        )
 
     def __enter__(self) -> Self:
         return self
@@ -146,6 +150,19 @@ class ThreadExchange:
         logger.info(f'{self} registered {cid}')
         return cid
 
+    def unregister(self, identifier: Identifier) -> None:
+        """Unregister the entity (either agent or client).
+
+        Args:
+            identifier: Identifier of the entity to unregister.
+        """
+        self._queues.pop(identifier, None)
+        mailboxes = self._mailboxes.pop(identifier, None)
+        if mailboxes is not None:
+            for mailbox in mailboxes:
+                mailbox.close()
+        logger.info(f'{self} unregistered {identifier}')
+
     def create_handle(self, aid: AgentIdentifier) -> Handle:
         """Create a handle to an agent in the system.
 
@@ -185,4 +202,6 @@ class ThreadExchange:
             queue = self._queues[uid]
         except KeyError:
             return None
-        return ThreadMailbox(queue)
+        mailbox = ThreadMailbox(queue)
+        self._mailboxes[uid].append(mailbox)
+        return mailbox

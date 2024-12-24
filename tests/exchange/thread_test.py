@@ -68,3 +68,20 @@ def test_create_handle_to_client() -> None:
     with ThreadExchange() as exchange:
         with pytest.raises(TypeError, match='Handle must be created from an'):
             exchange.create_handle(ClientIdentifier.new())  # type: ignore[arg-type]
+
+
+def test_unregister_entity() -> None:
+    with ThreadExchange() as exchange:
+        agent_id = exchange.register_agent()
+        exchange.unregister(agent_id)
+
+        agent_id = exchange.register_agent()
+        mailbox = exchange.get_mailbox(agent_id)
+        assert mailbox is not None
+
+        exchange.unregister(agent_id)
+        new_mailbox = exchange.get_mailbox(agent_id)
+        assert new_mailbox is None
+
+        with pytest.raises(MailboxClosedError):
+            mailbox.recv()
