@@ -56,6 +56,23 @@ class Behavior(Protocol):
         ...
 
 
+class BehaviorMixin:
+    """Mixin class that add no-op setup and shutdown methods to a class.
+
+    This is a shortcut for writing out empty setup and shutdown methods
+    to satisfy the [`Behavior`][aeris.behavior.Behavior] protocol for
+    behaviors that do not need to specify setup or shutdown.
+    """
+
+    def setup(self) -> None:
+        """No-op setup."""
+        pass
+
+    def shutdown(self) -> None:
+        """No-op shutdown."""
+        pass
+
+
 class Action(Generic[P, R_co], Protocol):
     """Action method protocol."""
 

@@ -6,6 +6,7 @@ import pytest
 
 from aeris.agent import Agent
 from aeris.behavior import action
+from aeris.behavior import BehaviorMixin
 from aeris.behavior import loop
 from aeris.exception import BadMessageTypeError
 from aeris.exchange.thread import ThreadExchange
@@ -72,15 +73,9 @@ def test_agent_shutdown() -> None:
     assert agent.behavior.shutdown_event.is_set()
 
 
-class Counter:
+class Counter(BehaviorMixin):
     def __init__(self) -> None:
         self._count = 0
-
-    def setup(self) -> None:
-        pass
-
-    def shutdown(self) -> None:
-        pass
 
     @action
     def add(self, value: int) -> None:
