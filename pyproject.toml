@@ -33,12 +33,14 @@ Documentation = "https://aeris.proxystore.dev"
 Source = "https://github.com/proxystore/aeris"
 
 [project.optional-dependencies]
+all = ["aeris"]
 dev = [
     "covdefaults>=2.2",
     "coverage",
     "mypy",
     "pre-commit",
     "pytest",
+    "pytest-asyncio",
     "pytest-cov",
     "ruff>=0.2.0",
     "tox",
@@ -86,6 +88,9 @@ allow_untyped_defs = true
 module = "tests.*"
 allow_incomplete_defs = true
 allow_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 line-length = 79
