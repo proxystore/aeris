@@ -42,7 +42,6 @@ logger = logging.getLogger(__name__)
 
 P = ParamSpec('P')
 R_co = TypeVar('R_co', covariant=True)
-T_co = TypeVar('T_co', covariant=True)
 
 
 def _validate_state(
@@ -190,7 +189,7 @@ class Handle:
         /,
         *args: Any,
         **kwargs: Any,
-    ) -> Future[T_co]:
+    ) -> Future[R_co]:
         """Invoke an action on the agent.
 
         Args:
@@ -208,7 +207,7 @@ class Handle:
             args=args,
             kwargs=kwargs,
         )
-        future: Future[T_co] = Future()
+        future: Future[R_co] = Future()
         self._futures[request.mid] = future
         self._agent_mailbox.send(request)
         logger.debug(f'{self} sent {request}')
