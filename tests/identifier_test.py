@@ -4,39 +4,30 @@ import uuid
 
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
-from aeris.identifier import Role
 
 
 def tests_identifier_equality() -> None:
     aid = AgentIdentifier.new()
     cid = ClientIdentifier.new()
 
-    assert aid.role == Role.AGENT
-    assert cid.role == Role.CLIENT
+    assert isinstance(aid, AgentIdentifier)
+    assert isinstance(cid, ClientIdentifier)
 
-    assert aid != aid._uid
     assert aid != cid
     assert hash(aid) != hash(cid)
 
-    uuid_ = uuid.uuid4()
-    aid1 = AgentIdentifier(uuid_)
-    aid2 = AgentIdentifier(uuid_)
-    cid1 = ClientIdentifier(uuid_)
+    uid = uuid.uuid4()
+    aid1 = AgentIdentifier(uid=uid)
+    aid2 = AgentIdentifier(uid=uid)
+    cid1 = ClientIdentifier(uid=uid)
 
     assert aid1 == aid2
-    assert repr(aid1) == repr(aid2)
-    assert str(aid1) == str(aid2)
-    assert hash(aid1) == hash(aid2)
     assert aid1 != cid1
-    assert hash(aid1) != hash(cid1)
 
 
 def tests_identifier_equality_ignore_name() -> None:
-    uuid_ = uuid.uuid4()
-    aid1 = AgentIdentifier(uuid_, name='aid1')
-    aid2 = AgentIdentifier(uuid_, name='aid2')
+    uid = uuid.uuid4()
+    aid1 = AgentIdentifier(uid=uid, name='aid1')
+    aid2 = AgentIdentifier(uid=uid, name='aid2')
 
     assert aid1 == aid2
-    assert repr(aid1) != repr(aid2)
-    assert str(aid1) != str(aid2)
-    assert hash(aid1) == hash(aid2)

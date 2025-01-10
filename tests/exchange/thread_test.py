@@ -9,8 +9,8 @@ from aeris.exchange import Exchange
 from aeris.exchange import Mailbox
 from aeris.exchange import MailboxClosedError
 from aeris.exchange.thread import ThreadExchange
+from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
-from aeris.identifier import Role
 from aeris.message import PingRequest
 
 
@@ -22,8 +22,8 @@ def test_protocol() -> None:
         agent_id = exchange.register_agent()
         client_id = exchange.register_client()
 
-        assert agent_id.role == Role.AGENT
-        assert client_id.role == Role.CLIENT
+        assert isinstance(agent_id, AgentIdentifier)
+        assert isinstance(client_id, ClientIdentifier)
 
         mailbox = exchange.get_mailbox(agent_id)
         assert isinstance(mailbox, Mailbox)

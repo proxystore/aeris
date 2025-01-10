@@ -86,8 +86,8 @@ class SimpleMailbox:
         pickled = base64.b64encode(pickle.dumps(message)).decode('ascii')
         payload = {
             'kind': 'message',
-            'src': str(message.src._uid),
-            'dest': str(message.dest._uid),
+            'src': str(message.src.uid),
+            'dest': str(message.dest.uid),
             'message': pickled,
         }
         self._exchange._send_server_message(payload)
@@ -218,8 +218,8 @@ class SimpleExchange:
 
     def _register(self, uid: Identifier) -> None:
         # TODO: expose _uid as public property.
-        self._mailboxes[uid._uid] = SimpleMailbox(uid, self)
-        payload = {'kind': 'register', 'src': str(uid._uid)}
+        self._mailboxes[uid.uid] = SimpleMailbox(uid, self)
+        payload = {'kind': 'register', 'src': str(uid.uid)}
         encoded = json.dumps(payload).encode() + b'\n'
         self._socket.send(encoded)
 
@@ -251,10 +251,10 @@ class SimpleExchange:
         Args:
             uid: Identifier of the entity to unregister.
         """
-        mailbox = self._mailboxes.pop(uid._uid, None)
+        mailbox = self._mailboxes.pop(uid.uid, None)
         if mailbox is not None:
             mailbox.close()
-        payload = {'kind': 'unregister', 'src': str(uid._uid)}
+        payload = {'kind': 'unregister', 'src': str(uid.uid)}
         encoded = json.dumps(payload).encode() + b'\n'
         self._socket.send(encoded)
         logger.info(f'{self} unregistered {uid}')
@@ -299,7 +299,7 @@ class SimpleExchange:
                 registered with the exchange.
         """
         try:
-            return self._mailboxes[uid._uid]
+            return self._mailboxes[uid.uid]
         except KeyError as e:
             raise BadIdentifierError(
                 f'{uid} is not registered with this exchange.',
