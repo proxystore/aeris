@@ -4,7 +4,6 @@ import asyncio
 import multiprocessing
 import socket
 import time
-import uuid
 from collections.abc import AsyncGenerator
 from collections.abc import Generator
 from unittest import mock
@@ -14,11 +13,13 @@ import pytest_asyncio
 
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
+from aeris.exchange.message import ForwardMessage
 from aeris.exchange.simple.client import SimpleExchange
 from aeris.exchange.simple.server import _AsyncMailbox
 from aeris.exchange.simple.server import _MailboxManager
 from aeris.exchange.simple.server import _main
 from aeris.exchange.simple.server import MailboxServer
+from aeris.identifier import AgentIdentifier
 from aeris.message import PingRequest
 from testing.sys import open_port
 
@@ -102,7 +103,7 @@ async def test_async_mailbox_subscribe() -> None:
 @pytest.mark.asyncio
 async def test_mailbox_manager_registration() -> None:
     manager = _MailboxManager()
-    uid = uuid.uuid4()
+    uid = AgentIdentifier.new()
 
     manager.register(uid)
     manager.register(uid)  # Idempotent check
@@ -114,14 +115,18 @@ async def test_mailbox_manager_registration() -> None:
 @pytest.mark.asyncio
 async def test_mailbox_manager_subscribe() -> None:
     manager = _MailboxManager()
-    uid = uuid.uuid4()
-    messages = [b'1', b'2', b'3']
+    uid = AgentIdentifier.new()
+    messages = [
+        ForwardMessage(src=uid, dest=uid, message='1'),
+        ForwardMessage(src=uid, dest=uid, message='2'),
+        ForwardMessage(src=uid, dest=uid, message='3'),
+    ]
 
     manager.register(uid)
     for message in messages:
-        await manager.send(uid, message)
+        await manager.send(message)
 
-    received: list[bytes] = []
+    received: list[ForwardMessage] = []
     async for message in await manager.subscribe(uid):
         received.append(message)
         if len(received) == len(messages):
@@ -134,10 +139,11 @@ async def test_mailbox_manager_subscribe() -> None:
 @pytest.mark.asyncio
 async def test_mailbox_manager_bad_identifier() -> None:
     manager = _MailboxManager()
-    uid = uuid.uuid4()
+    uid = AgentIdentifier.new()
+    message = ForwardMessage(src=uid, dest=uid, message='foo')
 
     with pytest.raises(BadIdentifierError):
-        await manager.send(uid, b'foo')
+        await manager.send(message)
 
     with pytest.raises(BadIdentifierError):
         await manager.subscribe(uid)

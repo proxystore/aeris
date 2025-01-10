@@ -4,11 +4,9 @@ import argparse
 import asyncio
 import contextlib
 import dataclasses
-import json
 import logging
 import signal
 import sys
-import uuid
 from collections.abc import AsyncGenerator
 from collections.abc import Sequence
 from typing import cast
@@ -17,6 +15,12 @@ from typing import TypeVar
 
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
+from aeris.exchange.message import BaseExchangeMessage
+from aeris.exchange.message import ForwardMessage
+from aeris.exchange.message import RegisterMessage
+from aeris.exchange.message import ResponseMessage
+from aeris.exchange.message import UnregisterMessage
+from aeris.identifier import Identifier
 
 T = TypeVar('T')
 
@@ -70,26 +74,29 @@ class _AsyncMailbox(Generic[T]):
 
 class _MailboxManager:
     def __init__(self) -> None:
-        self._mailboxes: dict[uuid.UUID, _AsyncMailbox[bytes]] = {}
+        self._mailboxes: dict[Identifier, _AsyncMailbox[ForwardMessage]] = {}
 
-    def register(self, uid: uuid.UUID) -> None:
+    def register(self, uid: Identifier) -> None:
         if uid not in self._mailboxes or self._mailboxes[uid].closed():
             # If the old mailbox was closed, it gets thrown away.
             self._mailboxes[uid] = _AsyncMailbox()
 
-    async def unregister(self, uid: uuid.UUID) -> None:
+    async def unregister(self, uid: Identifier) -> None:
         if uid in self._mailboxes:
             await self._mailboxes[uid].close(immediate=True)
 
-    async def send(self, uid: uuid.UUID, message: bytes) -> None:
+    async def send(self, message: ForwardMessage) -> None:
         try:
-            await self._mailboxes[uid].send(message)
+            await self._mailboxes[message.dest].send(message)
         except KeyError as e:
             raise BadIdentifierError(
-                f'No mailbox associated with {uid}',
+                f'No mailbox associated with {message.dest}',
             ) from e
 
-    async def subscribe(self, uid: uuid.UUID) -> AsyncGenerator[bytes]:
+    async def subscribe(
+        self,
+        uid: Identifier,
+    ) -> AsyncGenerator[ForwardMessage]:
         try:
             return self._mailboxes[uid].subscribe()
         except KeyError as e:
@@ -110,88 +117,91 @@ class MailboxServer:
         self.host = host
         self.port = port
         self.manager = _MailboxManager()
-        self._subscriber_tasks: dict[uuid.UUID, asyncio.Task[None]] = {}
+        self._subscriber_tasks: dict[Identifier, asyncio.Task[None]] = {}
 
     async def _subscribe(
         self,
-        eid: uuid.UUID,
+        uid: Identifier,
         writer: asyncio.StreamWriter,
     ) -> None:
-        messages = await self.manager.subscribe(eid)
-        logger.info('Started subscriber task for %s', eid)
+        messages = await self.manager.subscribe(uid)
+        logger.info('Started subscriber task for %s', uid)
 
         while not writer.is_closing():
             try:
-                raw = await asyncio.wait_for(
+                message = await asyncio.wait_for(
                     messages.__anext__(),
                     timeout=1,
                 )
-                message = {'kind': 'message', 'dest': str(eid), 'message': raw}
-                encoded = json.dumps(message).encode()
             except asyncio.TimeoutError:
                 continue
             except StopAsyncIteration:
                 break
-            else:
-                writer.write(encoded)
-                writer.write(b'\n')
-                try:
-                    await writer.drain()
-                    logger.debug('Sent message to %s: %s', eid, message)
-                except OSError:
-                    logger.warning(
-                        'Failed to send message to %s: %s',
-                        eid,
-                        message,
-                    )
+
+            encoded = message.model_serialize()
+            writer.write(encoded)
+            writer.write(b'\n')
+            try:
+                await writer.drain()
+                logger.debug('Sent message to %s: %s', uid, message)
+            except OSError:
+                logger.warning(
+                    'Failed to send message to %s: %s',
+                    uid,
+                    message,
+                )
 
         writer.close()
         await writer.wait_closed()
-        logger.info('Exited subscriber task for %s', eid)
+        logger.info('Exited subscriber task for %s', uid)
 
     async def _handle(
         self,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
-        logger.info('New client connected')
+        logger.debug('Started new client handle')
         while not reader.at_eof():
             raw = await reader.readline()
             if raw == b'':
                 reader.feed_eof()
                 continue
 
-            message = json.loads(raw.decode())
+            message = BaseExchangeMessage.model_deserialize(raw)
             logger.debug('Received: %s', message)
-            kind = message['kind'].strip().lower()
-            src_id = uuid.UUID(message['src'])
-            response = None
+            response: ResponseMessage | None = None
 
-            if kind == 'message':
-                dest_id = uuid.UUID(message['dest'])
-                await self.manager.send(dest_id, message['message'])
-            elif kind == 'register':
-                self.manager.register(src_id)
+            if isinstance(message, ForwardMessage):
+                await self.manager.send(message)
+                response = message.response()
+            elif isinstance(message, RegisterMessage):
+                self.manager.register(message.src)
                 task = asyncio.create_task(
-                    self._subscribe(src_id, writer),
-                    name=f'{src_id}-subscriber',
+                    self._subscribe(message.src, writer),
+                    name=f'{message.src.uid}-subscriber',
                 )
-                self._subscriber_tasks[src_id] = task
-                logger.info('Registered client %s', src_id)
-            elif kind == 'unregister':
-                await self.manager.unregister(src_id)
-                task = self._subscriber_tasks.pop(src_id)
+                self._subscriber_tasks[message.src] = task
+                logger.info('Registered client %s', message.src)
+                response = message.response()
+            elif isinstance(message, UnregisterMessage):
+                await self.manager.unregister(message.src)
+                task = self._subscriber_tasks.pop(message.src)
                 await task
-                logger.info('Unregistered client %s', src_id)
+                logger.info('Unregistered client %s', message.src)
+                response = message.response()
             else:
-                response = {'kind': kind, 'status': 'error'}
-                logger.warning('Recieved bad message type: %s', kind)
+                logger.warning('Unhandled message type: %s', type(message))
+                break
 
             if response is not None:
-                encoded = json.dumps(response).encode()
+                encoded = response.model_serialize()
                 writer.write(encoded)
                 writer.write(b'\n')
                 await writer.drain()
+
+        writer.close()
+        await writer.wait_closed()
+        logger.info('Exited client handle')
 
     async def serve_forever(
         self,

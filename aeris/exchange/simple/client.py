@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import base64
 import dataclasses
 import io
-import json
 import logging
-import pickle
 import queue
 import socket
 import sys
 import threading
-import uuid
 from types import TracebackType
 from typing import Any
 from typing import get_args
@@ -27,10 +23,17 @@ else:  # pragma: <3.11 cover
 
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
+from aeris.exchange.message import BaseExchangeMessage
+from aeris.exchange.message import ExchangeMessage
+from aeris.exchange.message import ForwardMessage
+from aeris.exchange.message import RegisterMessage
+from aeris.exchange.message import ResponseMessage
+from aeris.exchange.message import UnregisterMessage
 from aeris.handle import Handle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.identifier import Identifier
+from aeris.message import BaseMessage
 from aeris.message import Message
 
 logger = logging.getLogger()
@@ -84,14 +87,12 @@ class SimpleMailbox:
         """
         if self._closed:
             raise MailboxClosedError
-        pickled = base64.b64encode(pickle.dumps(message)).decode('ascii')
-        payload = {
-            'kind': 'message',
-            'src': str(message.src.uid),
-            'dest': str(message.dest.uid),
-            'message': pickled,
-        }
-        self._exchange._send_server_message(payload)
+        wrapped = ForwardMessage(
+            src=message.src,
+            dest=message.dest,
+            message=message.model_dump_json(),
+        )
+        self._exchange._send_server_message(wrapped)
 
     def recv(self) -> Message:
         """Get the next message from this mailbox.
@@ -136,9 +137,7 @@ class SimpleExchange:
         )
         self._handler_thread.start()
         logging.debug('%s started server message handler thread', self)
-        # TODO: Would be great to use identifiers everywhere which would
-        # require updating server to parse control messages.
-        self._mailboxes: dict[uuid.UUID, SimpleMailbox] = {}
+        self._mailboxes: dict[Identifier, SimpleMailbox] = {}
 
     def __enter__(self) -> Self:
         return self
@@ -179,22 +178,27 @@ class SimpleExchange:
             for line in buffer:
                 start_index += len(line)
 
-                line_str = line.decode().strip()
-                if len(line_str) == 0:
+                raw = line.strip()
+                if len(raw) == 0:
                     continue
-                payload = json.loads(line_str)
-                kind = payload['kind'].strip().lower()
 
-                if kind == 'message':
-                    client = uuid.UUID(payload['dest'])
-                    message: Message = pickle.loads(
-                        base64.b64decode(payload['message']),
-                    )
-                    self._mailboxes[client]._push(message)
-                elif payload['status'] != 'success':
+                message = BaseExchangeMessage.model_deserialize(raw)
+
+                if isinstance(message, ForwardMessage):
+                    wrapped = BaseMessage.model_from_json(message.message)
+                    self._mailboxes[message.dest]._push(wrapped)
+                elif (
+                    isinstance(message, ResponseMessage)
+                    and not message.success
+                ):
                     logger.warning(
-                        'Got bad payload from exchange: %s',
-                        payload,
+                        'Got bad response from exchange: %s',
+                        message,
+                    )
+                else:
+                    logger.warning(
+                        'Unhandled message type from exchange: %s',
+                        message,
                     )
 
             if start_index > 0:
@@ -207,22 +211,14 @@ class SimpleExchange:
                 buffer.seek(0, 2)
         buffer.close()
 
-    def _send_server_message(self, payload: dict[str, Any]) -> None:
-        encoded = json.dumps(payload).encode()
-        self._socket.send(encoded + b'\n')
+    def _send_server_message(self, message: ExchangeMessage) -> None:
+        self._socket.send(message.model_serialize() + b'\n')
 
     def close(self) -> None:
         """Close the connection to the exchange."""
         logger.debug('%s closing socket connection to server', self)
         self._socket.close()
         self._handler_thread.join(timeout=1)
-
-    def _register(self, uid: Identifier) -> None:
-        # TODO: expose _uid as public property.
-        self._mailboxes[uid.uid] = SimpleMailbox(uid, self)
-        payload = {'kind': 'register', 'src': str(uid.uid)}
-        encoded = json.dumps(payload).encode() + b'\n'
-        self._socket.send(encoded)
 
     def register_agent(self, name: str | None = None) -> AgentIdentifier:
         """Create a mailbox for a new agent in the system.
@@ -231,7 +227,9 @@ class SimpleExchange:
             name: Optional human-readable name for the agent.
         """
         aid = AgentIdentifier.new(name=name)
-        self._register(aid)
+        self._mailboxes[aid] = SimpleMailbox(aid, self)
+        message = RegisterMessage(src=aid)
+        self._send_server_message(message)
         logger.info(f'{self} registered {aid}')
         return aid
 
@@ -242,7 +240,9 @@ class SimpleExchange:
             name: Optional human-readable name for the client.
         """
         cid = ClientIdentifier.new(name=name)
-        self._register(cid)
+        self._mailboxes[cid] = SimpleMailbox(cid, self)
+        message = RegisterMessage(src=cid)
+        self._send_server_message(message)
         logger.info(f'{self} registered {cid}')
         return cid
 
@@ -252,12 +252,11 @@ class SimpleExchange:
         Args:
             uid: Identifier of the entity to unregister.
         """
-        mailbox = self._mailboxes.pop(uid.uid, None)
+        mailbox = self._mailboxes.pop(uid, None)
         if mailbox is not None:
             mailbox.close()
-        payload = {'kind': 'unregister', 'src': str(uid.uid)}
-        encoded = json.dumps(payload).encode() + b'\n'
-        self._socket.send(encoded)
+        message = UnregisterMessage(src=uid)
+        self._send_server_message(message)
         logger.info(f'{self} unregistered {uid}')
 
     def create_handle(self, aid: AgentIdentifier) -> Handle:
@@ -300,7 +299,7 @@ class SimpleExchange:
                 registered with the exchange.
         """
         try:
-            return self._mailboxes[uid.uid]
+            return self._mailboxes[uid]
         except KeyError as e:
             raise BadIdentifierError(
                 f'{uid} is not registered with this exchange.',
