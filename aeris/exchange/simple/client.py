@@ -13,6 +13,7 @@ import threading
 import uuid
 from types import TracebackType
 from typing import Any
+from typing import get_args
 
 if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
     from typing import TypeAlias
@@ -105,7 +106,7 @@ class SimpleMailbox:
         message = item.message
         if message is CLOSE_SENTINAL:
             raise MailboxClosedError
-        assert isinstance(message, Message)
+        assert isinstance(message, get_args(Message))
         return message
 
     def close(self) -> None:

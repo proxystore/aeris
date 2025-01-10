@@ -6,8 +6,11 @@ from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
+from aeris.message import BaseMessage
+from aeris.message import Message
 from aeris.message import PingRequest
 from aeris.message import PingResponse
+from aeris.message import ShutdownRequest
 
 
 def test_message_repr() -> None:
@@ -46,3 +49,29 @@ def test_construct_ping_response() -> None:
     )
 
     assert isinstance(request.response(), PingResponse)
+
+
+_src = AgentIdentifier.new()
+_dest = AgentIdentifier.new()
+
+
+@pytest.mark.parametrize(
+    'message',
+    (
+        ActionRequest(src=_src, dest=_dest, action='foo', args=(b'bar',)),
+        ActionResponse(
+            src=_src,
+            dest=_dest,
+            action='foo',
+            exception=Exception(),
+        ),
+        ActionResponse(src=_src, dest=_dest, action='foo', result=b'bar'),
+        PingRequest(src=_src, dest=_dest),
+        PingResponse(src=_src, dest=_dest),
+        ShutdownRequest(src=_src, dest=_dest),
+    ),
+)
+def test_message_to_json(message: Message) -> None:
+    jsoned = message.model_dump_json()
+    recreated = BaseMessage.model_from_json(jsoned)
+    assert message == recreated
