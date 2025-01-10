@@ -15,13 +15,20 @@ from pydantic import field_serializer
 from pydantic import field_validator
 from pydantic import TypeAdapter
 
+from aeris.identifier import AgentIdentifier
 from aeris.identifier import Identifier
 
 NO_RESULT = object()
 
 
 class BaseMessage(BaseModel):
-    """Base exchange message type."""
+    """Base message type for messages between entities (agents or clients).
+
+    Args:
+        mid: Unique message ID.
+        src: Source entity.
+        dest: Destination entity.
+    """
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
@@ -56,11 +63,16 @@ class BaseMessage(BaseModel):
 
 
 class ActionRequest(BaseMessage):
-    """Action request message.
+    """Agent action request message.
 
     When this message is dumped to a JSON string, the `args` and `kwargs`
     are pickled and then base64 encoded to a string. This can have non-trivial
     time and space overheads for large arguments.
+
+    Args:
+        action: Name of the action requested.
+        args: Positional arguments for the action method.
+        kwargs: Keyword arguments for the action method.
     """
 
     action: str
@@ -111,7 +123,13 @@ class ActionRequest(BaseMessage):
 
 
 class ActionResponse(BaseMessage):
-    """Action response message."""
+    """Agent action response message.
+
+    Args:
+        action: Name of the action requested.
+        result: Result of the action if successful.
+        exception: Exception of the action if unsuccessful.
+    """
 
     action: str
     result: Any = None
@@ -165,9 +183,19 @@ class PingResponse(BaseMessage):
 
 
 class ShutdownRequest(BaseMessage):
-    """Shutdown request message."""
+    """Agent shutdown request message."""
 
     kind: Literal['shutdown-request'] = Field('shutdown-request', repr=False)
+
+    @field_validator('dest', mode='after')
+    @classmethod
+    def _validate_agent(cls, dest: Identifier) -> Identifier:
+        if not isinstance(dest, AgentIdentifier):
+            raise ValueError(
+                'Shutdown requests can only be send to an agent. '
+                f'Destination identifier has the {dest.role} role.',
+            )
+        return dest
 
 
 Message = Union[

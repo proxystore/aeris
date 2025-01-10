@@ -51,6 +51,14 @@ def test_construct_ping_response() -> None:
     assert isinstance(request.response(), PingResponse)
 
 
+def test_shutdown_dest_type() -> None:
+    with pytest.raises(
+        ValueError,
+        match='Destination identifier has the client role.',
+    ):
+        ShutdownRequest(src=AgentIdentifier.new(), dest=ClientIdentifier.new())
+
+
 _src = AgentIdentifier.new()
 _dest = AgentIdentifier.new()
 
