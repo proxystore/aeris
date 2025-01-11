@@ -41,14 +41,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 P = ParamSpec('P')
-R_co = TypeVar('R_co', covariant=True)
+R = TypeVar('R')
 
 
 def _validate_state(
-    method: Callable[Concatenate[Handle, P], R_co],
-) -> Callable[Concatenate[Handle, P], R_co]:
+    method: Callable[Concatenate[Handle, P], R],
+) -> Callable[Concatenate[Handle, P], R]:
     @functools.wraps(method)
-    def _wrapper(self: Handle, *args: P.args, **kwargs: P.kwargs) -> R_co:
+    def _wrapper(self: Handle, *args: P.args, **kwargs: P.kwargs) -> R:
         if self._closed:
             raise HandleClosedError()
         return method(self, *args, **kwargs)
@@ -189,7 +189,7 @@ class Handle:
         /,
         *args: Any,
         **kwargs: Any,
-    ) -> Future[R_co]:
+    ) -> Future[R]:
         """Invoke an action on the agent.
 
         Args:
@@ -207,7 +207,7 @@ class Handle:
             args=args,
             kwargs=kwargs,
         )
-        future: Future[R_co] = Future()
+        future: Future[R] = Future()
         self._futures[request.mid] = future
         self._agent_mailbox.send(request)
         logger.debug(f'{self} sent {request}')

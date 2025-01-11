@@ -34,7 +34,6 @@ from collections.abc import AsyncGenerator
 from collections.abc import Sequence
 from concurrent.futures import Future
 from types import TracebackType
-from typing import Any
 from typing import cast
 from typing import Generic
 from typing import get_args
@@ -131,7 +130,7 @@ class SimpleMailbox:
             raise MailboxClosedError
         item = self._queue.get(block=True)
         message = item.message
-        if message is CLOSE_SENTINAL:
+        if message is CLOSE_SENTINAL:  # pragma: no cover
             raise MailboxClosedError
         assert isinstance(message, get_args(Message))
         return message
@@ -192,10 +191,10 @@ class SimpleExchange:
     ) -> None:
         self.close()
 
-    def __getnewargs_ex__(
+    def __reduce__(
         self,
-    ) -> tuple[tuple[str, int], dict[str, Any]]:
-        return ((self.host, self.port), {})
+    ) -> tuple[type[Self], tuple[str, int]]:
+        return (type(self), (self.host, self.port))
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}("{self.host}:{self.port}")'
@@ -245,7 +244,7 @@ class SimpleExchange:
             except OSError:
                 break
 
-            if len(raw) == 0:
+            if len(raw) == 0:  # pragma: no cover
                 break
 
             buffer.write(raw)
@@ -267,7 +266,7 @@ class SimpleExchange:
                 buffer.truncate(0)
                 buffer.seek(0)
                 buffer.write(remaining)
-            else:
+            else:  # pragma: no cover
                 buffer.seek(0, 2)
         buffer.close()
 
@@ -421,8 +420,9 @@ class _MailboxManager:
             self._mailboxes[uid] = _AsyncQueue()
 
     async def unregister(self, uid: Identifier) -> None:
-        if uid in self._mailboxes:
-            await self._mailboxes[uid].close(immediate=True)
+        mailbox = self._mailboxes.pop(uid, None)
+        if mailbox is not None:
+            await mailbox.close(immediate=True)
 
     async def send(self, message: ForwardMessage) -> None:
         try:
@@ -472,13 +472,13 @@ class SimpleServer:
         messages = await self.manager.subscribe(uid)
         logger.info('%s started subscriber task for %r', self, uid)
 
-        while not writer.is_closing():
+        while not writer.is_closing():  # pragma: no branch
             try:
                 message = await asyncio.wait_for(
                     messages.__anext__(),
                     timeout=1,
                 )
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError:  # pragma: no cover
                 continue
             except StopAsyncIteration:
                 break
@@ -489,7 +489,7 @@ class SimpleServer:
             try:
                 await writer.drain()
                 logger.debug('%s sent message to %r: %r', self, uid, message)
-            except OSError:
+            except OSError:  # pragma: no cover
                 logger.warning(
                     '%s failed to send message to %r: %r',
                     self,
@@ -516,7 +516,7 @@ class SimpleServer:
 
             message = BaseExchangeMessage.model_deserialize(raw)
             logger.debug('%s received: %r', self, message)
-            response: ResponseMessage | None = None
+            response: ResponseMessage
 
             if isinstance(message, ForwardMessage):
                 await self.manager.send(message)
@@ -537,18 +537,12 @@ class SimpleServer:
                 logger.info('%s unregistered client %r', self, message.src)
                 response = message.response()
             else:
-                logger.warning(
-                    '%s unhandled message type: %r',
-                    self,
-                    type(message),
-                )
-                break
+                raise AssertionError('Unreachable.')
 
-            if response is not None:
-                encoded = response.model_serialize()
-                writer.write(encoded)
-                writer.write(b'\n')
-                await writer.drain()
+            encoded = response.model_serialize()
+            writer.write(encoded)
+            writer.write(b'\n')
+            await writer.drain()
 
         writer.close()
         await writer.wait_closed()
@@ -580,9 +574,12 @@ class SimpleServer:
             server.close_clients()
 
 
-async def _serve_forever(server: SimpleServer) -> None:
+async def _serve_forever(
+    server: SimpleServer,
+    stop: asyncio.Future[None] | None = None,
+) -> None:
     loop = asyncio.get_running_loop()
-    stop = loop.create_future()
+    stop = loop.create_future() if stop is None else stop
     # Set the stop condition when receiving SIGINT (ctrl-C) and SIGTERM.
     loop.add_signal_handler(signal.SIGINT, stop.set_result, None)
     loop.add_signal_handler(signal.SIGTERM, stop.set_result, None)

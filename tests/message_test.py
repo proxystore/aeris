@@ -63,6 +63,24 @@ _src = AgentIdentifier.new()
 _dest = AgentIdentifier.new()
 
 
+def test_action_response_equality() -> None:
+    response1 = ActionResponse(
+        src=_src,
+        dest=_dest,
+        action='foo',
+        exception=Exception(),
+    )
+    response2 = ActionResponse(
+        mid=response1.mid,
+        src=_src,
+        dest=_dest,
+        action='foo',
+        exception=Exception(),
+    )
+    assert response1 == response2
+    assert response1 != 'foo'
+
+
 @pytest.mark.parametrize(
     'message',
     (
