@@ -1,3 +1,22 @@
+"""Simple message exchange client and server.
+
+To start the exchange:
+```bash
+python -m aeris.exchange.simple --host localhost --port 1234
+```
+
+Connect to the exchange through the client.
+```python
+from aeris.exchange.simple import SimpleExchange
+
+with SimpleExchange('localhost', 1234) as exchange:
+    aid = exchange.register_agent()
+    mailbox = exchange.get_mailbox(aid)
+    ...
+    mailbox.close()
+```
+"""
+
 from __future__ import annotations
 
 import argparse
