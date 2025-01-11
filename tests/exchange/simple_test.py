@@ -13,20 +13,22 @@ import pytest_asyncio
 
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
+from aeris.exchange import Exchange
+from aeris.exchange import Mailbox
 from aeris.exchange.message import ForwardMessage
-from aeris.exchange.simple.client import SimpleExchange
-from aeris.exchange.simple.server import _AsyncMailbox
-from aeris.exchange.simple.server import _MailboxManager
-from aeris.exchange.simple.server import _main
-from aeris.exchange.simple.server import MailboxServer
+from aeris.exchange.simple import _AsyncQueue
+from aeris.exchange.simple import _MailboxManager
+from aeris.exchange.simple import _main
+from aeris.exchange.simple import SimpleExchange
+from aeris.exchange.simple import SimpleServer
 from aeris.identifier import AgentIdentifier
 from aeris.message import PingRequest
 from testing.sys import open_port
 
 
 @pytest_asyncio.fixture
-async def server() -> AsyncGenerator[MailboxServer]:
-    server = MailboxServer('localhost', open_port())
+async def server() -> AsyncGenerator[SimpleServer]:
+    server = SimpleServer('localhost', open_port())
     aserver = await asyncio.start_server(
         server._handle,
         host=server.host,
@@ -69,34 +71,34 @@ def server_process() -> Generator[tuple[str, int]]:
 
 
 @pytest.mark.asyncio
-async def test_async_mailbox() -> None:
-    mailbox: _AsyncMailbox[str] = _AsyncMailbox()
+async def test_async_queue() -> None:
+    queue: _AsyncQueue[str] = _AsyncQueue()
 
     message = 'foo'
-    await mailbox.send(message)
-    received = await mailbox.recv()
+    await queue.put(message)
+    received = await queue.get()
     assert message == received
 
-    await mailbox.close()
-    await mailbox.close()  # Idempotent check
+    await queue.close()
+    await queue.close()  # Idempotent check
 
-    assert mailbox.closed()
+    assert queue.closed()
     with pytest.raises(MailboxClosedError):
-        await mailbox.send(message)
+        await queue.put(message)
     with pytest.raises(MailboxClosedError):
-        await mailbox.recv()
+        await queue.get()
 
 
 @pytest.mark.asyncio
-async def test_async_mailbox_subscribe() -> None:
-    mailbox: _AsyncMailbox[int] = _AsyncMailbox()
+async def test_async_queue_subscribe() -> None:
+    queue: _AsyncQueue[int] = _AsyncQueue()
 
-    await mailbox.send(1)
-    await mailbox.send(2)
-    await mailbox.send(3)
-    await mailbox.close(immediate=False)
+    await queue.put(1)
+    await queue.put(2)
+    await queue.put(3)
+    await queue.close(immediate=False)
 
-    messages = [m async for m in mailbox.subscribe()]
+    messages = [m async for m in queue.subscribe()]
     assert set(messages) == {1, 2, 3}
 
 
@@ -151,14 +153,14 @@ async def test_mailbox_manager_bad_identifier() -> None:
 
 def test_mailbox_serve() -> None:
     with mock.patch(
-        'aeris.exchange.simple.server.MailboxServer.serve_forever',
+        'aeris.exchange.simple.SimpleServer.serve_forever',
     ):
         assert _main(['--port', '0']) == 0
 
 
 @pytest.mark.asyncio
 async def test_mailbox_server_serve_forever() -> None:
-    server = MailboxServer('localhost', open_port())
+    server = SimpleServer('localhost', open_port())
     stop = asyncio.get_running_loop().create_future()
     task = asyncio.create_task(server.serve_forever(stop))
     await asyncio.sleep(0.01)
@@ -168,7 +170,7 @@ async def test_mailbox_server_serve_forever() -> None:
 
 
 @pytest.mark.asyncio
-async def test_client_register(server: MailboxServer) -> None:
+async def test_client_register(server: SimpleServer) -> None:
     with SimpleExchange(server.host, server.port) as exchange:
         aid = exchange.register_agent()
         cid = exchange.register_client()
@@ -180,9 +182,11 @@ async def test_client_register(server: MailboxServer) -> None:
 async def test_client_send_messages(server_process) -> None:
     host, port = server_process
     with SimpleExchange(host, port) as exchange:
+        assert isinstance(exchange, Exchange)
         aid1 = exchange.register_agent()
         aid2 = exchange.register_agent()
         mailbox1 = exchange.get_mailbox(aid1)
+        assert isinstance(mailbox1, Mailbox)
         mailbox2 = exchange.get_mailbox(aid2)
         message = PingRequest(src=aid1, dest=aid2)
         mailbox1.send(message)
