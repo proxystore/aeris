@@ -13,6 +13,7 @@ import sys
 import threading
 from collections.abc import AsyncGenerator
 from collections.abc import Sequence
+from concurrent.futures import Future
 from types import TracebackType
 from typing import Any
 from typing import cast
@@ -26,6 +27,7 @@ else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
 from aeris.exception import BadIdentifierError
+from aeris.exception import ExchangeRegistrationError
 from aeris.exception import MailboxClosedError
 from aeris.exchange.message import BaseExchangeMessage
 from aeris.exchange.message import ExchangeMessage
@@ -45,6 +47,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar('T')
 
 DEFAULT_PRIORITY = 0
+DEFAULT_SERVER_TIMEOUT = 30
 CLOSE_PRIORITY = DEFAULT_PRIORITY + 1
 CLOSE_SENTINAL = object()
 
@@ -115,11 +118,14 @@ class SimpleMailbox:
         return message
 
     def close(self) -> None:
-        """Close the mailbox."""
+        """Close the mailbox.
+
+        This unregisters the entity from the exchange.
+        """
         if not self._closed:
             self._closed = True
             self._queue.put(_QueueItem(CLOSE_PRIORITY, CLOSE_SENTINAL))
-            self._exchange.unregister(self.uid)
+            self._exchange._unregister(self.uid)
 
 
 class SimpleExchange:
@@ -128,20 +134,33 @@ class SimpleExchange:
     Args:
         host: Host of the exchange server.
         port: Port of the exchange server.
+        timeout: Timeout when waiting for server responses.
     """
 
-    def __init__(self, host: str, port: int) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        timeout: float = DEFAULT_SERVER_TIMEOUT,
+    ) -> None:
         self.host = host
         self.port = port
+        self.timeout = timeout
 
-        self._socket = socket.create_connection((self.host, self.port))
+        self._socket = socket.create_connection(
+            (self.host, self.port),
+            timeout=self.timeout,
+        )
         self._socket.setblocking(False)
         self._handler_thread = threading.Thread(
-            target=self._handle_server_messages,
+            target=self._listen_server_messages,
         )
         self._handler_thread.start()
-        logging.debug('%s started server message handler thread', self)
+        logging.debug('%r started server message handler thread', self)
         self._mailboxes: dict[Identifier, SimpleMailbox] = {}
+
+        self._pending_registration: dict[Identifier, Future[None]] = {}
+        self._pending_unregistration: dict[Identifier, Future[None]] = {}
 
     def __enter__(self) -> Self:
         return self
@@ -160,12 +179,44 @@ class SimpleExchange:
         return ((self.host, self.port), {})
 
     def __repr__(self) -> str:
-        return f'{type(self).__name__}()'
+        return f'{type(self).__name__}("{self.host}:{self.port}")'
 
     def __str__(self) -> str:
-        return f'{type(self).__name__}<{id(self)}>'
+        return f'{type(self).__name__}<{self.host}:{self.port}>'
 
-    def _handle_server_messages(self) -> None:
+    def _handle_server_message(self, message: ExchangeMessage) -> None:
+        logger.debug('%s received message from server: %r', self, message)
+        if isinstance(message, ForwardMessage):
+            wrapped = BaseMessage.model_from_json(message.message)
+            self._mailboxes[message.dest]._push(wrapped)
+        elif isinstance(message, ResponseMessage):
+            if message.op in ('register', 'unregister'):
+                if message.op == 'register':
+                    future = self._pending_registration[message.src]
+                elif message.op == 'unregister':
+                    future = self._pending_unregistration[message.src]
+                else:
+                    raise AssertionError('Unreachable.')
+                if message.error is None:
+                    future.set_result(None)
+                else:
+                    future.set_exception(
+                        ExchangeRegistrationError(message.error),
+                    )
+            elif message.op == 'forward':
+                if not message.success:
+                    # TODO: need to do something better here?
+                    # Need to modify forward message to set error?
+                    logger.warning('Forward message failed: %s', message.error)
+            else:
+                raise AssertionError('Unreachable.')
+        else:
+            logger.warning(
+                'Unhandled message type from exchange: %r',
+                message,
+            )
+
+    def _listen_server_messages(self) -> None:
         buffer = io.BytesIO()
         while True:
             try:
@@ -174,8 +225,10 @@ class SimpleExchange:
                 continue
             except OSError:
                 break
+
             if len(raw) == 0:
                 break
+
             buffer.write(raw)
             buffer.seek(0)
             start_index = 0
@@ -187,23 +240,7 @@ class SimpleExchange:
                     continue
 
                 message = BaseExchangeMessage.model_deserialize(raw)
-
-                if isinstance(message, ForwardMessage):
-                    wrapped = BaseMessage.model_from_json(message.message)
-                    self._mailboxes[message.dest]._push(wrapped)
-                elif (
-                    isinstance(message, ResponseMessage)
-                    and not message.success
-                ):
-                    logger.warning(
-                        'Got bad response from exchange: %s',
-                        message,
-                    )
-                else:
-                    logger.warning(
-                        'Unhandled message type from exchange: %s',
-                        message,
-                    )
+                self._handle_server_message(message)
 
             if start_index > 0:
                 buffer.seek(start_index)
@@ -217,12 +254,23 @@ class SimpleExchange:
 
     def _send_server_message(self, message: ExchangeMessage) -> None:
         self._socket.send(message.model_serialize() + b'\n')
+        logger.debug('%s sent message to server: %r', self, message)
 
     def close(self) -> None:
         """Close the connection to the exchange."""
         logger.debug('%s closing socket connection to server', self)
         self._socket.close()
         self._handler_thread.join(timeout=1)
+
+    def _register_entity(self, uid: Identifier) -> None:
+        self._mailboxes[uid] = SimpleMailbox(uid, self)
+        future: Future[None] = Future()
+        self._pending_registration[uid] = future
+        message = RegisterMessage(src=uid)
+        self._send_server_message(message)
+        future.result(timeout=self.timeout)
+        del self._pending_registration[uid]
+        logger.info('%s registered %r', self, uid)
 
     def register_agent(self, name: str | None = None) -> AgentIdentifier:
         """Create a mailbox for a new agent in the system.
@@ -231,10 +279,7 @@ class SimpleExchange:
             name: Optional human-readable name for the agent.
         """
         aid = AgentIdentifier.new(name=name)
-        self._mailboxes[aid] = SimpleMailbox(aid, self)
-        message = RegisterMessage(src=aid)
-        self._send_server_message(message)
-        logger.info(f'{self} registered {aid}')
+        self._register_entity(aid)
         return aid
 
     def register_client(self, name: str | None = None) -> ClientIdentifier:
@@ -244,11 +289,16 @@ class SimpleExchange:
             name: Optional human-readable name for the client.
         """
         cid = ClientIdentifier.new(name=name)
-        self._mailboxes[cid] = SimpleMailbox(cid, self)
-        message = RegisterMessage(src=cid)
-        self._send_server_message(message)
-        logger.info(f'{self} registered {cid}')
+        self._register_entity(cid)
         return cid
+
+    def _unregister(self, uid: Identifier) -> None:
+        future: Future[None] = Future()
+        self._pending_unregistration[uid] = future
+        message = UnregisterMessage(src=uid)
+        self._send_server_message(message)
+        future.result(timeout=self.timeout)
+        logger.info('%s unregistered %r', self, uid)
 
     def unregister(self, uid: Identifier) -> None:
         """Unregister the entity (either agent or client).
@@ -259,9 +309,6 @@ class SimpleExchange:
         mailbox = self._mailboxes.pop(uid, None)
         if mailbox is not None:
             mailbox.close()
-        message = UnregisterMessage(src=uid)
-        self._send_server_message(message)
-        logger.info(f'{self} unregistered {uid}')
 
     def create_handle(self, aid: AgentIdentifier) -> Handle:
         """Create a handle to an agent in the system.
@@ -392,13 +439,19 @@ class SimpleServer:
         self.manager = _MailboxManager()
         self._subscriber_tasks: dict[Identifier, asyncio.Task[None]] = {}
 
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}("{self.host}:{self.port}")'
+
+    def __str__(self) -> str:
+        return f'{type(self).__name__}<{self.host}:{self.port}>'
+
     async def _subscribe(
         self,
         uid: Identifier,
         writer: asyncio.StreamWriter,
     ) -> None:
         messages = await self.manager.subscribe(uid)
-        logger.info('Started subscriber task for %s', uid)
+        logger.info('%s started subscriber task for %r', self, uid)
 
         while not writer.is_closing():
             try:
@@ -416,24 +469,26 @@ class SimpleServer:
             writer.write(b'\n')
             try:
                 await writer.drain()
-                logger.debug('Sent message to %s: %s', uid, message)
+                logger.debug('%s sent message to %r: %r', self, uid, message)
             except OSError:
                 logger.warning(
-                    'Failed to send message to %s: %s',
+                    '%s failed to send message to %r: %r',
+                    self,
                     uid,
                     message,
                 )
 
-        writer.close()
-        await writer.wait_closed()
-        logger.info('Exited subscriber task for %s', uid)
+        # Note: we don't close the writer here. The happy path is that
+        # the server replies to the client's unregister request and the
+        # client closes the socket once the response is received.
+        logger.info('%s exited subscriber task for %r', self, uid)
 
     async def _handle(
         self,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
-        logger.debug('Started new client handle')
+        logger.debug('%s started new client handle', self)
         while not reader.at_eof():
             raw = await reader.readline()
             if raw == b'':
@@ -441,7 +496,7 @@ class SimpleServer:
                 continue
 
             message = BaseExchangeMessage.model_deserialize(raw)
-            logger.debug('Received: %s', message)
+            logger.debug('%s received: %r', self, message)
             response: ResponseMessage | None = None
 
             if isinstance(message, ForwardMessage):
@@ -454,16 +509,20 @@ class SimpleServer:
                     name=f'{message.src.uid}-subscriber',
                 )
                 self._subscriber_tasks[message.src] = task
-                logger.info('Registered client %s', message.src)
+                logger.info('%s registered client %r', self, message.src)
                 response = message.response()
             elif isinstance(message, UnregisterMessage):
                 await self.manager.unregister(message.src)
                 task = self._subscriber_tasks.pop(message.src)
                 await task
-                logger.info('Unregistered client %s', message.src)
+                logger.info('%s unregistered client %r', self, message.src)
                 response = message.response()
             else:
-                logger.warning('Unhandled message type: %s', type(message))
+                logger.warning(
+                    '%s unhandled message type: %r',
+                    self,
+                    type(message),
+                )
                 break
 
             if response is not None:
@@ -474,34 +533,20 @@ class SimpleServer:
 
         writer.close()
         await writer.wait_closed()
-        logger.info('Exited client handle')
+        logger.info('%s exited client handle', self)
 
-    async def serve_forever(
-        self,
-        stop: asyncio.Future[None] | None = None,
-    ) -> None:
-        """Accept and handles connections forever.
-
-        This method registered signal handlers for SIGINT and SIGTERM
-        for gracefully closing the server.
-        """
+    async def serve_forever(self, stop: asyncio.Future[None]) -> None:
+        """Accept and handles connections forever."""
         server = await asyncio.start_server(
             self._handle,
             host=self.host,
             port=self.port,
         )
 
-        # Set the stop condition when receiving SIGINT (ctrl-C) and SIGTERM.
-        loop = asyncio.get_running_loop()
-        stop = loop.create_future() if stop is None else stop
-        loop.add_signal_handler(signal.SIGINT, stop.set_result, None)
-        loop.add_signal_handler(signal.SIGTERM, stop.set_result, None)
-        logger.debug('Registered signal handlers for SIGINT and SIGTERM')
-
         async with server:
             await server.start_serving()
             logger.info(
-                'Server listening on %s:%s (ctrl-C to exit)',
+                'Server listening on %r:%r (ctrl-C to exit)',
                 self.host,
                 self.port,
             )
@@ -515,8 +560,19 @@ class SimpleServer:
         if sys.version_info >= (3, 13):  # pragma: >=3.13 cover
             server.close_clients()
 
-        loop.remove_signal_handler(signal.SIGINT)
-        loop.remove_signal_handler(signal.SIGTERM)
+
+async def _serve_forever(server: SimpleServer) -> None:
+    loop = asyncio.get_running_loop()
+    stop = loop.create_future()
+    # Set the stop condition when receiving SIGINT (ctrl-C) and SIGTERM.
+    loop.add_signal_handler(signal.SIGINT, stop.set_result, None)
+    loop.add_signal_handler(signal.SIGTERM, stop.set_result, None)
+    logger.debug('Registered signal handlers for SIGINT and SIGTERM')
+
+    await server.serve_forever(stop)
+
+    loop.remove_signal_handler(signal.SIGINT)
+    loop.remove_signal_handler(signal.SIGTERM)
 
 
 def _main(argv: Sequence[str] | None = None) -> int:
@@ -536,7 +592,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
     )
 
     server = SimpleServer(host=args.host, port=args.port)
-    asyncio.run(server.serve_forever())
+    asyncio.run(_serve_forever(server))
 
     return 0
 

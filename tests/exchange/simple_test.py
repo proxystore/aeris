@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import multiprocessing
 import socket
+import threading
 import time
 from collections.abc import AsyncGenerator
 from collections.abc import Generator
@@ -43,11 +43,18 @@ async def server() -> AsyncGenerator[SimpleServer]:
 
 
 @pytest.fixture
-def server_process() -> Generator[tuple[str, int]]:
-    context = multiprocessing.get_context('spawn')
+def server_thread() -> Generator[tuple[str, int]]:
     host, port = 'localhost', open_port()
-    args = ['--host', 'localhost', '--port', str(port), '--log-level', 'DEBUG']
-    handle = context.Process(target=_main, args=(args,))
+    server = SimpleServer(host, port)
+    loop = asyncio.new_event_loop()
+    stop = loop.create_future()
+
+    def _target() -> None:
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(server.serve_forever(stop))
+        loop.close()
+
+    handle = threading.Thread(target=_target)
     handle.start()
 
     # Wait for server to be listening
@@ -66,8 +73,13 @@ def server_process() -> Generator[tuple[str, int]]:
 
     yield host, port
 
-    handle.terminate()
-    handle.join(timeout=5)
+    loop.call_soon_threadsafe(stop.set_result, None)
+    timeout = 5
+    handle.join(timeout=timeout)
+    if handle.is_alive():
+        raise TimeoutError(
+            f'Server thread did not gracefully exit within {timeout} seconds.',
+        )
 
 
 @pytest.mark.asyncio
@@ -152,9 +164,7 @@ async def test_mailbox_manager_bad_identifier() -> None:
 
 
 def test_mailbox_serve() -> None:
-    with mock.patch(
-        'aeris.exchange.simple.SimpleServer.serve_forever',
-    ):
+    with mock.patch('aeris.exchange.simple._serve_forever'):
         assert _main(['--port', '0']) == 0
 
 
@@ -170,8 +180,9 @@ async def test_mailbox_server_serve_forever() -> None:
 
 
 @pytest.mark.asyncio
-async def test_client_register(server: SimpleServer) -> None:
-    with SimpleExchange(server.host, server.port) as exchange:
+async def test_client_register(server_thread: tuple[str, int]) -> None:
+    host, port = server_thread
+    with SimpleExchange(host, port) as exchange:
         aid = exchange.register_agent()
         cid = exchange.register_client()
         exchange.unregister(aid)
@@ -179,8 +190,8 @@ async def test_client_register(server: SimpleServer) -> None:
 
 
 @pytest.mark.asyncio
-async def test_client_send_messages(server_process) -> None:
-    host, port = server_process
+async def test_client_send_messages(server_thread: tuple[str, int]) -> None:
+    host, port = server_thread
     with SimpleExchange(host, port) as exchange:
         assert isinstance(exchange, Exchange)
         aid1 = exchange.register_agent()

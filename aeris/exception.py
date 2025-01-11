@@ -13,8 +13,16 @@ class BadMessageTypeError(Exception):
     pass
 
 
+class ExchangeRegistrationError(Exception):
+    """Registration with exchange failed."""
+
+    pass
+
+
 class HandleClosedError(Exception):
     """Agent handle has been closed."""
+
+    pass
 
 
 class MailboxClosedError(Exception):
