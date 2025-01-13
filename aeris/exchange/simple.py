@@ -49,16 +49,16 @@ from aeris.exception import ExchangeRegistrationError
 from aeris.exception import MailboxClosedError
 from aeris.exchange.message import BaseExchangeMessage
 from aeris.exchange.message import ExchangeMessage
+from aeris.exchange.message import ExchangeResponseMessage
 from aeris.exchange.message import ForwardMessage
 from aeris.exchange.message import RegisterMessage
-from aeris.exchange.message import ResponseMessage
 from aeris.exchange.message import UnregisterMessage
 from aeris.handle import Handle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.identifier import Identifier
-from aeris.message import BaseMessage
 from aeris.message import Message
+from aeris.message import RequestMessage
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,7 @@ class SimpleMailbox:
         wrapped = ForwardMessage(
             src=message.src,
             dest=message.dest,
-            message=message.model_dump_json(),
+            message=message,
         )
         self._exchange._send_server_message(wrapped)
 
@@ -143,7 +143,7 @@ class SimpleMailbox:
         if not self._closed:
             self._closed = True
             self._queue.put(_QueueItem(CLOSE_PRIORITY, CLOSE_SENTINAL))
-            self._exchange._unregister(self.uid)
+            self._exchange._unregister_entity(self.uid)
 
 
 class SimpleExchange:
@@ -202,32 +202,50 @@ class SimpleExchange:
     def __str__(self) -> str:
         return f'{type(self).__name__}<{self.host}:{self.port}>'
 
+    def _handle_response_message(
+        self,
+        message: ExchangeResponseMessage,
+    ) -> None:
+        if isinstance(message.request, (RegisterMessage, UnregisterMessage)):
+            if isinstance(message.request, RegisterMessage):
+                future = self._pending_registration[message.src]
+            elif isinstance(message.request, UnregisterMessage):
+                future = self._pending_unregistration[message.src]
+            else:
+                raise AssertionError('Unreachable.')
+            if message.error is None:
+                future.set_result(None)
+            else:
+                future.set_exception(ExchangeRegistrationError(message.error))
+        elif (
+            isinstance(message.request, ForwardMessage) and not message.success
+        ):
+            logger.warning(
+                '%s forward message failed: %s',
+                self,
+                message.error,
+            )
+            if isinstance(message.request.message, get_args(RequestMessage)):
+                response = message.request.message.error(
+                    BadIdentifierError(message.error),
+                )
+                self._mailboxes[message.src]._push(response)
+            else:
+                # If the failed forward was for a response message, then the
+                # dest entity is likely offline and we cannot recover.
+                pass
+        elif isinstance(message.request, ForwardMessage):
+            # Nothing needs to be done in this case.
+            pass
+        else:
+            raise AssertionError('Unreachable.')
+
     def _handle_server_message(self, message: ExchangeMessage) -> None:
         logger.debug('%s received message from server: %r', self, message)
         if isinstance(message, ForwardMessage):
-            wrapped = BaseMessage.model_from_json(message.message)
-            self._mailboxes[message.dest]._push(wrapped)
-        elif isinstance(message, ResponseMessage):
-            if message.op in ('register', 'unregister'):
-                if message.op == 'register':
-                    future = self._pending_registration[message.src]
-                elif message.op == 'unregister':
-                    future = self._pending_unregistration[message.src]
-                else:
-                    raise AssertionError('Unreachable.')
-                if message.error is None:
-                    future.set_result(None)
-                else:
-                    future.set_exception(
-                        ExchangeRegistrationError(message.error),
-                    )
-            elif message.op == 'forward':
-                if not message.success:
-                    # TODO: need to do something better here?
-                    # Need to modify forward message to set error?
-                    logger.warning('Forward message failed: %s', message.error)
-            else:
-                raise AssertionError('Unreachable.')
+            self._mailboxes[message.dest]._push(message.message)
+        elif isinstance(message, ExchangeResponseMessage):
+            self._handle_response_message(message)
         else:
             logger.warning(
                 'Unhandled message type from exchange: %r',
@@ -310,7 +328,7 @@ class SimpleExchange:
         self._register_entity(cid)
         return cid
 
-    def _unregister(self, uid: Identifier) -> None:
+    def _unregister_entity(self, uid: Identifier) -> None:
         future: Future[None] = Future()
         self._pending_unregistration[uid] = future
         message = UnregisterMessage(src=uid)
@@ -418,18 +436,22 @@ class _MailboxManager:
         if uid not in self._mailboxes or self._mailboxes[uid].closed():
             # If the old mailbox was closed, it gets thrown away.
             self._mailboxes[uid] = _AsyncQueue()
+        else:
+            raise ExchangeRegistrationError(f'{uid!r} is already registered.')
 
     async def unregister(self, uid: Identifier) -> None:
         mailbox = self._mailboxes.pop(uid, None)
         if mailbox is not None:
             await mailbox.close(immediate=True)
+        else:
+            raise ExchangeRegistrationError(f'{uid!r} is not registered.')
 
     async def send(self, message: ForwardMessage) -> None:
         try:
             await self._mailboxes[message.dest].put(message)
         except KeyError as e:
             raise BadIdentifierError(
-                f'No mailbox associated with {message.dest}',
+                f'No mailbox associated with {message.dest!r}',
             ) from e
 
     async def subscribe(
@@ -502,7 +524,47 @@ class SimpleServer:
         # client closes the socket once the response is received.
         logger.info('%s exited subscriber task for %r', self, uid)
 
-    async def _handle(
+    async def _handle_client_message(
+        self,
+        message: ExchangeMessage,
+        writer: asyncio.StreamWriter,
+    ) -> ExchangeResponseMessage:
+        if isinstance(message, ForwardMessage):
+            try:
+                await self.manager.send(message)
+            except BadIdentifierError as e:
+                response = message.response(error=str(e))
+            else:
+                response = message.response()
+        elif isinstance(message, RegisterMessage):
+            try:
+                self.manager.register(message.src)
+            except ExchangeRegistrationError as e:
+                response = message.response(error=str(e))
+            else:
+                task = asyncio.create_task(
+                    self._subscribe(message.src, writer),
+                    name=f'{message.src.uid}-subscriber',
+                )
+                self._subscriber_tasks[message.src] = task
+                logger.info('%s registered client %r', self, message.src)
+                response = message.response()
+        elif isinstance(message, UnregisterMessage):
+            try:
+                await self.manager.unregister(message.src)
+            except ExchangeRegistrationError as e:
+                response = message.response(error=str(e))
+            else:
+                task = self._subscriber_tasks.pop(message.src)
+                await task
+                logger.info('%s unregistered client %r', self, message.src)
+                response = message.response()
+        else:
+            raise AssertionError('Unreachable.')
+
+        return response
+
+    async def _handle_client(
         self,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
@@ -516,29 +578,7 @@ class SimpleServer:
 
             message = BaseExchangeMessage.model_deserialize(raw)
             logger.debug('%s received: %r', self, message)
-            response: ResponseMessage
-
-            if isinstance(message, ForwardMessage):
-                await self.manager.send(message)
-                response = message.response()
-            elif isinstance(message, RegisterMessage):
-                self.manager.register(message.src)
-                task = asyncio.create_task(
-                    self._subscribe(message.src, writer),
-                    name=f'{message.src.uid}-subscriber',
-                )
-                self._subscriber_tasks[message.src] = task
-                logger.info('%s registered client %r', self, message.src)
-                response = message.response()
-            elif isinstance(message, UnregisterMessage):
-                await self.manager.unregister(message.src)
-                task = self._subscriber_tasks.pop(message.src)
-                await task
-                logger.info('%s unregistered client %r', self, message.src)
-                response = message.response()
-            else:
-                raise AssertionError('Unreachable.')
-
+            response = await self._handle_client_message(message, writer)
             encoded = response.model_serialize()
             writer.write(encoded)
             writer.write(b'\n')
@@ -551,7 +591,7 @@ class SimpleServer:
     async def serve_forever(self, stop: asyncio.Future[None]) -> None:
         """Accept and handles connections forever."""
         server = await asyncio.start_server(
-            self._handle,
+            self._handle_client,
             host=self.host,
             port=self.port,
         )

@@ -42,10 +42,6 @@ class BaseMessage(BaseModel):
     src: Identifier
     dest: Identifier
 
-    def __str__(self) -> str:
-        name = type(self).__name__
-        return f'{name}<from {self.src}; to {self.dest}; {self.mid}>'
-
     @classmethod
     def model_from_json(cls, data: str) -> Message:
         """Reconstruct a specific message from a JSON dump.
@@ -92,33 +88,34 @@ class ActionRequest(BaseMessage):
             return obj
         return pickle.loads(base64.b64decode(obj))
 
-    def response(
-        self,
-        *,
-        result: Any = NO_RESULT,
-        exception: Exception | None = None,
-    ) -> ActionResponse:
-        """Construct response to action request.
+    def error(self, exception: Exception) -> ActionResponse:
+        """Construct an error response to action request.
 
         Args:
-            result: Result of the action.
-            exception: Exception raised by the action.
-
-        Raises:
-            TypeError: if neither or both of `exception` and `result` are set.
+            exception: Error of the action.
         """
-        if exception is None and result is NO_RESULT:
-            raise TypeError('One of exception or result must be provided.')
-        elif exception is not None and result is not NO_RESULT:
-            raise TypeError('Cannot provide exception and result.')
-
         return ActionResponse(
             mid=self.mid,
             src=self.dest,
             dest=self.src,
             action=self.action,
-            result=None if result is NO_RESULT else result,
+            result=None,
             exception=exception,
+        )
+
+    def response(self, result: Any) -> ActionResponse:
+        """Construct a success response to action request.
+
+        Args:
+            result: Result of the action.
+        """
+        return ActionResponse(
+            mid=self.mid,
+            src=self.dest,
+            dest=self.src,
+            action=self.action,
+            result=result,
+            exception=None,
         )
 
 
@@ -173,13 +170,59 @@ class PingRequest(BaseMessage):
 
     def response(self) -> PingResponse:
         """Construct a ping response message."""
-        return PingResponse(mid=self.mid, src=self.dest, dest=self.src)
+        return PingResponse(
+            mid=self.mid,
+            src=self.dest,
+            dest=self.src,
+            exception=None,
+        )
+
+    def error(self, exception: Exception) -> PingResponse:
+        """Construct an error response to ping request.
+
+        Args:
+            exception: Error of the action.
+        """
+        return PingResponse(
+            mid=self.mid,
+            src=self.src,
+            dest=self.dest,
+            exception=exception,
+        )
 
 
 class PingResponse(BaseMessage):
     """Ping response message."""
 
+    exception: Optional[Exception] = None  # noqa: UP007
     kind: Literal['ping-response'] = Field('ping-response', repr=False)
+
+    @field_serializer('exception', when_used='json')
+    def _pickle_and_encode_obj(self, obj: Any) -> str | None:
+        if obj is None:
+            return None
+        raw = pickle.dumps(obj)
+        return base64.b64encode(raw).decode('utf-8')
+
+    @field_validator('exception', mode='before')
+    @classmethod
+    def _decode_pickled_obj(cls, obj: Any) -> Any:
+        if not isinstance(obj, str):
+            return obj
+        return pickle.loads(base64.b64decode(obj))
+
+    def __eq__(self, other: object, /) -> bool:
+        if not isinstance(other, PingResponse):
+            return False
+        return (
+            self.mid == other.mid
+            and self.src == other.src
+            and self.dest == other.dest
+            # Custom __eq__ is required because exception instances need
+            # to be compared by type. I.e., Exception() == Exception() is
+            # always False.
+            and type(self.exception) is type(other.exception)
+        )
 
 
 class ShutdownRequest(BaseMessage):
@@ -197,14 +240,66 @@ class ShutdownRequest(BaseMessage):
             )
         return dest
 
+    def response(self) -> ShutdownResponse:
+        """Construct a shutdown response message."""
+        return ShutdownResponse(
+            mid=self.mid,
+            src=self.dest,
+            dest=self.src,
+            exception=None,
+        )
 
-Message = Union[
-    ActionRequest,
-    ActionResponse,
-    PingRequest,
-    PingResponse,
-    ShutdownRequest,
-]
+    def error(self, exception: Exception) -> ShutdownResponse:
+        """Construct an error response to shutdown request.
+
+        Args:
+            exception: Error of the action.
+        """
+        return ShutdownResponse(
+            mid=self.mid,
+            src=self.src,
+            dest=self.dest,
+            exception=exception,
+        )
+
+
+class ShutdownResponse(BaseMessage):
+    """Agent shutdown response message."""
+
+    exception: Optional[Exception] = None  # noqa: UP007
+    kind: Literal['shutdown-response'] = Field('shutdown-response', repr=False)
+
+    @field_serializer('exception', when_used='json')
+    def _pickle_and_encode_obj(self, obj: Any) -> str | None:
+        if obj is None:
+            return None
+        raw = pickle.dumps(obj)
+        return base64.b64encode(raw).decode('utf-8')
+
+    @field_validator('exception', mode='before')
+    @classmethod
+    def _decode_pickled_obj(cls, obj: Any) -> Any:
+        if not isinstance(obj, str):
+            return obj
+        return pickle.loads(base64.b64decode(obj))
+
+    def __eq__(self, other: object, /) -> bool:
+        if not isinstance(other, ShutdownResponse):
+            return False
+        return (
+            self.mid == other.mid
+            and self.src == other.src
+            and self.dest == other.dest
+            # Custom __eq__ is required because exception instances need
+            # to be compared by type. I.e., Exception() == Exception() is
+            # always False.
+            and type(self.exception) is type(other.exception)
+        )
+
+
+RequestMessage = Union[ActionRequest, PingRequest, ShutdownRequest]
+ResponseMessage = Union[ActionResponse, PingResponse, ShutdownResponse]
+Message = Union[RequestMessage, ResponseMessage]
 """Message union type for type annotations.
 
 Tip:

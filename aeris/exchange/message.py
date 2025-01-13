@@ -16,6 +16,7 @@ from pydantic import Field
 from pydantic import TypeAdapter
 
 from aeris.identifier import Identifier
+from aeris.message import Message
 
 
 class BaseExchangeMessage(BaseModel):
@@ -64,14 +65,14 @@ class RegisterMessage(BaseExchangeMessage):
     src: Identifier
     kind: Literal['register'] = Field('register', repr=False)
 
-    def response(self, error: str | None = None) -> ResponseMessage:
+    def response(self, error: str | None = None) -> ExchangeResponseMessage:
         """Construct an exchange response message.
 
         Args:
             error: Error message if the exchange could not complete the
                 request.
         """
-        return ResponseMessage(src=self.src, op='register', error=error)
+        return ExchangeResponseMessage(src=self.src, request=self, error=error)
 
 
 class UnregisterMessage(BaseExchangeMessage):
@@ -84,14 +85,14 @@ class UnregisterMessage(BaseExchangeMessage):
     src: Identifier
     kind: Literal['unregister'] = Field('unregister', repr=False)
 
-    def response(self, error: str | None = None) -> ResponseMessage:
+    def response(self, error: str | None = None) -> ExchangeResponseMessage:
         """Construct an exchange response message.
 
         Args:
             error: Error message if the exchange could not complete the
                 request.
         """
-        return ResponseMessage(src=self.src, op='unregister', error=error)
+        return ExchangeResponseMessage(src=self.src, request=self, error=error)
 
 
 class ForwardMessage(BaseExchangeMessage):
@@ -100,26 +101,32 @@ class ForwardMessage(BaseExchangeMessage):
     Args:
         src: Source of the message.
         dest: Destination of the message.
-        message: The message to send. This is typically a JSON string
-            of a [`Message`][aeris.message.Message].
+        message: The message to send forward to `dest` via the exchange.
     """
 
     src: Identifier
     dest: Identifier
-    message: str
+    message: Message
     kind: Literal['forward'] = Field('forward', repr=False)
 
-    def response(self, error: str | None = None) -> ResponseMessage:
+    def response(self, error: str | None = None) -> ExchangeResponseMessage:
         """Construct an exchange response message.
 
         Args:
             error: Error message if the exchange could not complete the
                 request.
         """
-        return ResponseMessage(src=self.src, op='forward', error=error)
+        return ExchangeResponseMessage(src=self.src, request=self, error=error)
 
 
-class ResponseMessage(BaseExchangeMessage):
+ExchangeRequestMessage = Union[
+    RegisterMessage,
+    UnregisterMessage,
+    ForwardMessage,
+]
+
+
+class ExchangeResponseMessage(BaseExchangeMessage):
     """Response message from the exchange to clients.
 
     Args:
@@ -129,7 +136,7 @@ class ResponseMessage(BaseExchangeMessage):
     """
 
     src: Identifier
-    op: Literal['forward', 'register', 'unregister']
+    request: ExchangeRequestMessage
     error: str | None = None
     kind: Literal['response'] = Field('response', repr=False)
 
@@ -143,12 +150,7 @@ class ResponseMessage(BaseExchangeMessage):
         return self.error is None
 
 
-ExchangeMessage = Union[
-    RegisterMessage,
-    UnregisterMessage,
-    ForwardMessage,
-    ResponseMessage,
-]
+ExchangeMessage = Union[ExchangeRequestMessage, ExchangeResponseMessage]
 """Exchange message union type for type annotations.
 
 Tip:

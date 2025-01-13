@@ -6,15 +6,19 @@ import socket
 import threading
 import time
 from collections.abc import Generator
+from typing import get_args
 from unittest import mock
 
 import pytest
 
 from aeris.exception import BadIdentifierError
+from aeris.exception import ExchangeRegistrationError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
 from aeris.exchange import Mailbox
+from aeris.exchange.message import ExchangeResponseMessage
 from aeris.exchange.message import ForwardMessage
+from aeris.exchange.message import RegisterMessage
 from aeris.exchange.simple import _AsyncQueue
 from aeris.exchange.simple import _MailboxManager
 from aeris.exchange.simple import _main
@@ -24,8 +28,11 @@ from aeris.exchange.simple import SimpleServer
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.message import PingRequest
+from aeris.message import PingResponse
+from aeris.message import ResponseMessage
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_LOOP_SLEEP
+from testing.constant import TEST_SLEEP
 from testing.sys import open_port
 
 
@@ -103,22 +110,31 @@ async def test_async_queue_subscribe() -> None:
 async def test_mailbox_manager_registration() -> None:
     manager = _MailboxManager()
     uid = AgentIdentifier.new()
-
     manager.register(uid)
-    manager.register(uid)  # Idempotent check
-
     await manager.unregister(uid)
-    await manager.unregister(uid)  # Idempotent check
+
+
+@pytest.mark.asyncio
+async def test_mailbox_manager_registration_failure() -> None:
+    manager = _MailboxManager()
+    uid = AgentIdentifier.new()
+    manager.register(uid)
+    with pytest.raises(ExchangeRegistrationError):
+        manager.register(uid)
+    await manager.unregister(uid)
+    with pytest.raises(ExchangeRegistrationError):
+        await manager.unregister(uid)
 
 
 @pytest.mark.asyncio
 async def test_mailbox_manager_subscribe() -> None:
     manager = _MailboxManager()
     uid = AgentIdentifier.new()
+    request = PingRequest(src=uid, dest=uid)
     messages = [
-        ForwardMessage(src=uid, dest=uid, message='1'),
-        ForwardMessage(src=uid, dest=uid, message='2'),
-        ForwardMessage(src=uid, dest=uid, message='3'),
+        ForwardMessage(src=uid, dest=uid, message=request),
+        ForwardMessage(src=uid, dest=uid, message=request),
+        ForwardMessage(src=uid, dest=uid, message=request),
     ]
 
     manager.register(uid)
@@ -139,7 +155,8 @@ async def test_mailbox_manager_subscribe() -> None:
 async def test_mailbox_manager_bad_identifier() -> None:
     manager = _MailboxManager()
     uid = AgentIdentifier.new()
-    message = ForwardMessage(src=uid, dest=uid, message='foo')
+    request = PingRequest(src=uid, dest=uid)
+    message = ForwardMessage(src=uid, dest=uid, message=request)
 
     with pytest.raises(BadIdentifierError):
         await manager.send(message)
@@ -161,24 +178,16 @@ async def test_mailbox_server_serve_forever() -> None:
 
     stop = asyncio.get_running_loop().create_future()
     task = asyncio.create_task(_serve_forever(server, stop))
-    await asyncio.sleep(0.01)
+    await asyncio.sleep(TEST_SLEEP)
     stop.set_result(None)
     await task
     task.result()
 
 
 @pytest.mark.asyncio
-async def test_client_serialize(server_thread: tuple[str, int]) -> None:
-    host, port = server_thread
-    with SimpleExchange(host, port) as exchange1:
-        pickled = pickle.dumps(exchange1)
-        with pickle.loads(pickled) as exchange2:
-            assert repr(exchange1) == repr(exchange2)
-            assert str(exchange1) == str(exchange2)
-
-
-@pytest.mark.asyncio
-async def test_client_register(server_thread: tuple[str, int]) -> None:
+async def test_exchange_register_entity(
+    server_thread: tuple[str, int],
+) -> None:
     host, port = server_thread
     with SimpleExchange(host, port) as exchange:
         aid = exchange.register_agent()
@@ -189,7 +198,74 @@ async def test_client_register(server_thread: tuple[str, int]) -> None:
 
 
 @pytest.mark.asyncio
-async def test_mailbox_errors(server_thread: tuple[str, int]) -> None:
+async def test_exchange_register_failure(
+    server_thread: tuple[str, int],
+) -> None:
+    host, port = server_thread
+    with SimpleExchange(host, port) as exchange:
+        aid = exchange.register_agent()
+        with pytest.raises(ExchangeRegistrationError):
+            exchange._register_entity(aid)
+        exchange.unregister(aid)
+
+
+@pytest.mark.asyncio
+async def test_exchange_unregister_failure(
+    server_thread: tuple[str, int],
+) -> None:
+    host, port = server_thread
+    with SimpleExchange(host, port) as exchange:
+        with pytest.raises(ExchangeRegistrationError):
+            # A client typically won't reach this error because the exchange
+            # unregisters an entity by closing it's mailbox if one exists.
+            exchange._unregister_entity(AgentIdentifier.new())
+
+
+@pytest.mark.asyncio
+async def test_exchange_serialize(server_thread: tuple[str, int]) -> None:
+    host, port = server_thread
+    with SimpleExchange(host, port) as exchange1:
+        pickled = pickle.dumps(exchange1)
+        with pickle.loads(pickled) as exchange2:
+            assert repr(exchange1) == repr(exchange2)
+            assert str(exchange1) == str(exchange2)
+
+
+@pytest.mark.asyncio
+async def test_exchange_bad_server_message(
+    server_thread: tuple[str, int],
+) -> None:
+    host, port = server_thread
+    with SimpleExchange(host, port) as exchange:
+        message = RegisterMessage(src=AgentIdentifier.new())
+        # The exchange client should never receive this type of message
+        # from the server, but if it does it should just ignore it.
+        exchange._handle_server_message(message)
+
+
+@pytest.mark.asyncio
+async def test_mailbox_manager_send_response_failure(
+    server_thread: tuple[str, int],
+) -> None:
+    host, port = server_thread
+    with SimpleExchange(host, port) as exchange:
+        uid = AgentIdentifier.new()
+        message = ForwardMessage(
+            src=uid,
+            dest=uid,
+            message=PingResponse(src=uid, dest=uid),
+        )
+        response = ExchangeResponseMessage(
+            src=uid,
+            request=message,
+            error='bad request',
+        )
+        # This should just drop the response.
+        exchange._handle_server_message(response)
+
+
+@pytest.mark.asyncio
+async def test_exchange_mailbox_errors(server_thread: tuple[str, int]) -> None:
     host, port = server_thread
     with SimpleExchange(host, port) as exchange:
         aid = exchange.register_agent()
@@ -215,7 +291,9 @@ async def test_mailbox_errors(server_thread: tuple[str, int]) -> None:
 
 
 @pytest.mark.asyncio
-async def test_client_send_messages(server_thread: tuple[str, int]) -> None:
+async def test_exchange_mailbox_send_messages(
+    server_thread: tuple[str, int],
+) -> None:
     host, port = server_thread
     with SimpleExchange(host, port) as exchange:
         assert isinstance(exchange, Exchange)
@@ -233,7 +311,25 @@ async def test_client_send_messages(server_thread: tuple[str, int]) -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_handle(server_thread: tuple[str, int]) -> None:
+async def test_exchange_mailbox_send_message_failure(
+    server_thread: tuple[str, int],
+) -> None:
+    host, port = server_thread
+    with SimpleExchange(host, port) as exchange:
+        assert isinstance(exchange, Exchange)
+        aid1 = exchange.register_agent()
+        aid2 = AgentIdentifier.new()
+
+        with exchange.get_mailbox(aid1) as mailbox:
+            message = PingRequest(src=aid1, dest=aid2)
+            mailbox.send(message)
+            response = mailbox.recv()
+            assert isinstance(response, get_args(ResponseMessage))
+            assert isinstance(response.exception, BadIdentifierError)
+
+
+@pytest.mark.asyncio
+async def test_exchange_create_handle(server_thread: tuple[str, int]) -> None:
     host, port = server_thread
     with SimpleExchange(host, port) as exchange:
         cid = ClientIdentifier.new()
