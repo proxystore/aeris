@@ -55,13 +55,19 @@ def server_thread() -> Generator[tuple[str, int]]:
     waited = 0.0
     while True:
         try:
-            with socket.create_connection((host, port)):
+            start = time.perf_counter()
+            with socket.create_connection(
+                (host, port),
+                timeout=TEST_LOOP_SLEEP,
+            ):
                 break
         except OSError as e:
             if waited > TEST_CONNECTION_TIMEOUT:  # pragma: no cover
                 raise TimeoutError from e
-            time.sleep(TEST_LOOP_SLEEP)
-            waited += TEST_LOOP_SLEEP
+            end = time.perf_counter()
+            sleep = max(0, TEST_LOOP_SLEEP - (end - start))
+            time.sleep(sleep)
+            waited += sleep
 
     yield host, port
 
