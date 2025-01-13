@@ -230,7 +230,9 @@ class SimpleExchange:
                     BadIdentifierError(message.error),
                 )
                 self._mailboxes[message.src]._push(response)
-            else:
+            else:  # pragma: >=3.10 cover
+                # This is covered, by coverage in Python 3.9 doesn't not
+                # detect the empty else pass.
                 # If the failed forward was for a response message, then the
                 # dest entity is likely offline and we cannot recover.
                 pass

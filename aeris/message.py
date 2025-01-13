@@ -134,7 +134,7 @@ class ActionResponse(BaseMessage):
     kind: Literal['action-response'] = Field('action-response', repr=False)
 
     @field_serializer('exception', 'result', when_used='json')
-    def _pickle_and_encode_obj(self, obj: Any) -> str | None:
+    def _pickle_and_encode_obj(self, obj: Any) -> Optional[str]:  # noqa: UP007
         if obj is None:
             return None
         raw = pickle.dumps(obj)
@@ -198,7 +198,7 @@ class PingResponse(BaseMessage):
     kind: Literal['ping-response'] = Field('ping-response', repr=False)
 
     @field_serializer('exception', when_used='json')
-    def _pickle_and_encode_obj(self, obj: Any) -> str | None:
+    def _pickle_and_encode_obj(self, obj: Any) -> Optional[str]:  # noqa: UP007
         if obj is None:
             return None
         raw = pickle.dumps(obj)
@@ -270,7 +270,7 @@ class ShutdownResponse(BaseMessage):
     kind: Literal['shutdown-response'] = Field('shutdown-response', repr=False)
 
     @field_serializer('exception', when_used='json')
-    def _pickle_and_encode_obj(self, obj: Any) -> str | None:
+    def _pickle_and_encode_obj(self, obj: Any) -> Optional[str]:  # noqa: UP007
         if obj is None:
             return None
         raw = pickle.dumps(obj)

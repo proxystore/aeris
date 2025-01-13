@@ -8,6 +8,7 @@ Warning:
 from __future__ import annotations
 
 from typing import Literal
+from typing import Optional
 from typing import Union
 
 from pydantic import BaseModel
@@ -137,7 +138,7 @@ class ExchangeResponseMessage(BaseExchangeMessage):
 
     src: Identifier
     request: ExchangeRequestMessage
-    error: str | None = None
+    error: Optional[str] = None  # noqa: UP007
     kind: Literal['response'] = Field('response', repr=False)
 
     @property

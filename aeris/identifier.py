@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import uuid
 from typing import Literal
+from typing import Optional
 from typing import Union
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
@@ -33,7 +34,7 @@ class BaseIdentifier(BaseModel):
     )
 
     uid: uuid.UUID = Field()
-    name: str | None = Field(None)
+    name: Optional[str] = Field(None)  # noqa: UP007
 
     @classmethod
     def new(cls, name: str | None = None) -> Self:
