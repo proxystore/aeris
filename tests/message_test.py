@@ -1,48 +1,101 @@
 from __future__ import annotations
 
+from typing import get_args
+
 import pytest
 
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
+from aeris.message import BaseMessage
+from aeris.message import Message
 from aeris.message import PingRequest
 from aeris.message import PingResponse
+from aeris.message import RequestMessage
+from aeris.message import ResponseMessage
+from aeris.message import ShutdownRequest
+from aeris.message import ShutdownResponse
 
 
-def test_message_repr() -> None:
-    request = ActionRequest(
-        src=ClientIdentifier.new(),
-        dest=AgentIdentifier.new(),
-        action='foo',
-    )
-    assert isinstance(repr(request), str)
-    assert isinstance(str(request), str)
-
-
-def test_construct_action_response() -> None:
-    request = ActionRequest(
-        src=ClientIdentifier.new(),
-        dest=AgentIdentifier.new(),
-        action='foo',
-    )
-
-    assert isinstance(request.response(result=42), ActionResponse)
-
+def test_shutdown_dest_type() -> None:
     with pytest.raises(
-        TypeError,
-        match='One of exception or result must be provided',
+        ValueError,
+        match='Destination identifier has the client role.',
     ):
-        request.response()
-
-    with pytest.raises(TypeError, match='Cannot provide exception and result'):
-        request.response(exception=Exception(), result=42)
+        ShutdownRequest(src=AgentIdentifier.new(), dest=ClientIdentifier.new())
 
 
-def test_construct_ping_response() -> None:
-    request = PingRequest(
-        src=ClientIdentifier.new(),
-        dest=AgentIdentifier.new(),
-    )
+_src = AgentIdentifier.new()
+_dest = AgentIdentifier.new()
 
-    assert isinstance(request.response(), PingResponse)
+
+@pytest.mark.parametrize(
+    'message',
+    (
+        ActionRequest(src=_src, dest=_dest, action='foo', args=(b'bar',)),
+        ActionResponse(src=_src, dest=_dest, action='foo', result=b'bar'),
+        ActionResponse(
+            src=_src,
+            dest=_dest,
+            action='foo',
+            exception=Exception(),
+        ),
+        PingRequest(src=_src, dest=_dest),
+        PingResponse(src=_src, dest=_dest),
+        PingResponse(src=_src, dest=_dest, exception=Exception()),
+        ShutdownRequest(src=_src, dest=_dest),
+        ShutdownResponse(src=_src, dest=_dest),
+        ShutdownResponse(src=_src, dest=_dest, exception=Exception()),
+    ),
+)
+def test_message_representations(message: Message) -> None:
+    assert isinstance(str(message), str)
+    assert isinstance(repr(message), str)
+    jsoned = message.model_dump_json()
+    recreated = BaseMessage.model_from_json(jsoned)
+    assert message == recreated
+
+
+@pytest.mark.parametrize(
+    'request_',
+    (
+        ActionRequest(src=_src, dest=_dest, action='foo', args=(b'bar',)),
+        PingRequest(src=_src, dest=_dest),
+        ShutdownRequest(src=_src, dest=_dest),
+    ),
+)
+def test_create_response_message(request_: RequestMessage) -> None:
+    if isinstance(request_, ActionRequest):
+        assert isinstance(
+            request_.response(result=42),
+            get_args(ResponseMessage),
+        )
+    else:
+        assert isinstance(request_.response(), get_args(ResponseMessage))
+
+    exception = Exception('foo')
+    response = request_.error(exception)
+    assert isinstance(response, get_args(ResponseMessage))
+    assert response.exception == exception
+
+
+@pytest.mark.parametrize(
+    'response',
+    (
+        ActionResponse(
+            src=_src,
+            dest=_dest,
+            action='foo',
+            exception=Exception(),
+        ),
+        PingResponse(src=_src, dest=_dest, exception=Exception()),
+        ShutdownResponse(src=_src, dest=_dest, exception=Exception()),
+    ),
+)
+def test_action_response_exception_equality(response: ResponseMessage) -> None:
+    dump = response.model_dump()
+    dump['exception'] = Exception()
+    other = type(response).model_validate(dump)
+    assert response == other
+    assert response != BaseMessage(src=response.src, dest=response.dest)

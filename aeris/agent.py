@@ -146,7 +146,7 @@ class Agent(Generic[BehaviorT]):
                     message.kwargs,
                 )
             except Exception as e:
-                return message.response(exception=e)
+                return message.error(exception=e)
             else:
                 return message.response(result=result)
         elif isinstance(message, PingRequest):
@@ -157,7 +157,7 @@ class Agent(Generic[BehaviorT]):
             return None
         else:
             raise BadMessageTypeError(
-                f'Agent cannot handle message type: {message}',
+                f'Agent cannot handle message type: {message!r}',
             )
 
     def _message_listener(self) -> None:
