@@ -134,18 +134,25 @@ class ActionResponse(BaseMessage):
     kind: Literal['action-response'] = Field('action-response', repr=False)
 
     @field_serializer('exception', 'result', when_used='json')
-    def _pickle_and_encode_obj(self, obj: Any) -> Optional[str]:  # noqa: UP007
+    def _pickle_and_encode_obj(self, obj: Any) -> Optional[tuple[str, str]]:  # noqa: UP007
         if obj is None:
             return None
         raw = pickle.dumps(obj)
-        return base64.b64encode(raw).decode('utf-8')
+        # This sential value at the start of the tuple is so we can
+        # disambiguate a result that is a str versus the string of a
+        # serialized result.
+        return ('__pickled__', base64.b64encode(raw).decode('utf-8'))
 
     @field_validator('exception', 'result', mode='before')
     @classmethod
     def _decode_pickled_obj(cls, obj: Any) -> Any:
-        if not isinstance(obj, str):
-            return obj
-        return pickle.loads(base64.b64decode(obj))
+        if (
+            isinstance(obj, (tuple, list))
+            and len(obj) == 2  # noqa: PLR2004
+            and obj[0] == '__pickled__'
+        ):
+            return pickle.loads(base64.b64decode(obj[1]))
+        return obj
 
     def __eq__(self, other: object, /) -> bool:
         if not isinstance(other, ActionResponse):
