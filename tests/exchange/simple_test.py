@@ -61,8 +61,8 @@ def server_thread() -> Generator[tuple[str, int]]:
                 timeout=TEST_LOOP_SLEEP,
             ):
                 break
-        except OSError as e:
-            if waited > TEST_CONNECTION_TIMEOUT:  # pragma: no cover
+        except OSError as e:  # pragma: no cover
+            if waited > TEST_CONNECTION_TIMEOUT:
                 raise TimeoutError from e
             end = time.perf_counter()
             sleep = max(0, TEST_LOOP_SLEEP - (end - start))

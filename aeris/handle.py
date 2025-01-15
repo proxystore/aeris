@@ -239,7 +239,7 @@ class Handle:
         future.result(timeout=timeout)
         elapsed = time.perf_counter() - start
         logger.debug(
-            f'{self} received ping response in {elapsed / 1000:.3f} ms'
+            f'{self} received ping response in {elapsed / 1000:.3f} ms',
         )
         return elapsed
 

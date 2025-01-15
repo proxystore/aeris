@@ -144,6 +144,8 @@ select = [
     "RUF",
 ]
 extend-ignore = [
+    # Allow builtin module shadowing.
+    "A005",
     # Do not require: module (D100), package (D104), magic method (D105),
     # or __init__ (D107) docstrings.
     "D100", "D104", "D105", "D107",
