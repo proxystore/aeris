@@ -238,7 +238,9 @@ class Handle:
         logger.debug(f'{self} sent {request}')
         future.result(timeout=timeout)
         elapsed = time.perf_counter() - start
-        logger.debug(f'{self} received ping response in {elapsed/1000:.3f} ms')
+        logger.debug(
+            f'{self} received ping response in {elapsed / 1000:.3f} ms',
+        )
         return elapsed
 
     @_validate_state
