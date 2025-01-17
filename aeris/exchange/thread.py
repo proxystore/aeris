@@ -158,18 +158,18 @@ class ThreadExchange:
         logger.info(f'{self} registered {cid}')
         return cid
 
-    def unregister(self, identifier: Identifier) -> None:
+    def unregister(self, uid: Identifier) -> None:
         """Unregister the entity (either agent or client).
 
         Args:
-            identifier: Identifier of the entity to unregister.
+            uid: Identifier of the entity to unregister.
         """
-        self._queues.pop(identifier, None)
-        mailboxes = self._mailboxes.pop(identifier, None)
+        self._queues.pop(uid, None)
+        mailboxes = self._mailboxes.pop(uid, None)
         if mailboxes is not None:
             for mailbox in mailboxes:
                 mailbox.close()
-        logger.info(f'{self} unregistered {identifier}')
+        logger.info(f'{self} unregistered {uid}')
 
     def create_handle(self, aid: AgentIdentifier) -> Handle:
         """Create a handle to an agent in the system.

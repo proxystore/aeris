@@ -86,11 +86,11 @@ class Exchange(Protocol):
         """
         ...
 
-    def unregister(self, identifier: Identifier) -> None:
+    def unregister(self, uid: Identifier) -> None:
         """Unregister the entity (either agent or client).
 
         Args:
-            identifier: Identifier of the entity to unregister.
+            uid: Identifier of the entity to unregister.
         """
         ...
 
