@@ -26,8 +26,8 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-import aeris
 from aeris.exception import HandleClosedError
+from aeris.exception import MailboxClosedError
 from aeris.identifier import AgentIdentifier
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
@@ -75,18 +75,11 @@ class Handle:
 
     def __init__(self, aid: AgentIdentifier, exchange: Exchange) -> None:
         self.aid = aid
+        self.cid = exchange.create_client()
+
         self.exchange = exchange
 
-        agent_mailbox = exchange.get_mailbox(self.aid)
-        assert agent_mailbox is not None
-        self._agent_mailbox = agent_mailbox
-
-        self._cid = exchange.register_client()
-        client_mailbox = exchange.get_mailbox(self._cid)
-        assert client_mailbox is not None
-        self._client_mailbox = client_mailbox
-
-        logger.info(f'Initialized handle to {self.aid} with {self._cid}')
+        logger.info(f'Initialized handle to {self.aid} with {self.cid}')
 
         self._futures: dict[uuid.UUID, Future[Any]] = {}
         self._listener_thread = threading.Thread(target=self._result_listener)
@@ -119,14 +112,14 @@ class Handle:
 
     def __str__(self) -> str:
         name = type(self).__name__
-        return f'{name}<{self._cid}; {self.aid}; {self.exchange}>'
+        return f'{name}<{self.cid}; {self.aid}; {self.exchange}>'
 
     def _result_listener(self) -> None:
-        logger.debug(f'{self._cid} listening for results from {self.aid}')
+        logger.debug(f'{self.cid} listening for results from {self.aid}')
         while True:
             try:
-                message = self._client_mailbox.recv()
-            except aeris.exchange.MailboxClosedError:
+                message = self.exchange.recv(self.cid)
+            except MailboxClosedError:
                 break
 
             if isinstance(message, ActionResponse):
@@ -140,7 +133,7 @@ class Handle:
                 future.set_result(None)
             else:
                 logger.error(
-                    f'{self._cid} received invalid message response type '
+                    f'{self.cid} received invalid message response type '
                     f'from {self.aid}: {message}',
                 )
 
@@ -176,11 +169,10 @@ class Handle:
                 'This likely means the listener thread crashed.',
             )
 
-        self._client_mailbox.close()
+        self.exchange.close_mailbox(self.cid)
         self._listener_thread.join()
-        self.exchange.unregister(self._cid)
 
-        logger.info(f'{self._cid} is closed')
+        logger.info(f'{self.cid} is closed')
 
     @_validate_state
     def action(
@@ -201,7 +193,7 @@ class Handle:
             Future to the result of the action.
         """
         request = ActionRequest(
-            src=self._cid,
+            src=self.cid,
             dest=self.aid,
             action=action,
             args=args,
@@ -209,7 +201,7 @@ class Handle:
         )
         future: Future[R] = Future()
         self._futures[request.mid] = future
-        self._agent_mailbox.send(request)
+        self.exchange.send(self.aid, request)
         logger.debug(f'{self} sent {request}')
         return future
 
@@ -231,10 +223,10 @@ class Handle:
             TimeoutError: if the timeout is exceeded.
         """
         start = time.perf_counter()
-        request = PingRequest(src=self._cid, dest=self.aid)
+        request = PingRequest(src=self.cid, dest=self.aid)
         future: Future[None] = Future()
         self._futures[request.mid] = future
-        self._agent_mailbox.send(request)
+        self.exchange.send(self.aid, request)
         logger.debug(f'{self} sent {request}')
         future.result(timeout=timeout)
         elapsed = time.perf_counter() - start
@@ -249,6 +241,6 @@ class Handle:
 
         This is non-blocking and will only send the message.
         """
-        request = ShutdownRequest(src=self._cid, dest=self.aid)
-        self._agent_mailbox.send(request)
+        request = ShutdownRequest(src=self.cid, dest=self.aid)
+        self.exchange.send(self.aid, request)
         logger.debug(f'{self} sent {request}')

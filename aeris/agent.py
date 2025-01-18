@@ -16,9 +16,8 @@ from aeris.behavior import get_actions
 from aeris.behavior import get_loops
 from aeris.exception import BadIdentifierError
 from aeris.exception import BadMessageTypeError
+from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
-from aeris.exchange import Mailbox
-from aeris.exchange import MailboxClosedError
 from aeris.identifier import AgentIdentifier
 from aeris.message import ActionRequest
 from aeris.message import Message
@@ -78,7 +77,6 @@ class Agent(Generic[BehaviorT]):
 
         self._futures: tuple[Future[None], ...] | None = None
         self._start_loops_lock = threading.Lock()
-        self._mailbox: Mailbox | None = None
 
         self._status = _AgentStatus.INITIALIZED
 
@@ -161,17 +159,13 @@ class Agent(Generic[BehaviorT]):
             )
 
     def _message_listener(self) -> None:
-        if self._mailbox is None:
-            raise AssertionError(
-                'Message listener started without initializing mailbox.',
-            )
+        assert self.aid is not None
         assert self.exchange is not None
-
         logger.info(f'{self._log_prefix()} is listening for incoming messages')
 
         while True:
             try:
-                message = self._mailbox.recv()
+                message = self.exchange.recv(self.aid)
             except MailboxClosedError:
                 break
 
@@ -179,15 +173,13 @@ class Agent(Generic[BehaviorT]):
 
             if response is not None:
                 try:
-                    dest = self.exchange.get_mailbox(response.dest)
-                except BadIdentifierError:
-                    logger.exception(
-                        f'Failed to get mailbox of {response.dest} to '
-                        f'send {response}. This likely means the '
-                        'entity was unregistered from the exchange.',
+                    self.exchange.send(response.dest, response)
+                except (BadIdentifierError, MailboxClosedError):
+                    logger.warning(
+                        f'Failed to send response to {response.dest}. '
+                        'This likely means the destination mailbox was '
+                        'removed from the exchange.',
                     )
-                else:
-                    dest.send(response)
 
     def run(self) -> None:
         """Run the agent.
@@ -211,7 +203,6 @@ class Agent(Generic[BehaviorT]):
         with ThreadPoolExecutor(max_workers=len(self._loops) + 1) as pool:
             with self._start_loops_lock:
                 if self.exchange is not None and self.aid is not None:
-                    self._mailbox = self.exchange.get_mailbox(self.aid)
                     futures.append(pool.submit(self._message_listener))
 
                 for method in self._loops.values():
@@ -233,15 +224,15 @@ class Agent(Generic[BehaviorT]):
         """Notify control loops to shutdown.
 
         Sets the shutdown event passed to each control loop method and closes
-        the incoming messages mailbox.
+        the agent's mailbox in the exchange.
         """
         logger.info(f'{self._log_prefix()} shutdown requested')
         self.done.set()
         self._status = _AgentStatus.TERMINTATING
 
         with self._start_loops_lock:
-            if self._mailbox is not None:
-                self._mailbox.close()
+            if self.exchange is not None and self.aid is not None:
+                self.exchange.close_mailbox(self.aid)
 
     def wait(self, timeout: float | None = None) -> None:
         """Wait for control loops to exit.

@@ -21,132 +21,137 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import contextlib
-import dataclasses
+import base64
+import enum
 import io
 import logging
-import queue
+import pickle
 import signal
 import socket
 import sys
 import threading
-from collections.abc import AsyncGenerator
+import uuid
 from collections.abc import Sequence
 from concurrent.futures import Future
-from types import TracebackType
-from typing import Generic
-from typing import get_args
-from typing import TypeVar
+from typing import Any
+from typing import Literal
+from typing import Optional
+from typing import Union
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
     from typing import Self
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
+from pydantic import BaseModel
+from pydantic import ConfigDict
+from pydantic import Field
+from pydantic import field_serializer
+from pydantic import field_validator
+from pydantic import TypeAdapter
+
 from aeris.exception import BadIdentifierError
-from aeris.exception import ExchangeRegistrationError
+from aeris.exception import BadRequestError
 from aeris.exception import MailboxClosedError
-from aeris.exchange.message import BaseExchangeMessage
-from aeris.exchange.message import ExchangeMessage
-from aeris.exchange.message import ExchangeResponseMessage
-from aeris.exchange.message import ForwardMessage
-from aeris.exchange.message import RegisterMessage
-from aeris.exchange.message import UnregisterMessage
+from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import AsyncQueue
-from aeris.handle import Handle
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import ClientIdentifier
+from aeris.exchange.queue import QueueClosedError
 from aeris.identifier import Identifier
 from aeris.message import Message
-from aeris.message import RequestMessage
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
-
-DEFAULT_PRIORITY = 0
 DEFAULT_SERVER_TIMEOUT = 30
-CLOSE_PRIORITY = DEFAULT_PRIORITY + 1
-CLOSE_SENTINAL = object()
 
 
-@dataclasses.dataclass(order=True)
-class _QueueItem(Generic[T]):
-    priority: int
-    message: T | object = dataclasses.field(compare=False)
+class _ExchangeMessageType(enum.Enum):
+    CREATE_MAILBOX = 'create-mailbox'
+    CLOSE_MAILBOX = 'close-mailbox'
+    SEND_MESSAGE = 'send-message'
+    REQUEST_MESSAGE = 'request-message'
 
 
-class SimpleMailbox:
-    """Thread-safe queue-based mailbox."""
+class _BaseExchangeMessage(BaseModel):
+    """Base exchange message."""
 
-    def __init__(self, uid: Identifier, exchange: SimpleExchange) -> None:
-        self.uid = uid
-        self._exchange = exchange
-        self._queue: queue.PriorityQueue[_QueueItem[Message]] = (
-            queue.PriorityQueue()
-        )
-        self._closed = False
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra='forbid',
+        frozen=True,
+        use_enum_values=False,
+        validate_default=True,
+    )
 
-    def __enter__(self) -> Self:
-        return self
+    mid: uuid.UUID = Field(default_factory=uuid.uuid4)
+    kind: _ExchangeMessageType = Field()
+    src: Identifier = Field()
+    dest: Optional[Identifier] = Field(None)  # noqa: UP007
+    payload: Optional[Message] = Field(None)  # noqa: UP007
 
-    def __exit__(
+    @classmethod
+    def model_deserialize(cls, raw: bytes) -> _ExchangeMessage:
+        dump = raw.decode()
+        return TypeAdapter(_ExchangeMessage).validate_json(dump)
+
+    def model_serialize(self) -> bytes:
+        dump = self.model_dump_json()
+        return dump.encode()
+
+
+class _ExchangeRequestMessage(_BaseExchangeMessage):
+    mtype: Literal['request'] = Field('request', repr=False)
+
+    def response(
         self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        exc_traceback: TracebackType | None,
-    ) -> None:
-        self.close()
-
-    def _push(self, message: Message) -> None:
-        if self._closed:
-            raise MailboxClosedError
-        self._queue.put(_QueueItem(DEFAULT_PRIORITY, message))
-
-    def send(self, message: Message) -> None:
-        """Send a message to this mailbox.
-
-        Raises:
-            MailboxClosedError: if [`close()`][aeris.exchange.Mailbox.close]
-                has been called.
-        """
-        if self._closed:
-            raise MailboxClosedError
-        wrapped = ForwardMessage(
-            src=message.src,
-            dest=message.dest,
-            message=message,
+        *,
+        error: Exception | None = None,
+        payload: Message | None = None,
+    ) -> _ExchangeResponseMessage:
+        return _ExchangeResponseMessage(
+            mid=self.mid,
+            kind=self.kind,
+            src=self.src,
+            dest=self.dest,
+            error=error,
+            payload=payload,
         )
-        self._exchange._send_server_message(wrapped)
-
-    def recv(self) -> Message:
-        """Get the next message from this mailbox.
-
-        Raises:
-            MailboxClosedError: if [`close()`][aeris.exchange.Mailbox.close]
-                has been called.
-        """
-        if self._closed:
-            raise MailboxClosedError
-        item = self._queue.get(block=True)
-        message = item.message
-        if message is CLOSE_SENTINAL:  # pragma: no cover
-            raise MailboxClosedError
-        assert isinstance(message, get_args(Message))
-        return message
-
-    def close(self) -> None:
-        """Close the mailbox.
-
-        This unregisters the entity from the exchange.
-        """
-        if not self._closed:
-            self._closed = True
-            self._queue.put(_QueueItem(CLOSE_PRIORITY, CLOSE_SENTINAL))
-            self._exchange._unregister_entity(self.uid)
 
 
-class SimpleExchange:
+class _ExchangeResponseMessage(_BaseExchangeMessage):
+    mtype: Literal['response'] = Field('response', repr=False)
+    error: Optional[Exception] = Field(None)  # noqa: UP007
+
+    @field_serializer('error', when_used='json')
+    def _pickle_and_encode_obj(self, obj: Any) -> str:
+        raw = pickle.dumps(obj)
+        return base64.b64encode(raw).decode('utf-8')
+
+    @field_validator('error', mode='before')
+    @classmethod
+    def _decode_pickled_obj(cls, obj: Any) -> Any:
+        if not isinstance(obj, str):
+            return obj
+        return pickle.loads(base64.b64decode(obj))
+
+    def __eq__(self, other: object, /) -> bool:
+        if not isinstance(other, _ExchangeResponseMessage):
+            return False
+        self_dump = self.model_dump()
+        other_dump = other.model_dump()
+        return (
+            isinstance(self_dump.pop('error'), type(other_dump.pop('error')))
+            and self_dump == other_dump
+        )
+
+    @property
+    def success(self) -> bool:
+        return self.error is None
+
+
+_ExchangeMessage = Union[_ExchangeRequestMessage, _ExchangeResponseMessage]
+
+
+class SimpleExchange(ExchangeMixin):
     """Simple exchange client.
 
     Args:
@@ -175,21 +180,8 @@ class SimpleExchange:
         )
         self._handler_thread.start()
         logging.debug('%r started server message handler thread', self)
-        self._mailboxes: dict[Identifier, SimpleMailbox] = {}
 
-        self._pending_registration: dict[Identifier, Future[None]] = {}
-        self._pending_unregistration: dict[Identifier, Future[None]] = {}
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        exc_traceback: TracebackType | None,
-    ) -> None:
-        self.close()
+        self._pending: dict[uuid.UUID, Future[_ExchangeResponseMessage]] = {}
 
     def __reduce__(
         self,
@@ -202,55 +194,21 @@ class SimpleExchange:
     def __str__(self) -> str:
         return f'{type(self).__name__}<{self.host}:{self.port}>'
 
-    def _handle_response_message(
+    def _handle_message(
         self,
-        message: ExchangeResponseMessage,
+        message: _ExchangeMessage,
     ) -> None:
-        if isinstance(message.request, (RegisterMessage, UnregisterMessage)):
-            if isinstance(message.request, RegisterMessage):
-                future = self._pending_registration[message.src]
-            elif isinstance(message.request, UnregisterMessage):
-                future = self._pending_unregistration[message.src]
+        if isinstance(message, _ExchangeResponseMessage):
+            logger.debug('%s received message from server: %r', self, message)
+            if message.success:
+                self._pending[message.mid].set_result(message)
             else:
-                raise AssertionError('Unreachable.')
-            if message.error is None:
-                future.set_result(None)
-            else:
-                future.set_exception(ExchangeRegistrationError(message.error))
-        elif (
-            isinstance(message.request, ForwardMessage) and not message.success
-        ):
+                assert message.error is not None
+                self._pending[message.mid].set_exception(message.error)
+        else:
             logger.warning(
-                '%s forward message failed: %s',
+                '%s dropping bad message type: %r',
                 self,
-                message.error,
-            )
-            if isinstance(message.request.message, get_args(RequestMessage)):
-                response = message.request.message.error(
-                    BadIdentifierError(message.error),
-                )
-                self._mailboxes[message.src]._push(response)
-            else:  # pragma: >=3.10 cover
-                # This is covered, by coverage in Python 3.9 doesn't not
-                # detect the empty else pass.
-                # If the failed forward was for a response message, then the
-                # dest entity is likely offline and we cannot recover.
-                pass
-        elif isinstance(message.request, ForwardMessage):
-            # Nothing needs to be done in this case.
-            pass
-        else:
-            raise AssertionError('Unreachable.')
-
-    def _handle_server_message(self, message: ExchangeMessage) -> None:
-        logger.debug('%s received message from server: %r', self, message)
-        if isinstance(message, ForwardMessage):
-            self._mailboxes[message.dest]._push(message.message)
-        elif isinstance(message, ExchangeResponseMessage):
-            self._handle_response_message(message)
-        else:
-            logger.warning(
-                'Unhandled message type from exchange: %r',
                 message,
             )
 
@@ -277,8 +235,15 @@ class SimpleExchange:
                 if len(raw) == 0:
                     continue
 
-                message = BaseExchangeMessage.model_deserialize(raw)
-                self._handle_server_message(message)
+                try:
+                    message = _BaseExchangeMessage.model_deserialize(raw)
+                except Exception:
+                    logger.exception(
+                        '%s failed to deserialize message from client',
+                        self,
+                    )
+                    return
+                self._handle_message(message)
 
             if start_index > 0:
                 buffer.seek(start_index)
@@ -290,147 +255,130 @@ class SimpleExchange:
                 buffer.seek(0, 2)
         buffer.close()
 
-    def _send_server_message(self, message: ExchangeMessage) -> None:
-        self._socket.send(message.model_serialize() + b'\n')
-        logger.debug('%s sent message to server: %r', self, message)
+    def _send_request(
+        self,
+        request: _ExchangeRequestMessage,
+    ) -> _ExchangeResponseMessage:
+        future: Future[_ExchangeResponseMessage] = Future()
+        self._pending[request.mid] = future
+        self._socket.send(request.model_serialize() + b'\n')
+        logger.debug('%s sent message to server: %r', self, request)
+        response = future.result(timeout=self.timeout)
+        del self._pending[request.mid]
+        return response
 
     def close(self) -> None:
-        """Close the connection to the exchange."""
+        """Close this exchange client."""
         logger.debug('%s closing socket connection to server', self)
         self._socket.close()
         self._handler_thread.join(timeout=1)
 
-    def _register_entity(self, uid: Identifier) -> None:
-        self._mailboxes[uid] = SimpleMailbox(uid, self)
-        future: Future[None] = Future()
-        self._pending_registration[uid] = future
-        message = RegisterMessage(src=uid)
-        self._send_server_message(message)
-        future.result(timeout=self.timeout)
-        del self._pending_registration[uid]
-        logger.info('%s registered %r', self, uid)
-
-    def register_agent(self, name: str | None = None) -> AgentIdentifier:
-        """Create a mailbox for a new agent in the system.
-
-        Args:
-            name: Optional human-readable name for the agent.
-        """
-        aid = AgentIdentifier.new(name=name)
-        self._register_entity(aid)
-        return aid
-
-    def register_client(self, name: str | None = None) -> ClientIdentifier:
-        """Create a mailbox for a new client in the system.
-
-        Args:
-            name: Optional human-readable name for the client.
-        """
-        cid = ClientIdentifier.new(name=name)
-        self._register_entity(cid)
-        return cid
-
-    def _unregister_entity(self, uid: Identifier) -> None:
-        future: Future[None] = Future()
-        self._pending_unregistration[uid] = future
-        message = UnregisterMessage(src=uid)
-        self._send_server_message(message)
-        future.result(timeout=self.timeout)
-        logger.info('%s unregistered %r', self, uid)
-
-    def unregister(self, uid: Identifier) -> None:
-        """Unregister the entity (either agent or client).
-
-        Args:
-            uid: Identifier of the entity to unregister.
-        """
-        mailbox = self._mailboxes.pop(uid, None)
-        if mailbox is not None:
-            mailbox.close()
-
-    def create_handle(self, aid: AgentIdentifier) -> Handle:
-        """Create a handle to an agent in the system.
-
-        A handle enables a client to invoke actions on the agent.
+    def create_mailbox(self, uid: Identifier) -> None:
+        """Create the mailbox in the exchange for a new entity.
 
         Note:
-            It is not possible to create a handle to a client since a handle
-            is essentially a new client of a specific agent.
+            This method is a no-op if the mailbox already exists.
 
         Args:
-            aid: Identifier of agent in the system to create a handle to.
-
-        Returns:
-            Handle to the agent.
-
-        Raises:
-            TypeError: if `aid` is not an instance of
-                [`AgentIdentifier`][aeris.identifier.AgentIdentifier].
+            uid: Entity identifier used as the mailbox address.
         """
-        if not isinstance(aid, AgentIdentifier):
-            raise TypeError(
-                f'Handle must be created from an {AgentIdentifier.__name__} '
-                f'but got identifier with type {type(aid).__name__}.',
-            )
-        return Handle(aid, self)
+        request = _ExchangeRequestMessage(
+            kind=_ExchangeMessageType.CREATE_MAILBOX,
+            src=uid,
+        )
+        response = self._send_request(request)
+        assert response.success
+        logger.info('%s created mailbox for %r', self, uid)
 
-    def get_mailbox(self, uid: Identifier) -> SimpleMailbox:
-        """Get the mailbox for an entity in the system.
+    def close_mailbox(self, uid: Identifier) -> None:
+        """Close the mailbox for an entity from the exchange.
+
+        Note:
+            This method is a no-op if the mailbox does not exists.
 
         Args:
-            uid: Identifier of entity in the system.
+            uid: Entity identifier of the mailbox to close.
+        """
+        request = _ExchangeRequestMessage(
+            kind=_ExchangeMessageType.CLOSE_MAILBOX,
+            src=uid,
+        )
+        response = self._send_request(request)
+        assert response.success
+        logger.info('%s closed mailbox for %r', self, uid)
 
-        Returns:
-            Mailbox for the entity.
+    def send(self, uid: Identifier, message: Message) -> None:
+        """Send a message to a mailbox.
+
+        Args:
+            uid: Destination address of the message.
+            message: Message to send.
 
         Raises:
-            BadIdentifierError: if an entity with `uid` is not
-                registered with the exchange.
+            BadIdentifierError: if a mailbox for `uid` does not exist.
+            MailboxClosedError: if the mailbox was closed.
         """
-        try:
-            return self._mailboxes[uid]
-        except KeyError as e:
-            raise BadIdentifierError(
-                f'{uid} is not registered with this exchange.',
-            ) from e
+        request = _ExchangeRequestMessage(
+            kind=_ExchangeMessageType.SEND_MESSAGE,
+            src=message.src,
+            dest=uid,
+            payload=message,
+        )
+        response = self._send_request(request)
+        assert response.success
+        logger.info('%s sent message to %r', self, uid)
+
+    def recv(self, uid: Identifier) -> Message:
+        """Receive the next message address to an entity.
+
+        Args:
+            uid: Identifier of the entity request it's next message.
+
+        Returns:
+            Next message in the entity's mailbox.
+
+        Raises:
+            BadIdentifierError: if a mailbox for `uid` does not exist.
+            MailboxClosedError: if the mailbox was closed.
+        """
+        request = _ExchangeRequestMessage(
+            kind=_ExchangeMessageType.REQUEST_MESSAGE,
+            src=uid,
+        )
+        response = self._send_request(request)
+        assert response.success
+        assert response.payload is not None
+        return response.payload
 
 
 class _MailboxManager:
     def __init__(self) -> None:
-        self._mailboxes: dict[Identifier, AsyncQueue[ForwardMessage]] = {}
+        self._mailboxes: dict[Identifier, AsyncQueue[Message]] = {}
 
-    def register(self, uid: Identifier) -> None:
+    def create_mailbox(self, uid: Identifier) -> None:
         if uid not in self._mailboxes or self._mailboxes[uid].closed():
-            # If the old mailbox was closed, it gets thrown away.
             self._mailboxes[uid] = AsyncQueue()
-        else:
-            raise ExchangeRegistrationError(f'{uid!r} is already registered.')
 
-    async def unregister(self, uid: Identifier) -> None:
-        mailbox = self._mailboxes.pop(uid, None)
+    async def close_mailbox(self, uid: Identifier) -> None:
+        mailbox = self._mailboxes.get(uid, None)
         if mailbox is not None:
-            await mailbox.close(immediate=True)
-        else:
-            raise ExchangeRegistrationError(f'{uid!r} is not registered.')
+            await mailbox.close()
 
-    async def send(self, message: ForwardMessage) -> None:
+    async def get(self, uid: Identifier) -> Message:
+        try:
+            return await self._mailboxes[uid].get()
+        except KeyError as e:
+            raise BadIdentifierError() from e
+        except QueueClosedError as e:
+            raise MailboxClosedError() from e
+
+    async def put(self, message: Message) -> None:
         try:
             await self._mailboxes[message.dest].put(message)
         except KeyError as e:
-            raise BadIdentifierError(
-                f'No mailbox associated with {message.dest!r}',
-            ) from e
-
-    async def subscribe(
-        self,
-        uid: Identifier,
-    ) -> AsyncGenerator[ForwardMessage]:
-        try:
-            return self._mailboxes[uid].subscribe()
-        except KeyError as e:
-            raise BadIdentifierError(
-                f'No mailbox associated with {uid}',
-            ) from e
+            raise BadIdentifierError() from e
+        except QueueClosedError as e:
+            raise MailboxClosedError() from e
 
 
 class SimpleServer:
@@ -445,7 +393,6 @@ class SimpleServer:
         self.host = host
         self.port = port
         self.manager = _MailboxManager()
-        self._subscriber_tasks: dict[Identifier, asyncio.Task[None]] = {}
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}("{self.host}:{self.port}")'
@@ -453,79 +400,39 @@ class SimpleServer:
     def __str__(self) -> str:
         return f'{type(self).__name__}<{self.host}:{self.port}>'
 
-    async def _subscribe(
+    async def _handle_request(
         self,
-        uid: Identifier,
-        writer: asyncio.StreamWriter,
-    ) -> None:
-        messages = await self.manager.subscribe(uid)
-        logger.info('%s started subscriber task for %r', self, uid)
-
-        while not writer.is_closing():  # pragma: no branch
-            try:
-                message = await asyncio.wait_for(
-                    messages.__anext__(),
-                    timeout=1,
+        message: _ExchangeRequestMessage,
+    ) -> _ExchangeResponseMessage:
+        logger.debug('%s received: %r', self, message)
+        if message.kind is _ExchangeMessageType.CREATE_MAILBOX:
+            self.manager.create_mailbox(message.src)
+            logger.info('%s created mailbox for %r', self, message.src)
+            response = message.response()
+        elif message.kind is _ExchangeMessageType.CLOSE_MAILBOX:
+            await self.manager.close_mailbox(message.src)
+            logger.info('%s closed mailbox for %r', self, message.src)
+            response = message.response()
+        elif message.kind is _ExchangeMessageType.SEND_MESSAGE:
+            if message.dest is None or message.payload is None:
+                error = BadRequestError(
+                    'Dest identifier and payload message must be specified.',
                 )
-            except asyncio.TimeoutError:  # pragma: no cover
-                continue
-            except StopAsyncIteration:
-                break
-
-            encoded = message.model_serialize()
-            writer.write(encoded)
-            writer.write(b'\n')
-            try:
-                await writer.drain()
-                logger.debug('%s sent message to %r: %r', self, uid, message)
-            except OSError:  # pragma: no cover
-                logger.warning(
-                    '%s failed to send message to %r: %r',
-                    self,
-                    uid,
-                    message,
-                )
-
-        # Note: we don't close the writer here. The happy path is that
-        # the server replies to the client's unregister request and the
-        # client closes the socket once the response is received.
-        logger.info('%s exited subscriber task for %r', self, uid)
-
-    async def _handle_client_message(
-        self,
-        message: ExchangeMessage,
-        writer: asyncio.StreamWriter,
-    ) -> ExchangeResponseMessage:
-        if isinstance(message, ForwardMessage):
-            try:
-                await self.manager.send(message)
-            except BadIdentifierError as e:
-                response = message.response(error=str(e))
+                response = message.response(error=error)
             else:
-                response = message.response()
-        elif isinstance(message, RegisterMessage):
+                try:
+                    await self.manager.put(message.payload)
+                except Exception as e:
+                    response = message.response(error=e)
+                else:
+                    response = message.response()
+        elif message.kind is _ExchangeMessageType.REQUEST_MESSAGE:
             try:
-                self.manager.register(message.src)
-            except ExchangeRegistrationError as e:
-                response = message.response(error=str(e))
+                next_message = await self.manager.get(message.src)
+            except Exception as e:
+                response = message.response(error=e)
             else:
-                task = asyncio.create_task(
-                    self._subscribe(message.src, writer),
-                    name=f'{message.src.uid}-subscriber',
-                )
-                self._subscriber_tasks[message.src] = task
-                logger.info('%s registered client %r', self, message.src)
-                response = message.response()
-        elif isinstance(message, UnregisterMessage):
-            try:
-                await self.manager.unregister(message.src)
-            except ExchangeRegistrationError as e:
-                response = message.response(error=str(e))
-            else:
-                task = self._subscriber_tasks.pop(message.src)
-                await task
-                logger.info('%s unregistered client %r', self, message.src)
-                response = message.response()
+                response = message.response(payload=next_message)
         else:
             raise AssertionError('Unreachable.')
 
@@ -543,13 +450,27 @@ class SimpleServer:
                 reader.feed_eof()
                 continue
 
-            message = BaseExchangeMessage.model_deserialize(raw)
-            logger.debug('%s received: %r', self, message)
-            response = await self._handle_client_message(message, writer)
-            encoded = response.model_serialize()
-            writer.write(encoded)
-            writer.write(b'\n')
-            await writer.drain()
+            try:
+                message = _BaseExchangeMessage.model_deserialize(raw)
+            except Exception:
+                logger.exception(
+                    '%s failed to deserialize message from client',
+                    self,
+                )
+                break
+
+            if isinstance(message, _ExchangeRequestMessage):
+                response = await self._handle_request(message)
+                encoded = response.model_serialize()
+                writer.write(encoded)
+                writer.write(b'\n')
+                await writer.drain()
+            else:
+                logger.warning(
+                    '%s dropping bad message type: %r',
+                    self,
+                    message,
+                )
 
         writer.close()
         await writer.wait_closed()
@@ -566,16 +487,12 @@ class SimpleServer:
         async with server:
             await server.start_serving()
             logger.info(
-                'Server listening on %r:%r (ctrl-C to exit)',
+                'Server listening on %s:%s (ctrl-C to exit)',
                 self.host,
                 self.port,
             )
             await stop
             logger.info('Closing server...')
-            for task in self._subscriber_tasks.values():
-                task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
 
         if sys.version_info >= (3, 13):  # pragma: >=3.13 cover
             server.close_clients()

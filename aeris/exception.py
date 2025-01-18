@@ -13,8 +13,8 @@ class BadMessageTypeError(Exception):
     pass
 
 
-class ExchangeRegistrationError(Exception):
-    """Registration with exchange failed."""
+class BadRequestError(Exception):
+    """Request message is malformed."""
 
     pass
 

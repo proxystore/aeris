@@ -1,221 +1,106 @@
 from __future__ import annotations
 
-import dataclasses
 import logging
 import pickle
-import queue
-import sys
-from collections import defaultdict
-from types import TracebackType
-from typing import get_args
-
-if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
-    from typing import TypeAlias
-else:  # pragma: <3.10 cover
-    from typing_extensions import TypeAlias
-
-if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
-    from typing import Self
-else:  # pragma: <3.11 cover
-    from typing_extensions import Self
 
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
-from aeris.handle import Handle
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import ClientIdentifier
+from aeris.exchange import ExchangeMixin
+from aeris.exchange.queue import Queue
+from aeris.exchange.queue import QueueClosedError
 from aeris.identifier import Identifier
 from aeris.message import Message
 
-logger = logging.getLogger()
-
-DEFAULT_PRIORITY = 0
-CLOSE_PRIORITY = DEFAULT_PRIORITY + 1
-CLOSE_SENTINAL = object()
+logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass(order=True)
-class _MailboxQueueItem:
-    priority: int
-    message: Message | object = dataclasses.field(compare=False)
-
-
-MailboxQueue: TypeAlias = queue.PriorityQueue[_MailboxQueueItem]
-
-
-class ThreadMailbox:
-    """Thread-safe queue-based mailbox."""
-
-    def __init__(self, queue: MailboxQueue) -> None:
-        self._queue = queue
-        self._closed = False
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        exc_traceback: TracebackType | None,
-    ) -> None:
-        self.close()
-
-    def send(self, message: Message) -> None:
-        """Send a message to this mailbox.
-
-        Raises:
-            MailboxClosedError: if [`close()`][aeris.exchange.Mailbox.close]
-                has been called.
-        """
-        if self._closed:
-            raise MailboxClosedError
-        self._queue.put(_MailboxQueueItem(DEFAULT_PRIORITY, message))
-
-    def recv(self) -> Message:
-        """Get the next message from this mailbox.
-
-        Raises:
-            MailboxClosedError: if [`close()`][aeris.exchange.Mailbox.close]
-                has been called.
-        """
-        if self._closed:
-            raise MailboxClosedError
-
-        item = self._queue.get(block=True)
-        message = item.message
-        if message is CLOSE_SENTINAL:
-            raise MailboxClosedError
-        assert isinstance(message, get_args(Message))
-        return message
-
-    def close(self) -> None:
-        """Close the mailbox."""
-        if not self._closed:
-            self._closed = True
-            self._queue.put(_MailboxQueueItem(CLOSE_PRIORITY, CLOSE_SENTINAL))
-
-
-class ThreadExchange:
-    """Message exchange for threaded agents.
+class ThreadExchange(ExchangeMixin):
+    """Local process message exchange for threaded agents.
 
     This exchange uses [`Queues`][queue.Queue] as mailboxes for agents
     running as separate threads within the same process. This exchange
-    is helpful for local testing.
+    is helpful for local testing but not much more.
     """
 
     def __init__(self) -> None:
-        self._queues: dict[Identifier, MailboxQueue] = {}
-        self._mailboxes: dict[Identifier, list[ThreadMailbox]] = defaultdict(
-            list,
-        )
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        exc_traceback: TracebackType | None,
-    ) -> None:
-        self.close()
+        self._queues: dict[Identifier, Queue[Message]] = {}
 
     def __getstate__(self) -> None:
         raise pickle.PicklingError(
             f'{type(self).__name__} cannot be safely pickled.',
         )
 
-    def __repr__(self) -> str:
-        return f'{type(self).__name__}()'
-
-    def __str__(self) -> str:
-        return f'{type(self).__name__}<{id(self)}>'
-
     def close(self) -> None:
-        """Close the exchange."""
-        pass
+        """Close the exchange.
 
-    def register_agent(self, name: str | None = None) -> AgentIdentifier:
-        """Create a mailbox for a new agent in the system.
-
-        Args:
-            name: Optional human-readable name for the agent.
+        Unlike most exchange clients, this will close all of the mailboxes.
         """
-        aid = AgentIdentifier.new(name=name)
-        self._queues[aid] = queue.PriorityQueue()
-        logger.info(f'{self} registered {aid}')
-        return aid
+        for queue in self._queues.values():
+            queue.close()
 
-    def register_client(self, name: str | None = None) -> ClientIdentifier:
-        """Create a mailbox for a new client in the system.
-
-        Args:
-            name: Optional human-readable name for the client.
-        """
-        cid = ClientIdentifier.new(name=name)
-        self._queues[cid] = queue.PriorityQueue()
-        logger.info(f'{self} registered {cid}')
-        return cid
-
-    def unregister(self, uid: Identifier) -> None:
-        """Unregister the entity (either agent or client).
-
-        Args:
-            uid: Identifier of the entity to unregister.
-        """
-        self._queues.pop(uid, None)
-        mailboxes = self._mailboxes.pop(uid, None)
-        if mailboxes is not None:
-            for mailbox in mailboxes:
-                mailbox.close()
-        logger.info(f'{self} unregistered {uid}')
-
-    def create_handle(self, aid: AgentIdentifier) -> Handle:
-        """Create a handle to an agent in the system.
-
-        A handle enables a client to invoke actions on the agent.
+    def create_mailbox(self, uid: Identifier) -> None:
+        """Create the mailbox in the exchange for a new entity.
 
         Note:
-            It is not possible to create a handle to a client since a handle
-            is essentially a new client of a specific agent.
+            This method is a no-op if the mailbox already exists.
 
         Args:
-            aid: Identifier of agent in the system to create a handle to.
-
-        Returns:
-            Handle to the agent.
-
-        Raises:
-            TypeError: if `aid` is not an instance of
-                [`AgentIdentifier`][aeris.identifier.AgentIdentifier].
+            uid: Entity identifier used as the mailbox address.
         """
-        if not isinstance(aid, AgentIdentifier):
-            raise TypeError(
-                f'Handle must be created from an {AgentIdentifier.__name__} '
-                f'but got identifier with type {type(aid).__name__}.',
-            )
-        return Handle(aid, self)
+        if uid not in self._queues or self._queues[uid].closed():
+            self._queues[uid] = Queue()
+            logger.info(f'{self} created mailbox for {uid}')
 
-    def get_mailbox(self, uid: Identifier) -> ThreadMailbox:
-        """Get the mailbox for an entity in the system.
+    def close_mailbox(self, uid: Identifier) -> None:
+        """Close the mailbox for an entity from the exchange.
+
+        Note:
+            This method is a no-op if the mailbox does not exists.
 
         Args:
-            uid: Identifier of entity in the system.
+            uid: Entity identifier of the mailbox to close.
+        """
+        queue = self._queues.get(uid, None)
+        if queue is not None and not queue.closed():
+            queue.close()
+            logger.info(f'{self} closed mailbox for {uid}')
 
-        Returns:
-            Mailbox for the entity.
+    def send(self, uid: Identifier, message: Message) -> None:
+        """Send a message to a mailbox.
+
+        Args:
+            uid: Destination address of the message.
+            message: Message to send.
 
         Raises:
-            BadIdentifierError: if an entity with `uid` is not
-                registered with the exchange.
+            BadIdentifierError: if a mailbox for `uid` does not exist.
+            MailboxClosedError: if the mailbox was closed.
         """
+        queue = self._queues.get(uid, None)
+        if queue is None:
+            raise BadIdentifierError()
         try:
-            queue = self._queues[uid]
-        except KeyError as e:
-            raise BadIdentifierError(
-                f'{uid} is not registered with this exchange.',
-            ) from e
-        mailbox = ThreadMailbox(queue)
-        self._mailboxes[uid].append(mailbox)
-        return mailbox
+            queue.put(message)
+        except QueueClosedError as e:
+            raise MailboxClosedError() from e
+
+    def recv(self, uid: Identifier) -> Message:
+        """Receive the next message address to an entity.
+
+        Args:
+            uid: Identifier of the entity request it's next message.
+
+        Returns:
+            Next message in the entity's mailbox.
+
+        Raises:
+            BadIdentifierError: if a mailbox for `uid` does not exist.
+            MailboxClosedError: if the mailbox was closed.
+        """
+        queue = self._queues.get(uid, None)
+        if queue is None:
+            raise BadIdentifierError()
+        try:
+            return queue.get()
+        except QueueClosedError as e:
+            raise MailboxClosedError() from e

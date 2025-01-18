@@ -79,7 +79,7 @@ class ThreadLauncher:
         Returns:
             Mailbox used to communicate with agent.
         """
-        aid = self._exchange.register_agent()
+        aid = self._exchange.create_agent()
 
         agent = Agent(behavior, aid=aid, exchange=self._exchange)
         thread = threading.Thread(target=agent)

@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import queue
-from collections.abc import AsyncGenerator
 from typing import cast
 from typing import Generic
 from typing import TypeVar
@@ -68,14 +67,6 @@ class AsyncQueue(Generic[T]):
         if self.closed():
             raise QueueClosedError
         await self._queue.put(_Item(DEFAULT_PRIORITY, item))
-
-    async def subscribe(self) -> AsyncGenerator[T]:
-        """Create a generator that yields items from the queue."""
-        while True:
-            try:
-                yield await self.get()
-            except QueueClosedError:
-                return
 
 
 class Queue(Generic[T]):

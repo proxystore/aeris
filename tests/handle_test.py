@@ -35,7 +35,7 @@ class Counter(BehaviorMixin):
 
 def test_create_and_close_handle() -> None:
     with ThreadExchange() as exchange:
-        aid = exchange.register_agent()
+        aid = exchange.create_agent()
         with exchange.create_handle(aid) as handle:
             assert isinstance(repr(handle), str)
             assert isinstance(str(handle), str)
@@ -43,7 +43,7 @@ def test_create_and_close_handle() -> None:
 
 def test_handle_closed_error() -> None:
     with ThreadExchange() as exchange:
-        aid = exchange.register_agent()
+        aid = exchange.create_agent()
         handle = exchange.create_handle(aid)
         handle.close()
 
@@ -57,10 +57,10 @@ def test_handle_bad_message() -> None:
 
         with launcher.launch(Counter()) as handle:
             # Should log but not crash
-            handle._client_mailbox.send(
-                PingRequest(src=handle.aid, dest=handle._cid),
+            exchange.send(
+                handle.cid,
+                PingRequest(src=handle.aid, dest=handle.cid),
             )
-
             assert handle.ping() > 0
 
         launcher.close()
@@ -71,7 +71,7 @@ def test_handle_bad_message() -> None:
 )
 def test_listener_thread_crash() -> None:
     with ThreadExchange() as exchange:
-        aid = exchange.register_agent()
+        aid = exchange.create_agent()
 
         with mock.patch(
             'aeris.handle.Handle._result_listener',
@@ -133,7 +133,7 @@ def test_cancel_futures() -> None:
 
 def test_create_new_handle_from_getnewargs() -> None:
     with ThreadExchange() as exchange:
-        aid = exchange.register_agent()
+        aid = exchange.create_agent()
         handle = exchange.create_handle(aid)
 
         args, kwargs = handle.__getnewargs_ex__()

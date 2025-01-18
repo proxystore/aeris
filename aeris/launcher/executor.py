@@ -85,7 +85,7 @@ class ExecutorLauncher:
         Returns:
             Mailbox used to communicate with agent.
         """
-        aid = self._exchange.register_agent()
+        aid = self._exchange.create_agent()
 
         agent = Agent(behavior, aid=aid, exchange=self._exchange)
         future = self._executor.submit(agent)
