@@ -58,17 +58,16 @@ class ThreadLauncher:
         return f'{type(self).__name__}(exchange={self._exchange!r})'
 
     def __str__(self) -> str:
-        name = type(self).__name__
-        return f'{name}<{self._exchange}; {len(self._agents)} agents>'
+        return f'{type(self).__name__}<{self._exchange}>'
 
     def close(self) -> None:
         """Close the launcher and shutdown agents."""
-        logger.debug(f'{self} shutting down all agents')
+        logger.debug('Waiting for all agents to shutdown...')
         for aid in self._agents:
             self._agents[aid].agent.shutdown()
         for aid in self._agents:
             self._agents[aid].thread.join()
-        logger.info(f'{self} is closed')
+        logger.info('Closed %s', self)
 
     def launch(self, behavior: Behavior) -> Handle:
         """Launch a new agent with a specified behavior.
@@ -85,6 +84,6 @@ class ThreadLauncher:
         thread = threading.Thread(target=agent)
         thread.start()
         self._agents[aid] = _RunningAgent(agent, thread)
-        logger.info(f'{self} launched {agent}')
+        logger.info('Launched %s', agent)
 
         return self._exchange.create_handle(aid)

@@ -155,23 +155,23 @@ class SimpleExchange(ExchangeMixin):
     """Simple exchange client.
 
     Args:
-        host: Host of the exchange server.
+        hostname: Host name of the exchange server.
         port: Port of the exchange server.
         timeout: Timeout when waiting for server responses.
     """
 
     def __init__(
         self,
-        host: str,
+        hostname: str,
         port: int,
         timeout: float = DEFAULT_SERVER_TIMEOUT,
     ) -> None:
-        self.host = host
+        self.hostname = hostname
         self.port = port
         self.timeout = timeout
 
         self._socket = socket.create_connection(
-            (self.host, self.port),
+            (self.hostname, self.port),
             timeout=self.timeout,
         )
         self._socket.setblocking(False)
@@ -179,27 +179,33 @@ class SimpleExchange(ExchangeMixin):
             target=self._listen_server_messages,
         )
         self._handler_thread.start()
-        logging.debug('%r started server message handler thread', self)
 
         self._pending: dict[uuid.UUID, Future[_ExchangeResponseMessage]] = {}
 
     def __reduce__(
         self,
     ) -> tuple[type[Self], tuple[str, int]]:
-        return (type(self), (self.host, self.port))
+        return (type(self), (self.hostname, self.port))
 
     def __repr__(self) -> str:
-        return f'{type(self).__name__}("{self.host}:{self.port}")'
+        return (
+            f'{type(self).__name__}(hostname={self.hostname}, '
+            f'port={self.port}, timeout={self.timeout})'
+        )
 
     def __str__(self) -> str:
-        return f'{type(self).__name__}<{self.host}:{self.port}>'
+        return f'{type(self).__name__}<{self.hostname}:{self.port}>'
 
     def _handle_message(
         self,
         message: _ExchangeMessage,
     ) -> None:
         if isinstance(message, _ExchangeResponseMessage):
-            logger.debug('%s received message from server: %r', self, message)
+            logger.debug(
+                'Received message from server (exchange=%s, message=%r)',
+                self,
+                message,
+            )
             if message.success:
                 self._pending[message.mid].set_result(message)
             else:
@@ -207,12 +213,13 @@ class SimpleExchange(ExchangeMixin):
                 self._pending[message.mid].set_exception(message.error)
         else:
             logger.warning(
-                '%s dropping bad message type: %r',
+                'Dropping bad message from server with type %s (exchange=%s)',
+                type(message).__name__,
                 self,
-                message,
             )
 
     def _listen_server_messages(self) -> None:
+        logging.debug('Listening for server messages in %s', self)
         buffer = io.BytesIO()
         while True:
             try:
@@ -239,7 +246,7 @@ class SimpleExchange(ExchangeMixin):
                     message = _BaseExchangeMessage.model_deserialize(raw)
                 except Exception:
                     logger.exception(
-                        '%s failed to deserialize message from client',
+                        'Failed to deserialize message from server in %s',
                         self,
                     )
                     return
@@ -254,6 +261,7 @@ class SimpleExchange(ExchangeMixin):
             else:  # pragma: no cover
                 buffer.seek(0, 2)
         buffer.close()
+        logging.debug('Finished listening for server messages in %s', self)
 
     def _send_request(
         self,
@@ -262,16 +270,20 @@ class SimpleExchange(ExchangeMixin):
         future: Future[_ExchangeResponseMessage] = Future()
         self._pending[request.mid] = future
         self._socket.send(request.model_serialize() + b'\n')
-        logger.debug('%s sent message to server: %r', self, request)
+        logger.debug(
+            'Sent message to server (exchange=%s, message=%r)',
+            self,
+            request,
+        )
         response = future.result(timeout=self.timeout)
         del self._pending[request.mid]
         return response
 
     def close(self) -> None:
         """Close this exchange client."""
-        logger.debug('%s closing socket connection to server', self)
         self._socket.close()
         self._handler_thread.join(timeout=1)
+        logger.debug('Closed exchange client %s', self)
 
     def create_mailbox(self, uid: Identifier) -> None:
         """Create the mailbox in the exchange for a new entity.
@@ -288,7 +300,6 @@ class SimpleExchange(ExchangeMixin):
         )
         response = self._send_request(request)
         assert response.success
-        logger.info('%s created mailbox for %r', self, uid)
 
     def close_mailbox(self, uid: Identifier) -> None:
         """Close the mailbox for an entity from the exchange.
@@ -305,7 +316,6 @@ class SimpleExchange(ExchangeMixin):
         )
         response = self._send_request(request)
         assert response.success
-        logger.info('%s closed mailbox for %r', self, uid)
 
     def send(self, uid: Identifier, message: Message) -> None:
         """Send a message to a mailbox.
@@ -326,7 +336,6 @@ class SimpleExchange(ExchangeMixin):
         )
         response = self._send_request(request)
         assert response.success
-        logger.info('%s sent message to %r', self, uid)
 
     def recv(self, uid: Identifier) -> Message:
         """Receive the next message address to an entity.
@@ -358,11 +367,13 @@ class _MailboxManager:
     def create_mailbox(self, uid: Identifier) -> None:
         if uid not in self._mailboxes or self._mailboxes[uid].closed():
             self._mailboxes[uid] = AsyncQueue()
+            logger.info('Created mailbox for %s', uid)
 
     async def close_mailbox(self, uid: Identifier) -> None:
         mailbox = self._mailboxes.get(uid, None)
         if mailbox is not None:
             await mailbox.close()
+            logger.info('Closed mailbox for %s', uid)
 
     async def get(self, uid: Identifier) -> Message:
         try:
@@ -395,7 +406,7 @@ class SimpleServer:
         self.manager = _MailboxManager()
 
     def __repr__(self) -> str:
-        return f'{type(self).__name__}("{self.host}:{self.port}")'
+        return f'{type(self).__name__}(hostname={self.host}, port={self.port})'
 
     def __str__(self) -> str:
         return f'{type(self).__name__}<{self.host}:{self.port}>'
@@ -404,14 +415,12 @@ class SimpleServer:
         self,
         message: _ExchangeRequestMessage,
     ) -> _ExchangeResponseMessage:
-        logger.debug('%s received: %r', self, message)
+        logger.debug('Handling server request (%s)', message)
         if message.kind is _ExchangeMessageType.CREATE_MAILBOX:
             self.manager.create_mailbox(message.src)
-            logger.info('%s created mailbox for %r', self, message.src)
             response = message.response()
         elif message.kind is _ExchangeMessageType.CLOSE_MAILBOX:
             await self.manager.close_mailbox(message.src)
-            logger.info('%s closed mailbox for %r', self, message.src)
             response = message.response()
         elif message.kind is _ExchangeMessageType.SEND_MESSAGE:
             if message.dest is None or message.payload is None:
@@ -443,7 +452,7 @@ class SimpleServer:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
-        logger.debug('%s started new client handle', self)
+        logger.debug('Started new client handler')
         while not reader.at_eof():
             raw = await reader.readline()
             if raw == b'':
@@ -453,10 +462,7 @@ class SimpleServer:
             try:
                 message = _BaseExchangeMessage.model_deserialize(raw)
             except Exception:
-                logger.exception(
-                    '%s failed to deserialize message from client',
-                    self,
-                )
+                logger.exception('Failed to parse message from client')
                 break
 
             if isinstance(message, _ExchangeRequestMessage):
@@ -467,14 +473,13 @@ class SimpleServer:
                 await writer.drain()
             else:
                 logger.warning(
-                    '%s dropping bad message type: %r',
-                    self,
-                    message,
+                    'Dropping bad message with type %s',
+                    type(message).__name__,
                 )
 
         writer.close()
         await writer.wait_closed()
-        logger.info('%s exited client handle', self)
+        logger.debug('Finished client handler')
 
     async def serve_forever(self, stop: asyncio.Future[None]) -> None:
         """Accept and handles connections forever."""

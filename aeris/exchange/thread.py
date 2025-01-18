@@ -24,6 +24,7 @@ class ThreadExchange(ExchangeMixin):
 
     def __init__(self) -> None:
         self._queues: dict[Identifier, Queue[Message]] = {}
+        logger.info('Initialized %s', self)
 
     def __getstate__(self) -> None:
         raise pickle.PicklingError(
@@ -37,6 +38,7 @@ class ThreadExchange(ExchangeMixin):
         """
         for queue in self._queues.values():
             queue.close()
+        logger.info('Closed %s', self)
 
     def create_mailbox(self, uid: Identifier) -> None:
         """Create the mailbox in the exchange for a new entity.
@@ -49,7 +51,7 @@ class ThreadExchange(ExchangeMixin):
         """
         if uid not in self._queues or self._queues[uid].closed():
             self._queues[uid] = Queue()
-            logger.info(f'{self} created mailbox for {uid}')
+            logger.info('Created mailbox for %s in %s', uid, self)
 
     def close_mailbox(self, uid: Identifier) -> None:
         """Close the mailbox for an entity from the exchange.
@@ -63,7 +65,7 @@ class ThreadExchange(ExchangeMixin):
         queue = self._queues.get(uid, None)
         if queue is not None and not queue.closed():
             queue.close()
-            logger.info(f'{self} closed mailbox for {uid}')
+            logger.info('Closed mailbox for %s in %s', uid, self)
 
     def send(self, uid: Identifier, message: Message) -> None:
         """Send a message to a mailbox.
@@ -81,6 +83,7 @@ class ThreadExchange(ExchangeMixin):
             raise BadIdentifierError()
         try:
             queue.put(message)
+            logger.debug('Sent message for %s to %s', uid, self)
         except QueueClosedError as e:
             raise MailboxClosedError() from e
 

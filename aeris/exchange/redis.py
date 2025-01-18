@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 from typing import get_args
 
@@ -17,8 +16,6 @@ from aeris.exchange import ExchangeMixin
 from aeris.identifier import Identifier
 from aeris.message import BaseMessage
 from aeris.message import Message
-
-logger = logging.getLogger(__name__)
 
 
 class RedisExchange(ExchangeMixin):
@@ -64,7 +61,10 @@ class RedisExchange(ExchangeMixin):
         )
 
     def __repr__(self) -> str:
-        return f'{type(self).__name__}("{self.hostname}:{self.port}")'
+        return (
+            f'{type(self).__name__}(hostname={self.hostname}, '
+            f'port={self.port}, timeout={self.timeout})'
+        )
 
     def __str__(self) -> str:
         return f'{type(self).__name__}<{self.hostname}:{self.port}>'
@@ -89,7 +89,6 @@ class RedisExchange(ExchangeMixin):
             uid: Entity identifier used as the mailbox address.
         """
         self._client.set(self._active_key(uid), True)
-        logger.info(f'{self} created mailbox for {uid}')
 
     def close_mailbox(self, uid: Identifier) -> None:
         """Close the mailbox for an entity from the exchange.
@@ -102,7 +101,6 @@ class RedisExchange(ExchangeMixin):
         """
         self._client.set(self._active_key(uid), False)
         self._client.delete(self._queue_key(uid))
-        logger.info(f'{self} closed mailbox for {uid}')
 
     def send(self, uid: Identifier, message: Message) -> None:
         """Send a message to a mailbox.
@@ -147,7 +145,7 @@ class RedisExchange(ExchangeMixin):
             raw = self._client.blpop(self._queue_key(uid), timeout=timeout)
             if raw is None and self.timeout is not None:
                 raise TimeoutError(
-                    f'Timeout waiting for next message for {uid!r} after '
+                    f'Timeout waiting for next message for {uid} after '
                     f'{self.timeout} seconds.',
                 )
             elif raw is None:

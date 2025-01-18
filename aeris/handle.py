@@ -79,13 +79,12 @@ class Handle:
 
         self.exchange = exchange
 
-        logger.info(f'Initialized handle to {self.aid} with {self.cid}')
-
         self._futures: dict[uuid.UUID, Future[Any]] = {}
         self._listener_thread = threading.Thread(target=self._result_listener)
         self._listener_thread.start()
-
         self._closed = False
+
+        logger.info('Initialized handle to %s with %s', self.aid, self.cid)
 
     def __enter__(self) -> Self:
         return self
@@ -108,14 +107,17 @@ class Handle:
 
     def __repr__(self) -> str:
         name = type(self).__name__
-        return f'{name}(aid={self.aid!r}, exchange={self.exchange!r})'
+        return (
+            f'{name}(aid={self.aid!r}, cid={self.cid!r}, '
+            f'exchange={self.exchange!r})'
+        )
 
     def __str__(self) -> str:
         name = type(self).__name__
-        return f'{name}<{self.cid}; {self.aid}; {self.exchange}>'
+        return f'{name}<{self.aid}; {self.cid}>'
 
     def _result_listener(self) -> None:
-        logger.debug(f'{self.cid} listening for results from {self.aid}')
+        logger.debug('Started result listener thread for %s', self.cid)
         while True:
             try:
                 message = self.exchange.recv(self.cid)
@@ -133,9 +135,11 @@ class Handle:
                 future.set_result(None)
             else:
                 logger.error(
-                    f'{self.cid} received invalid message response type '
-                    f'from {self.aid}: {message}',
+                    'Received invalid message response type %s from %s',
+                    type(message).__name__,
+                    self.aid,
                 )
+        logger.debug('Exiting result listener thread for %s', self.cid)
 
     def close(
         self,
@@ -158,21 +162,23 @@ class Handle:
         self._closed = True
 
         if wait_futures:
+            logger.debug('Waiting on pending futures for %s', self.cid)
             wait(list(self._futures.values()), timeout=timeout)
         else:
+            logger.debug('Cancelling pending futures for %s', self.cid)
             for future in self._futures:
                 self._futures[future].cancel()
 
         if not self._listener_thread.is_alive():
             raise RuntimeError(
-                f'Result message listener for {self} is not alive. '
+                f'Result message listener for {self.cid} is not alive. '
                 'This likely means the listener thread crashed.',
             )
 
         self.exchange.close_mailbox(self.cid)
         self._listener_thread.join()
 
-        logger.info(f'{self.cid} is closed')
+        logger.info('Closed handle with %s', self.cid)
 
     @_validate_state
     def action(
@@ -202,7 +208,12 @@ class Handle:
         future: Future[R] = Future()
         self._futures[request.mid] = future
         self.exchange.send(self.aid, request)
-        logger.debug(f'{self} sent {request}')
+        logger.debug(
+            'Sent action request from %s to %s (action=%r)',
+            self.cid,
+            self.aid,
+            action,
+        )
         return future
 
     @_validate_state
@@ -227,11 +238,14 @@ class Handle:
         future: Future[None] = Future()
         self._futures[request.mid] = future
         self.exchange.send(self.aid, request)
-        logger.debug(f'{self} sent {request}')
+        logger.debug('Sent ping from %s to %s', self.cid, self.aid)
         future.result(timeout=timeout)
         elapsed = time.perf_counter() - start
         logger.debug(
-            f'{self} received ping response in {elapsed / 1000:.3f} ms',
+            'Received ping from %s to %s in %.3f ms',
+            self.cid,
+            self.aid,
+            elapsed / 1000,
         )
         return elapsed
 
@@ -243,4 +257,4 @@ class Handle:
         """
         request = ShutdownRequest(src=self.cid, dest=self.aid)
         self.exchange.send(self.aid, request)
-        logger.debug(f'{self} sent {request}')
+        logger.debug('Sent shutdown request from %s to %s', self.cid, self.aid)

@@ -64,17 +64,13 @@ class ExecutorLauncher:
         )
 
     def __str__(self) -> str:
-        name = type(self).__name__
-        return (
-            f'{name}'
-            f'<{self._exchange}; {self._executor}; {len(self._agents)} agents>'
-        )
+        return f'{type(self).__name__}<{self._exchange}; {self._executor}>'
 
     def close(self) -> None:
         """Close the launcher and shutdown agents."""
-        logger.debug('%r waiting for all agents to shutdown', self)
+        logger.debug('Waiting for all agents to shutdown...')
         self._executor.shutdown(wait=True)
-        logger.info('%r is closed', self)
+        logger.info('Closed %s', self)
 
     def launch(self, behavior: Behavior) -> Handle:
         """Launch a new agent with a specified behavior.
@@ -90,6 +86,6 @@ class ExecutorLauncher:
         agent = Agent(behavior, aid=aid, exchange=self._exchange)
         future = self._executor.submit(agent)
         self._agents[aid] = _RunningAgent(agent, future)
-        logger.info('%r launched %r', self, agent)
+        logger.info('Launched %s', agent)
 
         return self._exchange.create_handle(aid)
