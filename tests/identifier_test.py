@@ -22,6 +22,7 @@ def tests_identifier_equality() -> None:
     cid1 = ClientIdentifier(uid=uid)
 
     assert aid1 == aid2
+    assert str(aid1) == str(aid2)
     assert aid1 != cid1
 
 
@@ -31,3 +32,4 @@ def tests_identifier_equality_ignore_name() -> None:
     aid2 = AgentIdentifier(uid=uid, name='aid2')
 
     assert aid1 == aid2
+    assert str(aid1) != str(aid2)

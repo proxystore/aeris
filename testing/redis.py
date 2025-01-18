@@ -10,26 +10,26 @@ class MockRedis:
 
     def blpop(
         self,
-        *keys: str,
+        keys: list[str],
         timeout: int = 0,
-    ) -> tuple[str, ...] | None:
+    ) -> list[str] | None:
         result: list[str] = []
         for key in keys:
             if key not in self.lists or len(self.lists[key]) == 0:
                 return None
             result.extend([key, self.lists[key].pop()])
-        return tuple(result)
+        return result
 
     def close(self) -> None:
         pass
 
-    def delete(self, key: str) -> None:
+    def delete(self, key: str) -> None:  # pragma: no cover
         if key in self.values:
             del self.values[key]
-        elif key in self.lists:  # pragma: no cover
+        elif key in self.lists:
             del self.lists[key]
 
-    def exists(self, key: str) -> bool:
+    def exists(self, key: str) -> bool:  # pragma: no cover
         return key in self.values or key in self.lists
 
     def get(self, key: str) -> str | list[str] | None:  # pragma: no cover

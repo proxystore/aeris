@@ -64,6 +64,12 @@ class BehaviorMixin:
     behaviors that do not need to specify setup or shutdown.
     """
 
+    def __str__(self) -> str:
+        return type(self).__name__
+
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}()'
+
     def setup(self) -> None:
         """No-op setup."""
         pass

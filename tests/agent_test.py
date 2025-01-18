@@ -8,7 +8,6 @@ from aeris.agent import Agent
 from aeris.behavior import action
 from aeris.behavior import BehaviorMixin
 from aeris.behavior import loop
-from aeris.exception import BadMessageTypeError
 from aeris.exchange.thread import ThreadExchange
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
@@ -90,13 +89,8 @@ def test_agent_message_listener() -> None:
     behavior = Counter()
     exchange = ThreadExchange()
 
-    aid = exchange.register_agent()
-    cid = exchange.register_client()
-
-    agent_mailbox = exchange.get_mailbox(aid)
-    assert agent_mailbox is not None
-    client_mailbox = exchange.get_mailbox(cid)
-    assert client_mailbox is not None
+    aid = exchange.create_agent()
+    cid = exchange.create_client()
 
     agent = Agent(behavior, aid=aid, exchange=exchange)
     assert isinstance(repr(agent), str)
@@ -107,8 +101,8 @@ def test_agent_message_listener() -> None:
 
     # Ping the agent
     ping = PingRequest(src=cid, dest=aid)
-    agent_mailbox.send(ping)
-    message = client_mailbox.recv()
+    exchange.send(aid, ping)
+    message = exchange.recv(cid)
     assert isinstance(message, PingResponse)
 
     # Invoke actions
@@ -119,8 +113,8 @@ def test_agent_message_listener() -> None:
         action='add',
         args=(value,),
     )
-    agent_mailbox.send(request)
-    message = client_mailbox.recv()
+    exchange.send(aid, request)
+    message = exchange.recv(cid)
     assert isinstance(message, ActionResponse)
     assert message.exception is None
     assert message.result is None
@@ -130,8 +124,8 @@ def test_agent_message_listener() -> None:
         dest=aid,
         action='count',
     )
-    agent_mailbox.send(request)
-    message = client_mailbox.recv()
+    exchange.send(aid, request)
+    message = exchange.recv(cid)
     assert isinstance(message, ActionResponse)
     assert message.exception is None
     assert message.result == value
@@ -142,37 +136,34 @@ def test_agent_message_listener() -> None:
         dest=aid,
         action='foo',
     )
-    agent_mailbox.send(request)
-    message = client_mailbox.recv()
+    exchange.send(aid, request)
+    message = exchange.recv(cid)
     assert isinstance(message, ActionResponse)
     assert isinstance(message.exception, TypeError)
     assert 'foo' in str(message.exception)
 
     # Shutdown the agent
     shutdown = ShutdownRequest(src=cid, dest=aid)
-    agent_mailbox.send(shutdown)
+    exchange.send(aid, shutdown)
 
     thread.join(timeout=1)
     assert not thread.is_alive()
+
+    exchange.close()
 
 
 def test_agent_listener_bad_message_type() -> None:
     behavior = Counter()
     exchange = ThreadExchange()
 
-    aid = exchange.register_agent()
-    cid = exchange.register_client()
-
-    agent_mailbox = exchange.get_mailbox(aid)
-    assert agent_mailbox is not None
-    client_mailbox = exchange.get_mailbox(cid)
-    assert client_mailbox is not None
+    aid = exchange.create_agent()
+    cid = exchange.create_client()
 
     agent = Agent(behavior, aid=aid, exchange=exchange)
 
-    agent_mailbox.send(PingResponse(src=cid, dest=aid))
+    exchange.send(aid, PingResponse(src=cid, dest=aid))
 
-    with pytest.raises(BadMessageTypeError, match='PingResponse'):
+    with pytest.raises(TypeError, match='PingResponse'):
         agent.run()
 
     exchange.close()

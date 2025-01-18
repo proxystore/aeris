@@ -6,6 +6,7 @@ import pytest
 
 from aeris.behavior import action
 from aeris.behavior import Behavior
+from aeris.behavior import BehaviorMixin
 from aeris.behavior import get_actions
 from aeris.behavior import get_loops
 from aeris.behavior import loop
@@ -25,11 +26,7 @@ def test_basic_behavior() -> None:
     instance.shutdown()
 
 
-class ComplexBehavior:
-    def setup(self) -> None: ...
-
-    def shutdown(self) -> None: ...
-
+class ComplexBehavior(BehaviorMixin):
     @action
     def action1(self) -> bool:
         return True
@@ -51,6 +48,8 @@ def test_complex_behavior() -> None:
     instance = ComplexBehavior()
     assert isinstance(instance, Behavior)
 
+    assert isinstance(str(instance), str)
+    assert isinstance(repr(instance), str)
     instance.setup()
     instance.shutdown()
 

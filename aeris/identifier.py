@@ -57,11 +57,19 @@ class AgentIdentifier(BaseIdentifier):
 
     role: Literal['agent'] = Field('agent', repr=False)
 
+    def __str__(self) -> str:
+        name = self.name if self.name is not None else str(self.uid)[:8]
+        return f'AgentID<{name}>'
+
 
 class ClientIdentifier(BaseIdentifier):
     """Unique identifier of a client in a multi-agent system."""
 
     role: Literal['client'] = Field('client', repr=False)
+
+    def __str__(self) -> str:
+        name = self.name if self.name is not None else str(self.uid)[:8]
+        return f'ClientID<{name}>'
 
 
 Identifier = Union[AgentIdentifier, ClientIdentifier]
