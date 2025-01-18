@@ -51,7 +51,6 @@ from pydantic import field_validator
 from pydantic import TypeAdapter
 
 from aeris.exception import BadIdentifierError
-from aeris.exception import BadRequestError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import AsyncQueue
@@ -62,6 +61,10 @@ from aeris.message import Message
 logger = logging.getLogger(__name__)
 
 DEFAULT_SERVER_TIMEOUT = 30
+
+
+class _BadRequestError(Exception):
+    pass
 
 
 class _ExchangeMessageType(enum.Enum):
@@ -379,17 +382,17 @@ class _MailboxManager:
         try:
             return await self._mailboxes[uid].get()
         except KeyError as e:
-            raise BadIdentifierError() from e
+            raise BadIdentifierError(uid) from e
         except QueueClosedError as e:
-            raise MailboxClosedError() from e
+            raise MailboxClosedError(uid) from e
 
     async def put(self, message: Message) -> None:
         try:
             await self._mailboxes[message.dest].put(message)
         except KeyError as e:
-            raise BadIdentifierError() from e
+            raise BadIdentifierError(message.dest) from e
         except QueueClosedError as e:
-            raise MailboxClosedError() from e
+            raise MailboxClosedError(message.dest) from e
 
 
 class SimpleServer:
@@ -424,7 +427,7 @@ class SimpleServer:
             response = message.response()
         elif message.kind is _ExchangeMessageType.SEND_MESSAGE:
             if message.dest is None or message.payload is None:
-                error = BadRequestError(
+                error = _BadRequestError(
                     'Dest identifier and payload message must be specified.',
                 )
                 response = message.response(error=error)

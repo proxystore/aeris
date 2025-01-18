@@ -15,7 +15,6 @@ from aeris.behavior import Behavior
 from aeris.behavior import get_actions
 from aeris.behavior import get_loops
 from aeris.exception import BadIdentifierError
-from aeris.exception import BadMessageTypeError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
 from aeris.identifier import AgentIdentifier
@@ -141,7 +140,7 @@ class Agent(Generic[BehaviorT]):
             self.shutdown()
             return None
         else:
-            raise BadMessageTypeError(
+            raise TypeError(
                 'Agent cannot handle message of type '
                 f'{type(message).__name__}',
             )

@@ -11,9 +11,9 @@ from unittest import mock
 import pytest
 
 from aeris.exception import BadIdentifierError
-from aeris.exception import BadRequestError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
+from aeris.exchange.simple import _BadRequestError
 from aeris.exchange.simple import _BaseExchangeMessage
 from aeris.exchange.simple import _ExchangeMessage
 from aeris.exchange.simple import _ExchangeMessageType
@@ -274,7 +274,7 @@ async def test_server_handle_malformed_send_message() -> None:
         src=uid,
     )
     response = await server._handle_request(request)
-    assert isinstance(response.error, BadRequestError)
+    assert isinstance(response.error, _BadRequestError)
 
 
 @pytest.mark.asyncio

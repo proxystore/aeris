@@ -50,7 +50,7 @@ def _validate_state(
     @functools.wraps(method)
     def _wrapper(self: Handle, *args: P.args, **kwargs: P.kwargs) -> R:
         if self._closed:
-            raise HandleClosedError()
+            raise HandleClosedError(self.aid, self.cid)
         return method(self, *args, **kwargs)
 
     return _wrapper

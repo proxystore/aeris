@@ -8,7 +8,6 @@ from aeris.agent import Agent
 from aeris.behavior import action
 from aeris.behavior import BehaviorMixin
 from aeris.behavior import loop
-from aeris.exception import BadMessageTypeError
 from aeris.exchange.thread import ThreadExchange
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
@@ -164,7 +163,7 @@ def test_agent_listener_bad_message_type() -> None:
 
     exchange.send(aid, PingResponse(src=cid, dest=aid))
 
-    with pytest.raises(BadMessageTypeError, match='PingResponse'):
+    with pytest.raises(TypeError, match='PingResponse'):
         agent.run()
 
     exchange.close()

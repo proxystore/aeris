@@ -35,7 +35,7 @@ class RedisExchange(ExchangeMixin):
         hostname: str,
         port: int,
         *,
-        timeout: float | None = None,
+        timeout: int | None = None,
         **kwargs: Any,
     ) -> None:
         self.hostname = hostname
@@ -55,7 +55,7 @@ class RedisExchange(ExchangeMixin):
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
         self._client = redis.Redis(
-            hostname=self.hostname,
+            host=self.hostname,
             port=self.port,
             **self._kwargs,
         )
@@ -115,11 +115,11 @@ class RedisExchange(ExchangeMixin):
         """
         status = self._client.get(self._active_key(uid))
         if status is None:
-            raise BadIdentifierError()
+            raise BadIdentifierError(uid)
         if status:
             self._client.rpush(self._queue_key(uid), message.model_dump_json())
         else:
-            raise MailboxClosedError()
+            raise MailboxClosedError(uid)
 
     def recv(self, uid: Identifier) -> Message:
         """Receive the next message addressed to an entity.
@@ -138,11 +138,11 @@ class RedisExchange(ExchangeMixin):
         while True:
             status = self._client.get(self._active_key(uid))
             if status is None:
-                raise BadIdentifierError()
+                raise BadIdentifierError(uid)
             if not status:
-                raise MailboxClosedError()
+                raise MailboxClosedError(uid)
 
-            raw = self._client.blpop(self._queue_key(uid), timeout=timeout)
+            raw = self._client.blpop([self._queue_key(uid)], timeout=timeout)
             if raw is None and self.timeout is not None:
                 raise TimeoutError(
                     f'Timeout waiting for next message for {uid} after '
@@ -151,7 +151,8 @@ class RedisExchange(ExchangeMixin):
             elif raw is None:
                 continue
 
-            # Only passed one key to blpop to result is tuple(key, item)
+            # Only passed one key to blpop to result is [key, item]
+            assert isinstance(raw, list)
             assert len(raw) == 2  # noqa: PLR2004
             message = BaseMessage.model_from_json(raw[1])
             assert isinstance(message, get_args(Message))

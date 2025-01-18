@@ -80,12 +80,12 @@ class ThreadExchange(ExchangeMixin):
         """
         queue = self._queues.get(uid, None)
         if queue is None:
-            raise BadIdentifierError()
+            raise BadIdentifierError(uid)
         try:
             queue.put(message)
             logger.debug('Sent message for %s to %s', uid, self)
         except QueueClosedError as e:
-            raise MailboxClosedError() from e
+            raise MailboxClosedError(uid) from e
 
     def recv(self, uid: Identifier) -> Message:
         """Receive the next message address to an entity.
@@ -102,8 +102,8 @@ class ThreadExchange(ExchangeMixin):
         """
         queue = self._queues.get(uid, None)
         if queue is None:
-            raise BadIdentifierError()
+            raise BadIdentifierError(uid)
         try:
             return queue.get()
         except QueueClosedError as e:
-            raise MailboxClosedError() from e
+            raise MailboxClosedError(uid) from e
