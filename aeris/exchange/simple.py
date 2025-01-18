@@ -34,7 +34,6 @@ from collections.abc import AsyncGenerator
 from collections.abc import Sequence
 from concurrent.futures import Future
 from types import TracebackType
-from typing import cast
 from typing import Generic
 from typing import get_args
 from typing import TypeVar
@@ -53,6 +52,7 @@ from aeris.exchange.message import ExchangeResponseMessage
 from aeris.exchange.message import ForwardMessage
 from aeris.exchange.message import RegisterMessage
 from aeris.exchange.message import UnregisterMessage
+from aeris.exchange.queue import AsyncQueue
 from aeris.handle import Handle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
@@ -395,49 +395,14 @@ class SimpleExchange:
             ) from e
 
 
-class _AsyncQueue(Generic[T]):
-    def __init__(self) -> None:
-        self._queue: asyncio.PriorityQueue[_QueueItem[T]] = (
-            asyncio.PriorityQueue()
-        )
-        self._closed = False
-
-    async def close(self, immediate: bool = False) -> None:
-        if not self.closed():
-            self._closed = True
-            priority = CLOSE_PRIORITY if immediate else DEFAULT_PRIORITY
-            await self._queue.put(_QueueItem(priority, CLOSE_SENTINAL))
-
-    def closed(self) -> bool:
-        return self._closed
-
-    async def get(self) -> T:
-        item = await self._queue.get()
-        if item.message is CLOSE_SENTINAL:
-            raise MailboxClosedError
-        return cast(T, item.message)
-
-    async def put(self, message: T) -> None:
-        if self.closed():
-            raise MailboxClosedError
-        await self._queue.put(_QueueItem(DEFAULT_PRIORITY, message))
-
-    async def subscribe(self) -> AsyncGenerator[T]:
-        while True:
-            try:
-                yield await self.get()
-            except MailboxClosedError:
-                return
-
-
 class _MailboxManager:
     def __init__(self) -> None:
-        self._mailboxes: dict[Identifier, _AsyncQueue[ForwardMessage]] = {}
+        self._mailboxes: dict[Identifier, AsyncQueue[ForwardMessage]] = {}
 
     def register(self, uid: Identifier) -> None:
         if uid not in self._mailboxes or self._mailboxes[uid].closed():
             # If the old mailbox was closed, it gets thrown away.
-            self._mailboxes[uid] = _AsyncQueue()
+            self._mailboxes[uid] = AsyncQueue()
         else:
             raise ExchangeRegistrationError(f'{uid!r} is already registered.')
 

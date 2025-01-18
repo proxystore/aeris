@@ -19,7 +19,6 @@ from aeris.exchange import Mailbox
 from aeris.exchange.message import ExchangeResponseMessage
 from aeris.exchange.message import ForwardMessage
 from aeris.exchange.message import RegisterMessage
-from aeris.exchange.simple import _AsyncQueue
 from aeris.exchange.simple import _MailboxManager
 from aeris.exchange.simple import _main
 from aeris.exchange.simple import _serve_forever
@@ -78,38 +77,6 @@ def server_thread() -> Generator[tuple[str, int]]:
             'Server thread did not gracefully exit within '
             f'{TEST_CONNECTION_TIMEOUT} seconds.',
         )
-
-
-@pytest.mark.asyncio
-async def test_async_queue() -> None:
-    queue: _AsyncQueue[str] = _AsyncQueue()
-
-    message = 'foo'
-    await queue.put(message)
-    received = await queue.get()
-    assert message == received
-
-    await queue.close()
-    await queue.close()  # Idempotent check
-
-    assert queue.closed()
-    with pytest.raises(MailboxClosedError):
-        await queue.put(message)
-    with pytest.raises(MailboxClosedError):
-        await queue.get()
-
-
-@pytest.mark.asyncio
-async def test_async_queue_subscribe() -> None:
-    queue: _AsyncQueue[int] = _AsyncQueue()
-
-    await queue.put(1)
-    await queue.put(2)
-    await queue.put(3)
-    await queue.close(immediate=False)
-
-    messages = [m async for m in queue.subscribe()]
-    assert set(messages) == {1, 2, 3}
 
 
 @pytest.mark.asyncio
