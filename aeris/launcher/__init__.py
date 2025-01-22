@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from typing import Protocol
 from typing import runtime_checkable
+from typing import TypeVar
 
 from aeris.behavior import Behavior
-from aeris.handle import Handle
+from aeris.handle import RemoteHandle
 
 __all__ = ['Launcher']
+
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
 @runtime_checkable
@@ -20,7 +23,7 @@ class Launcher(Protocol):
         """Close the launcher and shutdown agents."""
         ...
 
-    def launch(self, behavior: Behavior) -> Handle:
+    def launch(self, behavior: BehaviorT) -> RemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
         Args:

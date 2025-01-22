@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import Future
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -11,6 +12,8 @@ from aeris.behavior import Behavior
 from aeris.exception import HandleClosedError
 from aeris.exchange.thread import ThreadExchange
 from aeris.handle import Handle
+from aeris.handle import ProxyHandle
+from aeris.handle import RemoteHandle
 from aeris.launcher.thread import ThreadLauncher
 from aeris.message import PingRequest
 from testing.constant import TEST_SLEEP
@@ -33,10 +36,28 @@ class Counter(Behavior):
         raise Exception()
 
 
+def test_proxy_handle() -> None:
+    behavior = Counter()
+    handle = ProxyHandle(behavior)
+
+    assert isinstance(handle, Handle)
+    assert str(behavior) in str(handle)
+    assert repr(behavior) in repr(handle)
+
+    assert handle.action('add', 1).result() is None
+    assert handle.action('count').result() == 1
+    assert handle.action('fails').exception() is not None
+
+    with pytest.raises(AttributeError, match='foo'):
+        handle.action('foo').result()
+
+
 def test_create_and_close_handle() -> None:
     with ThreadExchange() as exchange:
         aid = exchange.create_agent()
+        handle: RemoteHandle[Any]
         with exchange.create_handle(aid) as handle:
+            assert isinstance(handle, Handle)
             assert isinstance(repr(handle), str)
             assert isinstance(str(handle), str)
 
@@ -44,11 +65,17 @@ def test_create_and_close_handle() -> None:
 def test_handle_closed_error() -> None:
     with ThreadExchange() as exchange:
         aid = exchange.create_agent()
-        handle = exchange.create_handle(aid)
+        handle: RemoteHandle[Any] = exchange.create_handle(aid)
         handle.close()
 
         with pytest.raises(HandleClosedError):
+            handle.action('foo')
+
+        with pytest.raises(HandleClosedError):
             handle.ping()
+
+        with pytest.raises(HandleClosedError):
+            handle.shutdown()
 
 
 def test_handle_bad_message() -> None:
@@ -74,10 +101,10 @@ def test_listener_thread_crash() -> None:
         aid = exchange.create_agent()
 
         with mock.patch(
-            'aeris.handle.Handle._result_listener',
+            'aeris.handle.RemoteHandle._result_listener',
             side_effect=Exception(),
         ):
-            handle = exchange.create_handle(aid)
+            handle: RemoteHandle[Any] = exchange.create_handle(aid)
 
         with pytest.raises(
             RuntimeError,
@@ -134,10 +161,10 @@ def test_cancel_futures() -> None:
 def test_create_new_handle_from_getnewargs() -> None:
     with ThreadExchange() as exchange:
         aid = exchange.create_agent()
-        handle = exchange.create_handle(aid)
+        handle: RemoteHandle[Any] = exchange.create_handle(aid)
 
         args, kwargs = handle.__getnewargs_ex__()
-        new_handle = Handle(*args, **kwargs)
+        new_handle: RemoteHandle[Any] = RemoteHandle(*args, **kwargs)
 
         handle.close()
         new_handle.close()

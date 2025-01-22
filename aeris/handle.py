@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 import logging
 import sys
 import threading
@@ -10,15 +9,15 @@ from concurrent.futures import Future
 from concurrent.futures import wait
 from types import TracebackType
 from typing import Any
-from typing import Callable
+from typing import Generic
+from typing import Protocol
+from typing import runtime_checkable
 from typing import TYPE_CHECKING
 from typing import TypeVar
 
 if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
-    from typing import Concatenate
     from typing import ParamSpec
 else:  # pragma: <3.10 cover
-    from typing_extensions import Concatenate
     from typing_extensions import ParamSpec
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
@@ -26,6 +25,7 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
+from aeris.behavior import Behavior
 from aeris.exception import HandleClosedError
 from aeris.exception import MailboxClosedError
 from aeris.identifier import AgentIdentifier
@@ -42,30 +42,92 @@ logger = logging.getLogger(__name__)
 
 P = ParamSpec('P')
 R = TypeVar('R')
+BehaviorT_co = TypeVar('BehaviorT_co', bound=Behavior, covariant=True)
 
 
-def _validate_state(
-    method: Callable[Concatenate[Handle, P], R],
-) -> Callable[Concatenate[Handle, P], R]:
-    @functools.wraps(method)
-    def _wrapper(self: Handle, *args: P.args, **kwargs: P.kwargs) -> R:
-        if self._closed:
-            raise HandleClosedError(self.aid, self.cid)
-        return method(self, *args, **kwargs)
+@runtime_checkable
+class Handle(Protocol[BehaviorT_co]):
+    """Agent handle protocol.
 
-    return _wrapper
+    A handle enables a client or agent to invoke actions on another agent.
+    """
+
+    def action(
+        self,
+        action: str,
+        /,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Future[R]:
+        """Invoke an action on the agent.
+
+        Args:
+            action: Action to invoke.
+            args: Positional arguments for the action.
+            kwargs: Keywords arguments for the action.
+
+        Returns:
+            Future to the result of the action.
+        """
+        ...
 
 
-class Handle:
-    """Client handle to a running agent.
+class ProxyHandle(Generic[BehaviorT_co]):
+    """Proxy handle.
+
+    A proxy handle is thin wrapper around a
+    [`Behavior`][aeris.behavior.Behavior] instance that is useful for testing
+    behaviors that are initialized with a handle to another agent without
+    needing to spawn agents. This wrapper invokes actions synchronously.
+    """
+
+    def __init__(self, behavior: BehaviorT_co) -> None:
+        self.behavior = behavior
+
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}(behavior={self.behavior!r})'
+
+    def __str__(self) -> str:
+        return f'{type(self).__name__}<{self.behavior}>'
+
+    def action(
+        self,
+        action: str,
+        /,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Future[R]:
+        """Invoke an action on the agent.
+
+        Args:
+            action: Action to invoke.
+            args: Positional arguments for the action.
+            kwargs: Keywords arguments for the action.
+
+        Returns:
+            Future to the result of the action.
+        """
+        future: Future[R] = Future()
+        try:
+            method = getattr(self.behavior, action)
+            result = method(*args, **kwargs)
+        except Exception as e:
+            future.set_exception(e)
+        else:
+            future.set_result(result)
+        return future
+
+
+class RemoteHandle(Generic[BehaviorT_co]):
+    """Handle to a remote agent.
 
     A handle enables a client to invoke actions on an agent.
 
     Note:
-        When a `Handle` instance is pickled and unpickled, such as when
+        When an instance is pickled and unpickled, such as when
         communicated along with an agent dispatched to run in another
-        process, the `Handle` will register itself as a new client with the
-        exchange. In other words, every `Handle` instance is a unique client
+        process, the handle will register itself as a new client with the
+        exchange. In other words, every handle instance is a unique client
         of the exchange.
 
     Args:
@@ -180,7 +242,6 @@ class Handle:
 
         logger.info('Closed handle with %s', self.cid)
 
-    @_validate_state
     def action(
         self,
         action: str,
@@ -197,7 +258,13 @@ class Handle:
 
         Returns:
             Future to the result of the action.
+
+        Raises:
+            HandleClosedError: if the handle was closed.
         """
+        if self._closed:
+            raise HandleClosedError(self.aid, self.cid)
+
         request = ActionRequest(
             src=self.cid,
             dest=self.aid,
@@ -216,8 +283,7 @@ class Handle:
         )
         return future
 
-    @_validate_state
-    def ping(self, timeout: float | None = None) -> float:
+    def ping(self, *, timeout: float | None = None) -> float:
         """Ping the agent.
 
         Ping the agent and wait to get a response. Agents process messages
@@ -231,8 +297,12 @@ class Handle:
             Round-trip time in seconds.
 
         Raises:
+            HandleClosedError: if the handle was closed.
             TimeoutError: if the timeout is exceeded.
         """
+        if self._closed:
+            raise HandleClosedError(self.aid, self.cid)
+
         start = time.perf_counter()
         request = PingRequest(src=self.cid, dest=self.aid)
         future: Future[None] = Future()
@@ -249,12 +319,17 @@ class Handle:
         )
         return elapsed
 
-    @_validate_state
     def shutdown(self) -> None:
         """Instruct the agent to shutdown.
 
         This is non-blocking and will only send the message.
+
+        Raises:
+            HandleClosedError: if the handle was closed.
         """
+        if self._closed:
+            raise HandleClosedError(self.aid, self.cid)
+
         request = ShutdownRequest(src=self.cid, dest=self.aid)
         self.exchange.send(self.aid, request)
         logger.debug('Sent shutdown request from %s to %s', self.cid, self.aid)

@@ -11,7 +11,11 @@ from aeris.launcher.thread import ThreadLauncher
 
 
 class Coordinator(Behavior):
-    def __init__(self, lowerer: Handle, reverser: Handle) -> None:
+    def __init__(
+        self,
+        lowerer: Handle[Lowerer],
+        reverser: Handle[Reverser],
+    ) -> None:
         self.lowerer = lowerer
         self.reverser = reverser
 

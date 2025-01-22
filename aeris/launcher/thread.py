@@ -17,7 +17,7 @@ else:  # pragma: <3.11 cover
 from aeris.agent import Agent
 from aeris.behavior import Behavior
 from aeris.exchange import Exchange
-from aeris.handle import Handle
+from aeris.handle import RemoteHandle
 from aeris.identifier import AgentIdentifier
 
 logger = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ class ThreadLauncher:
             self._agents[aid].thread.join()
         logger.info('Closed %s', self)
 
-    def launch(self, behavior: Behavior) -> Handle:
+    def launch(self, behavior: BehaviorT) -> RemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
         Args:
