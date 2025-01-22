@@ -6,7 +6,7 @@ import pytest
 
 from aeris.agent import Agent
 from aeris.behavior import action
-from aeris.behavior import BehaviorMixin
+from aeris.behavior import Behavior
 from aeris.behavior import loop
 from aeris.exchange.thread import ThreadExchange
 from aeris.message import ActionRequest
@@ -16,7 +16,7 @@ from aeris.message import PingResponse
 from aeris.message import ShutdownRequest
 
 
-class Waiter:
+class Waiter(Behavior):
     def __init__(self) -> None:
         self.setup_event = threading.Event()
         self.loop_event = threading.Event()
@@ -72,7 +72,7 @@ def test_agent_shutdown() -> None:
     assert agent.behavior.shutdown_event.is_set()
 
 
-class Counter(BehaviorMixin):
+class Counter(Behavior):
     def __init__(self) -> None:
         self._count = 0
 

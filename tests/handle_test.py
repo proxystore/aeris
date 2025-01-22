@@ -7,7 +7,7 @@ from unittest import mock
 import pytest
 
 from aeris.behavior import action
-from aeris.behavior import BehaviorMixin
+from aeris.behavior import Behavior
 from aeris.exception import HandleClosedError
 from aeris.exchange.thread import ThreadExchange
 from aeris.handle import Handle
@@ -16,7 +16,7 @@ from aeris.message import PingRequest
 from testing.constant import TEST_SLEEP
 
 
-class Counter(BehaviorMixin):
+class Counter(Behavior):
     def __init__(self) -> None:
         self._count = 0
 
@@ -111,7 +111,7 @@ def test_handle_operations() -> None:
     exchange.close()
 
 
-class Sleeper(BehaviorMixin):
+class Sleeper(Behavior):
     @action
     def sleep(self, sleep: float) -> None:
         time.sleep(sleep)

@@ -12,8 +12,6 @@ from typing import Generic
 from typing import TypeVar
 
 from aeris.behavior import Behavior
-from aeris.behavior import get_actions
-from aeris.behavior import get_loops
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
@@ -71,8 +69,8 @@ class Agent(Generic[BehaviorT]):
         else:
             self._mode = _AgentMode.SYSTEM
 
-        self._actions = get_actions(behavior)
-        self._loops = get_loops(behavior)
+        self._actions = behavior.behavior_actions()
+        self._loops = behavior.behavior_loops()
 
         self._futures: tuple[Future[None], ...] | None = None
         self._start_loops_lock = threading.Lock()

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import functools
 import inspect
+import logging
 import sys
 import threading
 from typing import Any
@@ -8,26 +10,33 @@ from typing import Callable
 from typing import Generic
 from typing import Literal
 from typing import Protocol
-from typing import runtime_checkable
 from typing import TypeVar
 
 if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
+    from typing import Concatenate
     from typing import ParamSpec
 else:  # pragma: <3.10 cover
+    from typing_extensions import Concatenate
     from typing_extensions import ParamSpec
 
-T = TypeVar('T')
+if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
+    from typing import Self
+else:  # pragma: <3.11 cover
+    from typing_extensions import Self
+
 P = ParamSpec('P')
 R = TypeVar('R')
 R_co = TypeVar('R_co', covariant=True)
 
+logger = logging.getLogger(__name__)
 
-@runtime_checkable
-class Behavior(Protocol):
-    """Agent behavior protocol.
 
-    This protocol defines the behavior an [`Agent`][aeris.agent.Agent]
-    will exhibit. A behavior is composed of three parts:
+class Behavior:
+    """Agent behavior base class.
+
+    All [`Agent`][aeris.agent.Agent] instances execute a behavior which is
+    defined by a subclass of the [`Behavior`][aeris.behavior.Behavior]. Each
+    behavior is composed of three parts:
       1. The [`startup()`][aeris.behavior.Behavior.setup] and
          [`shutdown()`][aeris.behavior.Behavior.shutdown] methods that are
          invoked once and the start and end of an agent's execution,
@@ -39,43 +48,63 @@ class Behavior(Protocol):
          may also call it's own action methods as normal methods.
       3. Control loop methods annotated with [`@loop`][aeris.behavior.loop]
          are executed in separate threads when the agent is executed.
+
+    Warning:
+        This class cannot be instantiated directly and must be subclassed.
     """
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Self:  # noqa: D102
+        if cls is Behavior:
+            raise TypeError(
+                f'The {cls.__name__} type cannot be instantiated directly '
+                'and must be subclassed.',
+            )
+        return super().__new__(cls, *args, **kwargs)
+
+    def __str__(self) -> str:
+        return f'<Behavior[{type(self).__name__}] @ 0x{id(self):x}>'
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def behavior_actions(self) -> dict[str, Action[Any, Any]]:
+        """Get methods of this behavior type that are decorated as actions.
+
+        Returns:
+            Dictionary mapping method names to action methods.
+        """
+        actions: dict[str, Action[Any, Any]] = {}
+        for name in dir(self):
+            attr = getattr(self, name)
+            if _is_actor_method_type(attr, 'action'):
+                actions[name] = attr
+        return actions
+
+    def behavior_loops(self) -> dict[str, ControlLoop]:
+        """Get methods of this behavior type that are decorated as loops.
+
+        Returns:
+            Dictionary mapping method names to loop methods.
+        """
+        loops: dict[str, ControlLoop] = {}
+        for name in dir(self):
+            attr = getattr(self, name)
+            if _is_actor_method_type(attr, 'loop'):
+                loops[name] = attr
+        return loops
 
     def setup(self) -> None:
         """Setup up resources needed for the agents execution.
 
-        This is called before an control loop threads are started.
+        This is called before any control loop threads are started.
         """
-        ...
+        pass
 
     def shutdown(self) -> None:
         """Shutdown resources after the agents execution.
 
         This is called after control loop threads have exited.
         """
-        ...
-
-
-class BehaviorMixin:
-    """Mixin class that add no-op setup and shutdown methods to a class.
-
-    This is a shortcut for writing out empty setup and shutdown methods
-    to satisfy the [`Behavior`][aeris.behavior.Behavior] protocol for
-    behaviors that do not need to specify setup or shutdown.
-    """
-
-    def __str__(self) -> str:
-        return type(self).__name__
-
-    def __repr__(self) -> str:
-        return f'{type(self).__name__}()'
-
-    def setup(self) -> None:
-        """No-op setup."""
-        pass
-
-    def shutdown(self) -> None:
-        """No-op shutdown."""
         pass
 
 
@@ -110,6 +139,9 @@ class ControlLoop(Protocol):
         ...
 
 
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
+
+
 def action(method: Callable[P, R]) -> Callable[P, R]:
     """Decorator that annotates a method of a behavior as an action.
 
@@ -120,9 +152,9 @@ def action(method: Callable[P, R]) -> Callable[P, R]:
 
     Example:
         ```python
-        from aeris.behavior import action
+        from aeris.behavior import Behavior, action
 
-        class ExampleBehavior:
+        class Example(Behavior):
             @action
             def perform(self):
                 ...
@@ -132,7 +164,9 @@ def action(method: Callable[P, R]) -> Callable[P, R]:
     return method
 
 
-def loop(method: Callable[P, R]) -> Callable[P, R]:
+def loop(
+    method: Callable[Concatenate[BehaviorT, P], R],
+) -> Callable[Concatenate[BehaviorT, P], R]:
     """Decorator that annotates a method of a behavior as a control loop.
 
     Control loop methods of a behavior are run as threads when an agent
@@ -143,9 +177,9 @@ def loop(method: Callable[P, R]) -> Callable[P, R]:
     Example:
         ```python
         import threading
-        from aeris.behavior import loop
+        from aeris.behavior import Behavior, loop
 
-        class ExampleBehavior:
+        class Example(Behavior):
             @loop
             def listen(self, shutdown: threading.Event) -> None:
                 while not shutdown.is_set():
@@ -174,7 +208,14 @@ def loop(method: Callable[P, R]) -> Callable[P, R]:
             'where the behavior is defined.',
         )
 
-    return method
+    @functools.wraps(method)
+    def _wrapped(self: BehaviorT, *args: P.args, **kwargs: P.kwargs) -> R:
+        logger.debug('Started "%s" loop for %s', method.__name__, self)
+        result = method(self, *args, **kwargs)
+        logger.debug('Exited "%s" loop for %s', method.__name__, self)
+        return result
+
+    return _wrapped
 
 
 def _is_actor_method_type(obj: Any, kind: str) -> bool:
@@ -183,37 +224,3 @@ def _is_actor_method_type(obj: Any, kind: str) -> bool:
         and hasattr(obj, '_actor_method_type')
         and obj._actor_method_type == kind
     )
-
-
-def get_actions(behavior: Behavior) -> dict[str, Action[Any, Any]]:
-    """Get methods annotated as actions.
-
-    Args:
-        behavior: Behavior instance to get action methods from.
-
-    Returns:
-        Dictionary mapping of method names to methods annotated as actions.
-    """
-    actions: dict[str, Action[Any, Any]] = {}
-    for name in dir(behavior):
-        attr = getattr(behavior, name)
-        if _is_actor_method_type(attr, 'action'):
-            actions[name] = attr
-    return actions
-
-
-def get_loops(behavior: Behavior) -> dict[str, ControlLoop]:
-    """Get methods annotated as loops.
-
-    Args:
-        behavior: Behavior instance to get loop methods from.
-
-    Returns:
-        Dictionary mapping of method names to methods annotated as loops.
-    """
-    loops: dict[str, ControlLoop] = {}
-    for name in dir(behavior):
-        attr = getattr(behavior, name)
-        if _is_actor_method_type(attr, 'loop'):
-            loops[name] = attr
-    return loops

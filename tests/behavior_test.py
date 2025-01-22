@@ -6,27 +6,36 @@ import pytest
 
 from aeris.behavior import action
 from aeris.behavior import Behavior
-from aeris.behavior import BehaviorMixin
-from aeris.behavior import get_actions
-from aeris.behavior import get_loops
 from aeris.behavior import loop
 
 
-class BasicBehavior:
-    def setup(self) -> None: ...
+def test_initialize_base_type_error() -> None:
+    with pytest.raises(
+        TypeError,
+        match='The Behavior type cannot be instantiated directly',
+    ):
+        Behavior()
 
-    def shutdown(self) -> None: ...
+
+class Default(Behavior):
+    pass
 
 
-def test_basic_behavior() -> None:
-    instance = BasicBehavior()
-    assert isinstance(instance, BasicBehavior)
+def test_default_behavior() -> None:
+    instance = Default()
+
+    assert isinstance(instance, Default)
+    assert isinstance(str(instance), str)
+    assert isinstance(repr(instance), str)
 
     instance.setup()
     instance.shutdown()
 
+    assert len(instance.behavior_actions()) == 0
+    assert len(instance.behavior_loops()) == 0
 
-class ComplexBehavior(BehaviorMixin):
+
+class Complex(Behavior):
     @action
     def action1(self) -> bool:
         return True
@@ -45,11 +54,12 @@ class ComplexBehavior(BehaviorMixin):
 
 
 def test_complex_behavior() -> None:
-    instance = ComplexBehavior()
-    assert isinstance(instance, Behavior)
+    instance = Complex()
 
+    assert isinstance(instance, Behavior)
     assert isinstance(str(instance), str)
     assert isinstance(repr(instance), str)
+
     instance.setup()
     instance.shutdown()
 
@@ -57,20 +67,16 @@ def test_complex_behavior() -> None:
     assert instance.action1()
     instance.loop1(threading.Event())
 
-    actions = get_actions(instance)
+    actions = instance.behavior_actions()
     assert set(actions) == {'action1', 'action2'}
 
-    loops = get_loops(instance)
+    loops = instance.behavior_loops()
     assert set(loops) == {'loop1', 'loop2'}
 
 
 def test_invalid_loop_signature() -> None:
-    class BadBehavior:
-        def setup(self) -> None: ...
-
-        def shutdown(self) -> None: ...
-
+    class Bad(Behavior):
         def loop(self) -> None: ...
 
     with pytest.raises(TypeError, match='Signature of loop method "loop"'):
-        loop(BadBehavior.loop)
+        loop(Bad.loop)
