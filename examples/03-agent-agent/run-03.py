@@ -44,7 +44,9 @@ def main() -> int:
     with ThreadLauncher(ThreadExchange()) as launcher:
         lowerer = launcher.launch(Lowerer())
         reverser = launcher.launch(Reverser())
-        coordinator = launcher.launch(Coordinator(lowerer, reverser))
+        coordinator = launcher.launch(
+            Coordinator(lowerer, reverser),
+        ).bind_as_client()
 
         text = 'DEADBEEF'
         expected = 'feebdaed'

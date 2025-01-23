@@ -34,8 +34,8 @@ def test_launch_agents() -> None:
         assert isinstance(repr(launcher), str)
         assert isinstance(str(launcher), str)
 
-        handle1 = launcher.launch(behavior)
-        handle2 = launcher.launch(behavior)
+        handle1 = launcher.launch(behavior).bind_as_client()
+        handle2 = launcher.launch(behavior).bind_as_client()
 
         time.sleep(5 * TEST_LOOP_SLEEP)
 

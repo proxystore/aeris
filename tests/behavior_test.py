@@ -7,6 +7,8 @@ import pytest
 from aeris.behavior import action
 from aeris.behavior import Behavior
 from aeris.behavior import loop
+from aeris.handle import Handle
+from aeris.handle import ProxyHandle
 
 
 def test_initialize_base_type_error() -> None:
@@ -33,9 +35,13 @@ def test_default_behavior() -> None:
 
     assert len(instance.behavior_actions()) == 0
     assert len(instance.behavior_loops()) == 0
+    assert len(instance.behavior_handles()) == 0
 
 
 class Complex(Behavior):
+    def __init__(self, handle: Handle[Default]) -> None:
+        self.handle = handle
+
     @action
     def action1(self) -> bool:
         return True
@@ -54,7 +60,8 @@ class Complex(Behavior):
 
 
 def test_complex_behavior() -> None:
-    instance = Complex()
+    handle = ProxyHandle(Default())
+    instance = Complex(handle)
 
     assert isinstance(instance, Behavior)
     assert isinstance(str(instance), str)
@@ -72,6 +79,9 @@ def test_complex_behavior() -> None:
 
     loops = instance.behavior_loops()
     assert set(loops) == {'loop1', 'loop2'}
+
+    handles = instance.behavior_handles()
+    assert set(handles) == {'handle'}
 
 
 def test_invalid_loop_signature() -> None:

@@ -148,7 +148,7 @@ class RedisExchange(ExchangeMixin):
                     f'Timeout waiting for next message for {uid} after '
                     f'{self.timeout} seconds.',
                 )
-            elif raw is None:
+            elif raw is None:  # pragma: no cover
                 continue
 
             # Only passed one key to blpop to result is [key, item]

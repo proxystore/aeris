@@ -24,6 +24,10 @@ NO_RESULT = object()
 class BaseMessage(BaseModel):
     """Base message type for messages between entities (agents or clients).
 
+    Note:
+        The [`hash()`][builtins.hash] is a combination of the message type
+        and message ID.
+
     Args:
         mid: Unique message ID.
         src: Source entity.
@@ -41,6 +45,9 @@ class BaseMessage(BaseModel):
     mid: uuid.UUID = Field(default_factory=uuid.uuid4)
     src: Identifier
     dest: Identifier
+
+    def __hash__(self) -> int:
+        return hash(type(self)) + hash(self.mid)
 
     @classmethod
     def model_from_json(cls, data: str) -> Message:
@@ -192,8 +199,8 @@ class PingRequest(BaseMessage):
         """
         return PingResponse(
             mid=self.mid,
-            src=self.src,
-            dest=self.dest,
+            src=self.dest,
+            dest=self.src,
             exception=exception,
         )
 
@@ -264,8 +271,8 @@ class ShutdownRequest(BaseMessage):
         """
         return ShutdownResponse(
             mid=self.mid,
-            src=self.src,
-            dest=self.dest,
+            src=self.dest,
+            dest=self.src,
             exception=exception,
         )
 

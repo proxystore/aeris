@@ -9,16 +9,24 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import wait
 from typing import Any
 from typing import Generic
+from typing import get_args
 from typing import TypeVar
 
 from aeris.behavior import Behavior
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
+from aeris.handle import AgentRemoteHandle
+from aeris.handle import ClientRemoteHandle
+from aeris.handle import ProxyHandle
+from aeris.handle import UnboundRemoteHandle
 from aeris.identifier import AgentIdentifier
+from aeris.identifier import Identifier
 from aeris.message import ActionRequest
 from aeris.message import Message
 from aeris.message import PingRequest
+from aeris.message import RequestMessage
+from aeris.message import ResponseMessage
 from aeris.message import ShutdownRequest
 
 logger = logging.getLogger(__name__)
@@ -72,8 +80,14 @@ class Agent(Generic[BehaviorT]):
         self._actions = behavior.behavior_actions()
         self._loops = behavior.behavior_loops()
 
-        self._futures: tuple[Future[None], ...] | None = None
         self._start_loops_lock = threading.Lock()
+        self._loop_futures: tuple[Future[None], ...] | None = None
+        self._action_pool = ThreadPoolExecutor()
+        self._action_futures: dict[ActionRequest, Future[None]] = {}
+        # The key in bound_handles is the identifier of the remote agent
+        # the handle targets. Each running agent should only have a single
+        # handle to any given remote agent.
+        self._bound_handles: dict[Identifier, AgentRemoteHandle[Any]] = {}
 
         self._status = _AgentStatus.INITIALIZED
 
@@ -119,29 +133,100 @@ class Agent(Generic[BehaviorT]):
             )
         return self._actions[action](*args, **kwargs)
 
-    def _message_handler(self, message: Message) -> Message | None:
-        if isinstance(message, ActionRequest):
-            try:
-                result = self.action(
-                    message.action,
-                    message.args,
-                    message.kwargs,
-                )
-            except Exception as e:
-                return message.error(exception=e)
-            else:
-                return message.response(result=result)
-        elif isinstance(message, PingRequest):
-            logger.info('Ping request received by %s', self.aid)
-            return message.response()
-        elif isinstance(message, ShutdownRequest):
-            self.shutdown()
-            return None
-        else:
-            raise TypeError(
-                'Agent cannot handle message of type '
-                f'{type(message).__name__}',
+    def _bind_handle(
+        self,
+        attr: str,
+        handle: AgentRemoteHandle[Any] | UnboundRemoteHandle[Any],
+    ) -> None:
+        if handle.aid in self._bound_handles:
+            raise RuntimeError(
+                f'{self} already has a handle bound to a remote agent with '
+                f'{handle.aid}. The duplicate handle should be removed from '
+                'the behavior instance.',
             )
+        bound = handle.bind_to_agent(self.aid)
+        # Replace the handle attribute on the behavior with a handle bound
+        # to this agent.
+        setattr(self.behavior, attr, bound)
+        self._bound_handles[bound.aid] = bound
+        logger.debug(
+            'Bound remote handle to %s to running agent with %s',
+            handle.aid,
+            self.aid,
+        )
+
+    def _bind_handles(self) -> None:
+        for attr, handle in self.behavior.behavior_handles().items():
+            if isinstance(
+                handle,
+                (ClientRemoteHandle, ProxyHandle),
+            ):  # pragma: no cover
+                # Ignore proxy handles and already bound client handles.
+                pass
+            elif isinstance(handle, UnboundRemoteHandle):
+                self._bind_handle(attr, handle)
+            elif isinstance(handle, AgentRemoteHandle):
+                if handle.hid != self.aid:
+                    self._bind_handle(attr, handle)
+            else:
+                raise AssertionError('Unreachable.')
+
+    def _send_response(self, response: ResponseMessage) -> None:
+        assert self.exchange is not None
+        try:
+            self.exchange.send(response.dest, response)
+        except (BadIdentifierError, MailboxClosedError):
+            logger.warning(
+                'Failed to send response from %s to %s. '
+                'This likely means the destination mailbox was '
+                'removed from the exchange.',
+                self.aid,
+                response.dest,
+            )
+
+    def _execute_action(self, request: ActionRequest) -> None:
+        try:
+            result = self.action(request.action, request.args, request.kwargs)
+        except Exception as e:
+            response = request.error(exception=e)
+        else:
+            response = request.response(result=result)
+        self._send_response(response)
+
+    def _response_handler(self, response: ResponseMessage) -> None:
+        try:
+            handle = self._bound_handles[response.src]
+        except KeyError:
+            logger.exception(
+                'Receieved a response message from %s but no handle to '
+                'that agent is bound to this agent.',
+                response.src,
+            )
+        else:
+            handle._process_response(response)
+
+    def _request_handler(self, request: RequestMessage) -> None:
+        if isinstance(request, ActionRequest):
+            future = self._action_pool.submit(self._execute_action, request)
+            self._action_futures[request] = future
+            future.add_done_callback(
+                lambda _: self._action_futures.pop(request),
+            )
+        elif isinstance(request, PingRequest):
+            logger.info('Ping request received by %s', self.aid)
+            self._send_response(request.response())
+        elif isinstance(request, ShutdownRequest):
+            self.shutdown()
+        else:
+            raise AssertionError('Unreachable.')
+
+    def _message_handler(self, message: Message) -> None:
+        if isinstance(message, get_args(ResponseMessage)):
+            self._response_handler(message)
+        elif isinstance(message, get_args(RequestMessage)):
+            self._request_handler(message)
+        else:
+            raise AssertionError('Unreachable.')
 
     def _message_listener(self) -> None:
         assert self.exchange is not None
@@ -152,24 +237,13 @@ class Agent(Generic[BehaviorT]):
                 message = self.exchange.recv(self.aid)
             except MailboxClosedError:
                 break
-
-            response = self._message_handler(message)
-
-            if response is not None:
-                try:
-                    self.exchange.send(response.dest, response)
-                except (BadIdentifierError, MailboxClosedError):
-                    logger.warning(
-                        'Failed to send response from %s to %s. '
-                        'This likely means the destination mailbox was '
-                        'removed from the exchange.',
-                        self.aid,
-                        response.dest,
-                    )
+            else:
+                self._message_handler(message)
 
     def run(self) -> None:
         """Run the agent.
 
+        1. Binds all unbound handles to remote agents to this agent.
         1. Calls [`Behavior.setup()`][aeris.behavior.Behavior.setup].
         1. Starts threads for all control loops defined on the agent's
            [`Behavior`][aeris.behavior.Behavior].
@@ -183,6 +257,7 @@ class Agent(Generic[BehaviorT]):
                 a valid request type.
         """
         self._status = _AgentStatus.STARTING
+        self._bind_handles()
         self.behavior.setup()
 
         futures: list[Future[None]] = []
@@ -194,7 +269,7 @@ class Agent(Generic[BehaviorT]):
                 for method in self._loops.values():
                     futures.append(pool.submit(method, self.done))
 
-                self._futures = tuple(futures)
+                self._loop_futures = tuple(futures)
                 self._status = _AgentStatus.RUNNING
 
             logger.info('Started agent with %s', self.aid)
@@ -217,6 +292,7 @@ class Agent(Generic[BehaviorT]):
         self._status = _AgentStatus.TERMINTATING
 
         with self._start_loops_lock:
+            self._action_pool.shutdown()
             if self.exchange is not None:
                 self.exchange.close_mailbox(self.aid)
 
@@ -231,7 +307,7 @@ class Agent(Generic[BehaviorT]):
             timeout: How long to wait for threads to exit gracefully.
         """
         with self._start_loops_lock:
-            if self._futures is None:
+            if self._loop_futures is None:
                 return
 
-            wait(self._futures, timeout=timeout)
+            wait(self._loop_futures, timeout=timeout)

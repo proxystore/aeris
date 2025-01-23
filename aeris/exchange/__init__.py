@@ -12,7 +12,7 @@ else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
 from aeris.behavior import Behavior
-from aeris.handle import RemoteHandle
+from aeris.handle import UnboundRemoteHandle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.identifier import Identifier
@@ -89,7 +89,10 @@ class Exchange(Protocol):
         """
         ...
 
-    def create_handle(self, aid: AgentIdentifier) -> RemoteHandle[BehaviorT]:
+    def create_handle(
+        self,
+        aid: AgentIdentifier,
+    ) -> UnboundRemoteHandle[BehaviorT]:
         """Create a new handle to an agent.
 
         A handle enables a client to invoke actions on the agent.
@@ -199,7 +202,7 @@ class ExchangeMixin:
     def create_handle(
         self: Exchange,
         aid: AgentIdentifier,
-    ) -> RemoteHandle[BehaviorT]:
+    ) -> UnboundRemoteHandle[BehaviorT]:
         """Create a new handle to an agent.
 
         A handle enables a client to invoke actions on the agent.
@@ -223,4 +226,4 @@ class ExchangeMixin:
                 f'Handle must be created from an {AgentIdentifier.__name__} '
                 f'but got identifier with type {type(aid).__name__}.',
             )
-        return RemoteHandle(aid, self)
+        return UnboundRemoteHandle(self, aid)

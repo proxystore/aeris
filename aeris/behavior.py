@@ -10,6 +10,7 @@ from typing import Callable
 from typing import Generic
 from typing import Literal
 from typing import Protocol
+from typing import TYPE_CHECKING
 from typing import TypeVar
 
 if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
@@ -23,6 +24,9 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
     from typing import Self
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
+
+if TYPE_CHECKING:
+    from aeris.handle import Handle
 
 P = ParamSpec('P')
 R = TypeVar('R')
@@ -59,7 +63,7 @@ class Behavior:
                 f'The {cls.__name__} type cannot be instantiated directly '
                 'and must be subclassed.',
             )
-        return super().__new__(cls, *args, **kwargs)
+        return super().__new__(cls)
 
     def __str__(self) -> str:
         return f'<Behavior[{type(self).__name__}] @ 0x{id(self):x}>'
@@ -92,6 +96,22 @@ class Behavior:
             if _is_actor_method_type(attr, 'loop'):
                 loops[name] = attr
         return loops
+
+    def behavior_handles(self) -> dict[str, Handle[Any]]:
+        """Get instance attributes that are agent handles.
+
+        Returns:
+            Dictionary mapping attribute names to agent handles.
+        """
+        from aeris.handle import Handle
+
+        # This import is deferred to prevent a cyclic import with aeris.handle.
+        handles: dict[str, Handle[Any]] = {}
+        for name in dir(self):
+            attr = getattr(self, name)
+            if isinstance(attr, Handle):
+                handles[name] = attr
+        return handles
 
     def setup(self) -> None:
         """Setup up resources needed for the agents execution.
