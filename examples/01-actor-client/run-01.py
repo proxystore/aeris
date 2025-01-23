@@ -4,12 +4,12 @@ import logging
 from concurrent.futures import Future
 
 from aeris.behavior import action
-from aeris.behavior import BehaviorMixin
+from aeris.behavior import Behavior
 from aeris.exchange.thread import ThreadExchange
 from aeris.launcher.thread import ThreadLauncher
 
 
-class Counter(BehaviorMixin):
+class Counter(Behavior):
     count: int
 
     def setup(self) -> None:
@@ -31,7 +31,7 @@ def main() -> int:
     exchange = ThreadExchange()
 
     with ThreadLauncher(exchange) as launcher:
-        agent = launcher.launch(behavior)
+        agent = launcher.launch(behavior).bind_as_client()
 
         future: Future[int] = agent.action('get_count')
         assert future.result() == 0

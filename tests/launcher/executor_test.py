@@ -4,6 +4,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+from aeris.behavior import Behavior
 from aeris.behavior import loop
 from aeris.exchange.thread import ThreadExchange
 from aeris.launcher import Launcher
@@ -11,12 +12,9 @@ from aeris.launcher.executor import ExecutorLauncher
 from testing.constant import TEST_LOOP_SLEEP
 
 
-class SimpleBehavior:
+class Simple(Behavior):
     def __init__(self) -> None:
         self.steps = 0
-
-    def setup(self) -> None:
-        pass
 
     def shutdown(self) -> None:
         assert self.steps > 0
@@ -29,7 +27,7 @@ class SimpleBehavior:
 
 
 def test_launch_agents() -> None:
-    behavior = SimpleBehavior()
+    behavior = Simple()
     exchange = ThreadExchange()
     executor = ThreadPoolExecutor(max_workers=2)
 
@@ -38,8 +36,8 @@ def test_launch_agents() -> None:
         assert isinstance(repr(launcher), str)
         assert isinstance(str(launcher), str)
 
-        handle1 = launcher.launch(behavior)
-        handle2 = launcher.launch(behavior)
+        handle1 = launcher.launch(behavior).bind_as_client()
+        handle2 = launcher.launch(behavior).bind_as_client()
 
         time.sleep(5 * TEST_LOOP_SLEEP)
 

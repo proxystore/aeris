@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pickle
+from typing import Any
 
 import pytest
 
@@ -8,6 +9,7 @@ from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
 from aeris.exchange.thread import ThreadExchange
+from aeris.handle import RemoteHandle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.message import PingRequest
@@ -58,7 +60,7 @@ def test_mailbox_closed_error() -> None:
 def test_create_handle_to_client() -> None:
     with ThreadExchange() as exchange:
         aid = exchange.create_agent()
-        handle = exchange.create_handle(aid)
+        handle: RemoteHandle[Any] = exchange.create_handle(aid)
         handle.close()
 
         with pytest.raises(TypeError, match='Handle must be created from an'):

@@ -4,19 +4,23 @@ import sys
 from types import TracebackType
 from typing import Protocol
 from typing import runtime_checkable
+from typing import TypeVar
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
     from typing import Self
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-from aeris.handle import Handle
+from aeris.behavior import Behavior
+from aeris.handle import UnboundRemoteHandle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.identifier import Identifier
 from aeris.message import Message
 
 __all__ = ['Exchange', 'ExchangeMixin']
+
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
 @runtime_checkable
@@ -85,7 +89,10 @@ class Exchange(Protocol):
         """
         ...
 
-    def create_handle(self, aid: AgentIdentifier) -> Handle:
+    def create_handle(
+        self,
+        aid: AgentIdentifier,
+    ) -> UnboundRemoteHandle[BehaviorT]:
         """Create a new handle to an agent.
 
         A handle enables a client to invoke actions on the agent.
@@ -192,7 +199,10 @@ class ExchangeMixin:
         self.create_mailbox(cid)
         return cid
 
-    def create_handle(self: Exchange, aid: AgentIdentifier) -> Handle:
+    def create_handle(
+        self: Exchange,
+        aid: AgentIdentifier,
+    ) -> UnboundRemoteHandle[BehaviorT]:
         """Create a new handle to an agent.
 
         A handle enables a client to invoke actions on the agent.
@@ -216,4 +226,4 @@ class ExchangeMixin:
                 f'Handle must be created from an {AgentIdentifier.__name__} '
                 f'but got identifier with type {type(aid).__name__}.',
             )
-        return Handle(aid, self)
+        return UnboundRemoteHandle(self, aid)
