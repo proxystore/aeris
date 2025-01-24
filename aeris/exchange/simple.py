@@ -181,6 +181,7 @@ class SimpleExchange(ExchangeMixin):
         self._socket.setblocking(False)
         self._handler_thread = threading.Thread(
             target=self._listen_server_messages,
+            name=f'{self}-message-handler',
         )
         self._handler_thread.start()
 

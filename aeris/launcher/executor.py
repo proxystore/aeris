@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import dataclasses
 import logging
 import sys
+from concurrent.futures import CancelledError
 from concurrent.futures import Executor
 from concurrent.futures import Future
 from types import TracebackType
-from typing import Any
-from typing import Generic
 from typing import TypeVar
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
@@ -26,12 +24,6 @@ logger = logging.getLogger(__name__)
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
-@dataclasses.dataclass
-class _RunningAgent(Generic[BehaviorT]):
-    agent: Agent[BehaviorT]
-    future: Future[None]
-
-
 class ExecutorLauncher:
     """Launcher that wraps a [`concurrent.futures.Executor`][concurrent.futures.Executor].
 
@@ -44,7 +36,7 @@ class ExecutorLauncher:
     def __init__(self, exchange: Exchange, executor: Executor) -> None:
         self._exchange = exchange
         self._executor = executor
-        self._agents: dict[AgentIdentifier, _RunningAgent[Any]] = {}
+        self._futures: dict[Future[None], AgentIdentifier] = {}
 
     def __enter__(self) -> Self:
         return self
@@ -66,10 +58,22 @@ class ExecutorLauncher:
     def __str__(self) -> str:
         return f'{type(self).__name__}<{self._exchange}; {self._executor}>'
 
+    def _callback(self, future: Future[None]) -> None:
+        aid = self._futures.pop(future)
+        try:
+            future.result()
+            logger.info('Safely completed agent with %s', aid)
+        except CancelledError:  # pragma: no cover
+            logger.warning('Cancelled agent future with %s', aid)
+        except Exception:
+            logger.exception('Runtime exception in agent with %s', aid)
+
     def close(self) -> None:
         """Close the launcher and shutdown agents."""
         logger.debug('Waiting for all agents to shutdown...')
-        self._executor.shutdown(wait=True)
+        for fut in self._futures.copy():
+            fut.result()
+        self._executor.shutdown(wait=True, cancel_futures=True)
         logger.info('Closed %s', self)
 
     def launch(self, behavior: BehaviorT) -> RemoteHandle[BehaviorT]:
@@ -85,7 +89,8 @@ class ExecutorLauncher:
 
         agent = Agent(behavior, aid=aid, exchange=self._exchange)
         future = self._executor.submit(agent)
-        self._agents[aid] = _RunningAgent(agent, future)
-        logger.info('Launched %s', agent)
+        future.add_done_callback(self._callback)
+        self._futures[future] = aid
+        logger.info('Launched agent with %s', agent)
 
         return self._exchange.create_handle(aid)

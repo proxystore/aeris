@@ -41,7 +41,7 @@ def simple_exchange_server() -> Generator[tuple[str, int]]:
         loop.run_until_complete(server.serve_forever(stop))
         loop.close()
 
-    handle = threading.Thread(target=_target)
+    handle = threading.Thread(target=_target, name=f'{server}-fixture')
     handle.start()
 
     # Wait for server to be listening

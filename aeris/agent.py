@@ -47,6 +47,16 @@ class _AgentStatus(enum.Enum):
     SHUTDOWN = 'shutdown'
 
 
+# Helper for Agent.__reduce__ which cannot handle the keyword arguments
+# of the Agent constructor.
+def _agent_trampoline(
+    behavior: BehaviorT,
+    aid: AgentIdentifier | None = None,
+    exchange: Exchange | None = None,
+) -> Agent[BehaviorT]:
+    return Agent(behavior, aid=aid, exchange=exchange)
+
+
 class Agent(Generic[BehaviorT]):
     """Executable agent.
 
@@ -57,7 +67,8 @@ class Agent(Generic[BehaviorT]):
     Args:
         behavior: Behavior that the agent will exhibit.
         aid: Identifier of this agent in a multi-agent system.
-        exchange: Message exchange of multi-agent system.
+        exchange: Message exchange of multi-agent system. The agent will close
+            the exchange when it finished running.
     """
 
     def __init__(
@@ -110,28 +121,8 @@ class Agent(Generic[BehaviorT]):
         behavior = type(self.behavior).__name__
         return f'{name}<{behavior}; {self.aid}>'
 
-    def action(self, action: str, args: Any, kwargs: Any) -> Any:
-        """Invoke an action of the agent.
-
-        Args:
-            action: Name of action to invoke.
-            args: Tuple of positional arguments.
-            kwargs: Dictionary of keyword arguments.
-
-        Returns:
-            Result of the action.
-
-        Raises:
-            AttributeError: if an action with this name is not implemented by
-                the behavior of the agent.
-        """
-        logger.debug('Invoking "%s" action on %s', action, self.aid)
-        if action not in self._actions:
-            raise AttributeError(
-                f'Agent[{type(self.behavior).__name__}] does not have an '
-                f'action named "{action}".',
-            )
-        return self._actions[action](*args, **kwargs)
+    def __reduce__(self) -> Any:
+        return (_agent_trampoline, (self.behavior, self.aid, self.exchange))
 
     def _bind_handle(
         self,
@@ -240,6 +231,29 @@ class Agent(Generic[BehaviorT]):
             else:
                 self._message_handler(message)
 
+    def action(self, action: str, args: Any, kwargs: Any) -> Any:
+        """Invoke an action of the agent.
+
+        Args:
+            action: Name of action to invoke.
+            args: Tuple of positional arguments.
+            kwargs: Dictionary of keyword arguments.
+
+        Returns:
+            Result of the action.
+
+        Raises:
+            AttributeError: if an action with this name is not implemented by
+                the behavior of the agent.
+        """
+        logger.debug('Invoking "%s" action on %s', action, self.aid)
+        if action not in self._actions:
+            raise AttributeError(
+                f'Agent[{type(self.behavior).__name__}] does not have an '
+                f'action named "{action}".',
+            )
+        return self._actions[action](*args, **kwargs)
+
     def run(self) -> None:
         """Run the agent.
 
@@ -251,6 +265,7 @@ class Agent(Generic[BehaviorT]):
            [`Exchange`][aeris.exchange.Exchange] (if provided).
         1. Waits for the threads to exit.
         1. Calls [`Behavior.shutdown()`][aeris.behavior.Behavior.shutdown].
+        1. Closes the exchange.
 
         Raises:
             BadMessageTypeError: if the agent receives a message that is not
@@ -278,6 +293,8 @@ class Agent(Generic[BehaviorT]):
                 future.result()
 
         self.behavior.shutdown()
+        if self.exchange is not None:
+            self.exchange.close()
         self._status = _AgentStatus.SHUTDOWN
         logger.info('Shutdown agent with %s', self.aid)
 

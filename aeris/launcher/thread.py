@@ -81,7 +81,7 @@ class ThreadLauncher:
         aid = self._exchange.create_agent()
 
         agent = Agent(behavior, aid=aid, exchange=self._exchange)
-        thread = threading.Thread(target=agent)
+        thread = threading.Thread(target=agent, name=f'{self}-{aid}')
         thread.start()
         self._agents[aid] = _RunningAgent(agent, thread)
         logger.info('Launched %s', agent)

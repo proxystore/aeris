@@ -10,6 +10,7 @@ from aeris.exchange.simple import SimpleExchange
 from aeris.launcher import Launcher
 from aeris.launcher.executor import ExecutorLauncher
 from testing.behavior import SleepBehavior
+from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_LOOP_SLEEP
 
 
@@ -50,7 +51,8 @@ def test_launch_agents_processes(
             handle1 = launcher.launch(behavior).bind_as_client()
             handle2 = launcher.launch(behavior).bind_as_client()
 
-            time.sleep(5 * TEST_LOOP_SLEEP)
+            assert handle1.ping(timeout=TEST_CONNECTION_TIMEOUT) > 0
+            assert handle2.ping(timeout=TEST_CONNECTION_TIMEOUT) > 0
 
             handle1.shutdown()
             handle2.shutdown()
