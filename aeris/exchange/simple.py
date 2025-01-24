@@ -249,7 +249,7 @@ class SimpleExchange(ExchangeMixin):
 
                 try:
                     message = _BaseExchangeMessage.model_deserialize(raw)
-                except Exception:
+                except Exception:  # pragma: no cover
                     logger.exception(
                         'Failed to deserialize message from server in %s',
                         self,

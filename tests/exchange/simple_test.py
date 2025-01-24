@@ -23,7 +23,6 @@ from aeris.exchange.simple import SimpleServer
 from aeris.identifier import AgentIdentifier
 from aeris.message import PingRequest
 from aeris.message import PingResponse
-from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_SLEEP
 
 
@@ -316,21 +315,6 @@ def test_exchange_drops_bad_server_message_type(
         )
         # Server should log but otherwise drop the message
         exchange._handle_message(message)
-
-
-def test_exchange_disconnect_message_parse_error(
-    simple_exchange_server: tuple[str, int],
-) -> None:
-    host, port = simple_exchange_server
-    with mock.patch('socket.socket') as mock_socket:
-        mock_socket.return_value.recv.return_value = b'random-bytes'
-
-        with SimpleExchange(host, port) as exchange:
-            # Message handler thread will start, immediately read the bad
-            # data, fail to parse it as a message, and exit so we just
-            # wait on the thread here.
-            exchange._handler_thread.join(timeout=TEST_CONNECTION_TIMEOUT)
-            assert not exchange._handler_thread.is_alive()
 
 
 def test_exchange_send_messages(

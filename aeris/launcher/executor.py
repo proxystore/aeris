@@ -65,7 +65,7 @@ class ExecutorLauncher:
             logger.info('Safely completed agent with %s', aid)
         except CancelledError:  # pragma: no cover
             logger.warning('Cancelled agent future with %s', aid)
-        except Exception:
+        except Exception:  # pragma: no cover
             logger.exception('Runtime exception in agent with %s', aid)
 
     def close(self) -> None:
