@@ -34,7 +34,7 @@ from testing.sys import open_port
 
 
 @pytest.fixture
-def server_thread() -> Generator[tuple[str, int]]:
+def simple_exchange_server() -> Generator[tuple[str, int]]:
     host, port = 'localhost', open_port()
     server = SimpleServer(host, port)
     loop = asyncio.new_event_loop()
@@ -331,11 +331,10 @@ async def test_server_handle_drop_bad_type() -> None:
     await server._handle_client(reader, writer)
 
 
-@pytest.mark.asyncio
-async def test_exchange_create_close_mailbox(
-    server_thread: tuple[str, int],
+def test_exchange_create_close_mailbox(
+    simple_exchange_server: tuple[str, int],
 ) -> None:
-    host, port = server_thread
+    host, port = simple_exchange_server
     with SimpleExchange(host, port) as exchange:
         uid = AgentIdentifier.new()
         exchange.create_mailbox(uid)
@@ -344,9 +343,8 @@ async def test_exchange_create_close_mailbox(
         exchange.close_mailbox(uid)  # Idempotent check
 
 
-@pytest.mark.asyncio
-async def test_exchange_serialize(server_thread: tuple[str, int]) -> None:
-    host, port = server_thread
+def test_exchange_serialize(simple_exchange_server: tuple[str, int]) -> None:
+    host, port = simple_exchange_server
     with SimpleExchange(host, port) as exchange1:
         assert isinstance(exchange1, Exchange)
         pickled = pickle.dumps(exchange1)
@@ -356,11 +354,10 @@ async def test_exchange_serialize(server_thread: tuple[str, int]) -> None:
             assert str(exchange1) == str(exchange2)
 
 
-@pytest.mark.asyncio
-async def test_exchange_drops_bad_server_message_type(
-    server_thread: tuple[str, int],
+def test_exchange_drops_bad_server_message_type(
+    simple_exchange_server: tuple[str, int],
 ) -> None:
-    host, port = server_thread
+    host, port = simple_exchange_server
     with SimpleExchange(host, port) as exchange:
         # Server should never send back a request type
         message = _ExchangeRequestMessage(
@@ -371,11 +368,10 @@ async def test_exchange_drops_bad_server_message_type(
         exchange._handle_message(message)
 
 
-@pytest.mark.asyncio
-async def test_exchange_disconnect_message_parse_error(
-    server_thread: tuple[str, int],
+def test_exchange_disconnect_message_parse_error(
+    simple_exchange_server: tuple[str, int],
 ) -> None:
-    host, port = server_thread
+    host, port = simple_exchange_server
     with mock.patch('socket.socket') as mock_socket:
         mock_socket.return_value.recv.return_value = b'random-bytes'
 
@@ -387,11 +383,10 @@ async def test_exchange_disconnect_message_parse_error(
             assert not exchange._handler_thread.is_alive()
 
 
-@pytest.mark.asyncio
-async def test_exchange_send_messages(
-    server_thread: tuple[str, int],
+def test_exchange_send_messages(
+    simple_exchange_server: tuple[str, int],
 ) -> None:
-    host, port = server_thread
+    host, port = simple_exchange_server
     with SimpleExchange(host, port) as exchange:
         aid1 = exchange.create_agent()
         aid2 = exchange.create_agent()
@@ -400,11 +395,10 @@ async def test_exchange_send_messages(
         assert exchange.recv(aid2) == message
 
 
-@pytest.mark.asyncio
-async def test_exchange_send_recv_bad_identifier(
-    server_thread: tuple[str, int],
+def test_exchange_send_recv_bad_identifier(
+    simple_exchange_server: tuple[str, int],
 ) -> None:
-    host, port = server_thread
+    host, port = simple_exchange_server
     with SimpleExchange(host, port) as exchange:
         aid = AgentIdentifier.new()
         message = PingRequest(src=aid, dest=aid)
