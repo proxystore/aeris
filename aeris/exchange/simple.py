@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import contextlib
 import enum
 import io
 import logging
@@ -242,7 +243,7 @@ class SimpleExchange(ExchangeMixin):
                 start_index += len(line)
 
                 raw = line.strip()
-                if len(raw) == 0:
+                if len(raw) == 0:  # pragma: no cover
                     continue
 
                 try:
@@ -407,6 +408,7 @@ class SimpleServer:
         self.host = host
         self.port = port
         self.manager = _MailboxManager()
+        self._handle_request_tasks: set[asyncio.Task[None]] = set()
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(hostname={self.host}, port={self.port})'
@@ -450,6 +452,16 @@ class SimpleServer:
 
         return response
 
+    async def _handle_request_task(
+        self,
+        request: _ExchangeRequestMessage,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        response = await self._handle_request(request)
+        encoded = response.model_serialize()
+        writer.write(encoded + b'\n')
+        await writer.drain()
+
     async def _handle_client(
         self,
         reader: asyncio.StreamReader,
@@ -469,11 +481,13 @@ class SimpleServer:
                 break
 
             if isinstance(message, _ExchangeRequestMessage):
-                response = await self._handle_request(message)
-                encoded = response.model_serialize()
-                writer.write(encoded)
-                writer.write(b'\n')
-                await writer.drain()
+                # Handle requests in separate tasks so we don't block the
+                # handle client coroutine.
+                task = asyncio.create_task(
+                    self._handle_request_task(message, writer),
+                )
+                self._handle_request_tasks.add(task)
+                task.add_done_callback(self._handle_request_tasks.discard)
             else:
                 logger.warning(
                     'Dropping bad message with type %s',
@@ -501,6 +515,10 @@ class SimpleServer:
             )
             await stop
             logger.info('Closing server...')
+            for task in self._handle_request_tasks:  # pragma: no cover
+                task.cancel('Server has been closed.')
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
 
         if sys.version_info >= (3, 13):  # pragma: >=3.13 cover
             server.close_clients()
