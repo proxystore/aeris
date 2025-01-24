@@ -17,7 +17,7 @@ from aeris.exchange.simple import _ExchangeRequestMessage
 from aeris.exchange.simple import _ExchangeResponseMessage
 from aeris.exchange.simple import _MailboxManager
 from aeris.exchange.simple import _main
-from aeris.exchange.simple import _serve_forever
+from aeris.exchange.simple import serve_forever
 from aeris.exchange.simple import SimpleExchange
 from aeris.exchange.simple import SimpleServer
 from aeris.identifier import AgentIdentifier
@@ -138,7 +138,7 @@ async def test_mailbox_manager_mailbox_closed() -> None:
 
 
 def test_server_cli() -> None:
-    with mock.patch('aeris.exchange.simple._serve_forever'):
+    with mock.patch('aeris.exchange.simple.serve_forever'):
         assert _main(['--port', '0']) == 0
 
 
@@ -149,7 +149,7 @@ async def test_server_serve_forever() -> None:
     assert isinstance(str(server), str)
 
     stop = asyncio.get_running_loop().create_future()
-    task = asyncio.create_task(_serve_forever(server, stop))
+    task = asyncio.create_task(serve_forever(server, stop))
     await asyncio.sleep(TEST_SLEEP)
     stop.set_result(None)
     await task

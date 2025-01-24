@@ -516,7 +516,7 @@ class SimpleServer:
             )
             await stop
             logger.info('Closing server...')
-            for task in self._handle_request_tasks:  # pragma: no cover
+            for task in tuple(self._handle_request_tasks):  # pragma: no cover
                 task.cancel('Server has been closed.')
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
@@ -525,10 +525,19 @@ class SimpleServer:
             server.close_clients()
 
 
-async def _serve_forever(
+async def serve_forever(
     server: SimpleServer,
     stop: asyncio.Future[None] | None = None,
 ) -> None:
+    """Serve the exchange forever until a stop signal is received.
+
+    This function registers signal handlers for SIGINT and SIGTERM.
+
+    Args:
+        server: Server instance to run.
+        stop: Optional future that when set will indicate that the server
+            should stop.
+    """
     loop = asyncio.get_running_loop()
     stop = loop.create_future() if stop is None else stop
     # Set the stop condition when receiving SIGINT (ctrl-C) and SIGTERM.
@@ -559,7 +568,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
     )
 
     server = SimpleServer(host=args.host, port=args.port)
-    asyncio.run(_serve_forever(server))
+    asyncio.run(serve_forever(server))
 
     return 0
 

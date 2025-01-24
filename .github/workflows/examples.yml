@@ -46,3 +46,6 @@ jobs:
 
       - name: Run Example 03
         run: python examples/03-agent-agent/run-03.py
+
+      - name: Run Example 04
+        run: python examples/04-execution/run-04.py
