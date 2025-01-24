@@ -122,12 +122,12 @@ class Agent(Generic[BehaviorT]):
             Result of the action.
 
         Raises:
-            TypeError: if an action with this name is not implemented by
+            AttributeError: if an action with this name is not implemented by
                 the behavior of the agent.
         """
         logger.debug('Invoking "%s" action on %s', action, self.aid)
         if action not in self._actions:
-            raise TypeError(
+            raise AttributeError(
                 f'Agent[{type(self.behavior).__name__}] does not have an '
                 f'action named "{action}".',
             )

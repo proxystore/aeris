@@ -4,89 +4,76 @@ import threading
 
 import pytest
 
-from aeris.behavior import action
 from aeris.behavior import Behavior
 from aeris.behavior import loop
-from aeris.handle import Handle
 from aeris.handle import ProxyHandle
+from testing.behavior import EmptyBehavior
+from testing.behavior import HandleBehavior
+from testing.behavior import IdentityBehavior
+from testing.behavior import WaitBehavior
 
 
 def test_initialize_base_type_error() -> None:
-    with pytest.raises(
-        TypeError,
-        match='The Behavior type cannot be instantiated directly',
-    ):
+    error = 'The Behavior type cannot be instantiated directly'
+    with pytest.raises(TypeError, match=error):
         Behavior()
 
 
-class Default(Behavior):
-    pass
+def test_behavior_empty() -> None:
+    behavior = EmptyBehavior()
+    behavior.setup()
+
+    assert isinstance(behavior, EmptyBehavior)
+    assert isinstance(str(behavior), str)
+    assert isinstance(repr(behavior), str)
+
+    assert len(behavior.behavior_actions()) == 0
+    assert len(behavior.behavior_loops()) == 0
+    assert len(behavior.behavior_handles()) == 0
+
+    behavior.shutdown()
 
 
-def test_default_behavior() -> None:
-    instance = Default()
+def test_behavior_actions() -> None:
+    behavior = IdentityBehavior()
+    behavior.setup()
 
-    assert isinstance(instance, Default)
-    assert isinstance(str(instance), str)
-    assert isinstance(repr(instance), str)
+    actions = behavior.behavior_actions()
+    assert set(actions) == {'identity'}
 
-    instance.setup()
-    instance.shutdown()
+    assert behavior.identity(1) == 1
 
-    assert len(instance.behavior_actions()) == 0
-    assert len(instance.behavior_loops()) == 0
-    assert len(instance.behavior_handles()) == 0
+    behavior.shutdown()
 
 
-class Complex(Behavior):
-    def __init__(self, handle: Handle[Default]) -> None:
-        self.handle = handle
+def test_behavior_loops() -> None:
+    behavior = WaitBehavior()
+    behavior.setup()
 
-    @action
-    def action1(self) -> bool:
-        return True
+    loops = behavior.behavior_loops()
+    assert set(loops) == {'wait'}
 
-    @action
-    def action2(self) -> None: ...
+    shutdown = threading.Event()
+    shutdown.set()
+    behavior.wait(shutdown)
 
-    @loop
-    def loop1(self, shutdown: threading.Event) -> None: ...
-
-    @loop
-    def loop2(self, shutdown: threading.Event) -> None: ...
-
-    def method(self) -> bool:
-        return True
+    behavior.shutdown()
 
 
-def test_complex_behavior() -> None:
-    handle = ProxyHandle(Default())
-    instance = Complex(handle)
+def test_behavior_handles() -> None:
+    handle = ProxyHandle(EmptyBehavior())
+    behavior = HandleBehavior(handle)
+    behavior.setup()
 
-    assert isinstance(instance, Behavior)
-    assert isinstance(str(instance), str)
-    assert isinstance(repr(instance), str)
-
-    instance.setup()
-    instance.shutdown()
-
-    assert instance.method()
-    assert instance.action1()
-    instance.loop1(threading.Event())
-
-    actions = instance.behavior_actions()
-    assert set(actions) == {'action1', 'action2'}
-
-    loops = instance.behavior_loops()
-    assert set(loops) == {'loop1', 'loop2'}
-
-    handles = instance.behavior_handles()
+    handles = behavior.behavior_handles()
     assert set(handles) == {'handle'}
+
+    behavior.shutdown()
 
 
 def test_invalid_loop_signature() -> None:
-    class Bad(Behavior):
+    class BadBehavior(Behavior):
         def loop(self) -> None: ...
 
     with pytest.raises(TypeError, match='Signature of loop method "loop"'):
-        loop(Bad.loop)
+        loop(BadBehavior.loop)

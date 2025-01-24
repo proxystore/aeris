@@ -2,4 +2,5 @@ from __future__ import annotations
 
 TEST_CONNECTION_TIMEOUT = 5
 TEST_LOOP_SLEEP = 0.001
+TEST_THREAD_JOIN_TIMEOUT = 1
 TEST_SLEEP = 0.001
