@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-import time
-from collections.abc import Generator
 from concurrent.futures import Future
 from typing import Any
 from unittest import mock
 
 import pytest
 
-from aeris.behavior import action
-from aeris.behavior import Behavior
 from aeris.exception import HandleClosedError
 from aeris.exception import HandleNotBoundError
 from aeris.exchange import Exchange
-from aeris.exchange.thread import ThreadExchange
 from aeris.handle import AgentRemoteHandle
 from aeris.handle import ClientRemoteHandle
 from aeris.handle import Handle
@@ -24,52 +19,33 @@ from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.launcher.thread import ThreadLauncher
 from aeris.message import PingRequest
+from testing.behavior import CounterBehavior
+from testing.behavior import EmptyBehavior
+from testing.behavior import ErrorBehavior
+from testing.behavior import SleepBehavior
 from testing.constant import TEST_SLEEP
 
 
-@pytest.fixture
-def exchange() -> Generator[Exchange]:
-    with ThreadExchange() as exchange:
-        yield exchange
-
-
-@pytest.fixture
-def launcher(exchange: Exchange) -> Generator[ThreadLauncher]:
-    with ThreadLauncher(exchange) as launcher:
-        yield launcher
-
-
-class Counter(Behavior):
-    def __init__(self) -> None:
-        self._count = 0
-
-    @action
-    def add(self, value: int) -> None:
-        self._count += value
-
-    @action
-    def count(self) -> int:
-        return self._count
-
-    @action
-    def fails(self) -> None:
-        raise Exception()
-
-
-def test_proxy_handle() -> None:
-    behavior = Counter()
+def test_proxy_handle_protocol() -> None:
+    behavior = EmptyBehavior()
     handle = ProxyHandle(behavior)
-
     assert isinstance(handle, Handle)
     assert str(behavior) in str(handle)
     assert repr(behavior) in repr(handle)
 
+
+def test_proxy_handle_actions() -> None:
+    handle = ProxyHandle(CounterBehavior())
     assert handle.action('add', 1).result() is None
     assert handle.action('count').result() == 1
-    assert handle.action('fails').exception() is not None
 
-    with pytest.raises(AttributeError, match='foo'):
-        handle.action('foo').result()
+
+def test_proxy_handle_errors() -> None:
+    handle = ProxyHandle(ErrorBehavior())
+    with pytest.raises(RuntimeError, match='This action always fails.'):
+        handle.action('fails').result()
+    with pytest.raises(AttributeError, match='null'):
+        handle.action('null').result()
 
 
 def test_unbound_remote_handle_serialize(exchange: Exchange) -> None:
@@ -200,7 +176,7 @@ def test_client_remote_handle_log_bad_response(
     launcher: ThreadLauncher,
 ) -> None:
     handle: RemoteHandle[Any]
-    with launcher.launch(Counter()) as handle:
+    with launcher.launch(EmptyBehavior()) as handle:
         client = handle.bind_as_client()
         assert client.hid is not None
         # Should log but not crash
@@ -230,34 +206,29 @@ def test_client_remote_handle_recv_thread_crash(exchange: Exchange) -> None:
         handle.close()
 
 
-def test_client_remote_handle_operations(launcher: ThreadLauncher) -> None:
-    behavior = Counter()
-    handle = launcher.launch(behavior).bind_as_client()
+def test_client_remote_handle_actions(launcher: ThreadLauncher) -> None:
+    with launcher.launch(CounterBehavior()).bind_as_client() as handle:
+        assert handle.ping() > 0
 
-    assert handle.ping() > 0
+        add_future: Future[None] = handle.action('add', 1)
+        add_future.result()
 
-    add_future: Future[None] = handle.action('add', 1)
-    add_future.result()
+        count_future: Future[int] = handle.action('count')
+        assert count_future.result() == 1
 
-    count_future: Future[int] = handle.action('count')
-    assert count_future.result() == 1
-
-    fails_future: Future[None] = handle.action('fails')
-    assert isinstance(fails_future.exception(), Exception)
-
-    handle.shutdown()
-
-    handle.close()
+        handle.shutdown()
 
 
-class Sleeper(Behavior):
-    @action
-    def sleep(self, sleep: float) -> None:
-        time.sleep(sleep)
+def test_client_remote_handle_errors(launcher: ThreadLauncher) -> None:
+    with launcher.launch(ErrorBehavior()).bind_as_client() as handle:
+        with pytest.raises(RuntimeError, match='This action always fails.'):
+            handle.action('fails').result()
+        with pytest.raises(AttributeError, match='null'):
+            handle.action('null').result()
 
 
 def test_client_remote_handle_wait_futures(launcher: ThreadLauncher) -> None:
-    behavior = Sleeper()
+    behavior = SleepBehavior()
     handle = launcher.launch(behavior).bind_as_client()
 
     future: Future[None] = handle.action('sleep', TEST_SLEEP)
@@ -266,7 +237,7 @@ def test_client_remote_handle_wait_futures(launcher: ThreadLauncher) -> None:
 
 
 def test_client_remote_handle_cancel_futures(launcher: ThreadLauncher) -> None:
-    behavior = Sleeper()
+    behavior = SleepBehavior()
     handle = launcher.launch(behavior).bind_as_client()
 
     future: Future[None] = handle.action('sleep', TEST_SLEEP)

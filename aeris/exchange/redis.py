@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 from typing import Any
 from typing import get_args
 
@@ -16,6 +17,11 @@ from aeris.exchange import ExchangeMixin
 from aeris.identifier import Identifier
 from aeris.message import BaseMessage
 from aeris.message import Message
+
+
+class _MailboxState(enum.Enum):
+    ACTIVE = 'ACTIVE'
+    INACTIVE = 'INACTIVE'
 
 
 class RedisExchange(ExchangeMixin):
@@ -42,7 +48,12 @@ class RedisExchange(ExchangeMixin):
         self.port = port
         self.timeout = timeout
         self._kwargs = kwargs
-        self._client = redis.Redis(host=hostname, port=port, **kwargs)
+        self._client = redis.Redis(
+            host=hostname,
+            port=port,
+            decode_responses=True,
+            **kwargs,
+        )
 
     def __getstate__(self) -> dict[str, Any]:
         return {
@@ -57,6 +68,7 @@ class RedisExchange(ExchangeMixin):
         self._client = redis.Redis(
             host=self.hostname,
             port=self.port,
+            decode_responses=True,
             **self._kwargs,
         )
 
@@ -88,7 +100,7 @@ class RedisExchange(ExchangeMixin):
         Args:
             uid: Entity identifier used as the mailbox address.
         """
-        self._client.set(self._active_key(uid), True)
+        self._client.set(self._active_key(uid), _MailboxState.ACTIVE.value)
 
     def close_mailbox(self, uid: Identifier) -> None:
         """Close the mailbox for an entity from the exchange.
@@ -99,7 +111,7 @@ class RedisExchange(ExchangeMixin):
         Args:
             uid: Entity identifier of the mailbox to close.
         """
-        self._client.set(self._active_key(uid), False)
+        self._client.set(self._active_key(uid), _MailboxState.INACTIVE.value)
         self._client.delete(self._queue_key(uid))
 
     def send(self, uid: Identifier, message: Message) -> None:
@@ -116,10 +128,10 @@ class RedisExchange(ExchangeMixin):
         status = self._client.get(self._active_key(uid))
         if status is None:
             raise BadIdentifierError(uid)
-        if status:
-            self._client.rpush(self._queue_key(uid), message.model_dump_json())
-        else:
+        elif status == _MailboxState.INACTIVE.value:
             raise MailboxClosedError(uid)
+        else:
+            self._client.rpush(self._queue_key(uid), message.model_dump_json())
 
     def recv(self, uid: Identifier) -> Message:
         """Receive the next message addressed to an entity.
@@ -139,7 +151,7 @@ class RedisExchange(ExchangeMixin):
             status = self._client.get(self._active_key(uid))
             if status is None:
                 raise BadIdentifierError(uid)
-            if not status:
+            elif status == _MailboxState.INACTIVE.value:
                 raise MailboxClosedError(uid)
 
             raw = self._client.blpop([self._queue_key(uid)], timeout=timeout)
@@ -152,7 +164,7 @@ class RedisExchange(ExchangeMixin):
                 continue
 
             # Only passed one key to blpop to result is [key, item]
-            assert isinstance(raw, list)
+            assert isinstance(raw, (tuple, list))
             assert len(raw) == 2  # noqa: PLR2004
             message = BaseMessage.model_from_json(raw[1])
             assert isinstance(message, get_args(Message))

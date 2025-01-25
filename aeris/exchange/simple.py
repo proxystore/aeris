@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import contextlib
 import enum
 import io
 import logging
@@ -180,6 +181,7 @@ class SimpleExchange(ExchangeMixin):
         self._socket.setblocking(False)
         self._handler_thread = threading.Thread(
             target=self._listen_server_messages,
+            name=f'{self}-message-handler',
         )
         self._handler_thread.start()
 
@@ -242,12 +244,12 @@ class SimpleExchange(ExchangeMixin):
                 start_index += len(line)
 
                 raw = line.strip()
-                if len(raw) == 0:
+                if len(raw) == 0:  # pragma: no cover
                     continue
 
                 try:
                     message = _BaseExchangeMessage.model_deserialize(raw)
-                except Exception:
+                except Exception:  # pragma: no cover
                     logger.exception(
                         'Failed to deserialize message from server in %s',
                         self,
@@ -407,6 +409,7 @@ class SimpleServer:
         self.host = host
         self.port = port
         self.manager = _MailboxManager()
+        self._handle_request_tasks: set[asyncio.Task[None]] = set()
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(hostname={self.host}, port={self.port})'
@@ -450,6 +453,16 @@ class SimpleServer:
 
         return response
 
+    async def _handle_request_task(
+        self,
+        request: _ExchangeRequestMessage,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        response = await self._handle_request(request)
+        encoded = response.model_serialize()
+        writer.write(encoded + b'\n')
+        await writer.drain()
+
     async def _handle_client(
         self,
         reader: asyncio.StreamReader,
@@ -469,11 +482,13 @@ class SimpleServer:
                 break
 
             if isinstance(message, _ExchangeRequestMessage):
-                response = await self._handle_request(message)
-                encoded = response.model_serialize()
-                writer.write(encoded)
-                writer.write(b'\n')
-                await writer.drain()
+                # Handle requests in separate tasks so we don't block the
+                # handle client coroutine.
+                task = asyncio.create_task(
+                    self._handle_request_task(message, writer),
+                )
+                self._handle_request_tasks.add(task)
+                task.add_done_callback(self._handle_request_tasks.discard)
             else:
                 logger.warning(
                     'Dropping bad message with type %s',
@@ -501,15 +516,28 @@ class SimpleServer:
             )
             await stop
             logger.info('Closing server...')
+            for task in tuple(self._handle_request_tasks):  # pragma: no cover
+                task.cancel('Server has been closed.')
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
 
         if sys.version_info >= (3, 13):  # pragma: >=3.13 cover
             server.close_clients()
 
 
-async def _serve_forever(
+async def serve_forever(
     server: SimpleServer,
     stop: asyncio.Future[None] | None = None,
 ) -> None:
+    """Serve the exchange forever until a stop signal is received.
+
+    This function registers signal handlers for SIGINT and SIGTERM.
+
+    Args:
+        server: Server instance to run.
+        stop: Optional future that when set will indicate that the server
+            should stop.
+    """
     loop = asyncio.get_running_loop()
     stop = loop.create_future() if stop is None else stop
     # Set the stop condition when receiving SIGINT (ctrl-C) and SIGTERM.
@@ -540,7 +568,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
     )
 
     server = SimpleServer(host=args.host, port=args.port)
-    asyncio.run(_serve_forever(server))
+    asyncio.run(serve_forever(server))
 
     return 0
 

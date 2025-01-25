@@ -568,7 +568,10 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
         if hid is None:
             hid = self.exchange.create_client()
         self.hid = hid
-        self._recv_thread = threading.Thread(target=self._recv_responses)
+        self._recv_thread = threading.Thread(
+            target=self._recv_responses,
+            name=f'{self}-message-handler',
+        )
         self._recv_thread.start()
 
     def _recv_responses(self) -> None:

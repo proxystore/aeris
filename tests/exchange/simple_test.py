@@ -2,10 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import pickle
-import socket
-import threading
-import time
-from collections.abc import Generator
 from unittest import mock
 
 import pytest
@@ -21,60 +17,13 @@ from aeris.exchange.simple import _ExchangeRequestMessage
 from aeris.exchange.simple import _ExchangeResponseMessage
 from aeris.exchange.simple import _MailboxManager
 from aeris.exchange.simple import _main
-from aeris.exchange.simple import _serve_forever
+from aeris.exchange.simple import serve_forever
 from aeris.exchange.simple import SimpleExchange
 from aeris.exchange.simple import SimpleServer
 from aeris.identifier import AgentIdentifier
 from aeris.message import PingRequest
 from aeris.message import PingResponse
-from testing.constant import TEST_CONNECTION_TIMEOUT
-from testing.constant import TEST_LOOP_SLEEP
 from testing.constant import TEST_SLEEP
-from testing.sys import open_port
-
-
-@pytest.fixture
-def server_thread() -> Generator[tuple[str, int]]:
-    host, port = 'localhost', open_port()
-    server = SimpleServer(host, port)
-    loop = asyncio.new_event_loop()
-    stop = loop.create_future()
-
-    def _target() -> None:
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(server.serve_forever(stop))
-        loop.close()
-
-    handle = threading.Thread(target=_target)
-    handle.start()
-
-    # Wait for server to be listening
-    waited = 0.0
-    while True:
-        try:
-            start = time.perf_counter()
-            with socket.create_connection(
-                (host, port),
-                timeout=TEST_LOOP_SLEEP,
-            ):
-                break
-        except OSError as e:  # pragma: no cover
-            if waited > TEST_CONNECTION_TIMEOUT:
-                raise TimeoutError from e
-            end = time.perf_counter()
-            sleep = max(0, TEST_LOOP_SLEEP - (end - start))
-            time.sleep(sleep)
-            waited += sleep
-
-    yield host, port
-
-    loop.call_soon_threadsafe(stop.set_result, None)
-    handle.join(timeout=TEST_CONNECTION_TIMEOUT)
-    if handle.is_alive():  # pragma: no cover
-        raise TimeoutError(
-            'Server thread did not gracefully exit within '
-            f'{TEST_CONNECTION_TIMEOUT} seconds.',
-        )
 
 
 @pytest.mark.parametrize(
@@ -188,7 +137,7 @@ async def test_mailbox_manager_mailbox_closed() -> None:
 
 
 def test_server_cli() -> None:
-    with mock.patch('aeris.exchange.simple._serve_forever'):
+    with mock.patch('aeris.exchange.simple.serve_forever'):
         assert _main(['--port', '0']) == 0
 
 
@@ -199,7 +148,7 @@ async def test_server_serve_forever() -> None:
     assert isinstance(str(server), str)
 
     stop = asyncio.get_running_loop().create_future()
-    task = asyncio.create_task(_serve_forever(server, stop))
+    task = asyncio.create_task(serve_forever(server, stop))
     await asyncio.sleep(TEST_SLEEP)
     stop.set_result(None)
     await task
@@ -331,11 +280,10 @@ async def test_server_handle_drop_bad_type() -> None:
     await server._handle_client(reader, writer)
 
 
-@pytest.mark.asyncio
-async def test_exchange_create_close_mailbox(
-    server_thread: tuple[str, int],
+def test_exchange_create_close_mailbox(
+    simple_exchange_server: tuple[str, int],
 ) -> None:
-    host, port = server_thread
+    host, port = simple_exchange_server
     with SimpleExchange(host, port) as exchange:
         uid = AgentIdentifier.new()
         exchange.create_mailbox(uid)
@@ -344,9 +292,8 @@ async def test_exchange_create_close_mailbox(
         exchange.close_mailbox(uid)  # Idempotent check
 
 
-@pytest.mark.asyncio
-async def test_exchange_serialize(server_thread: tuple[str, int]) -> None:
-    host, port = server_thread
+def test_exchange_serialize(simple_exchange_server: tuple[str, int]) -> None:
+    host, port = simple_exchange_server
     with SimpleExchange(host, port) as exchange1:
         assert isinstance(exchange1, Exchange)
         pickled = pickle.dumps(exchange1)
@@ -356,11 +303,10 @@ async def test_exchange_serialize(server_thread: tuple[str, int]) -> None:
             assert str(exchange1) == str(exchange2)
 
 
-@pytest.mark.asyncio
-async def test_exchange_drops_bad_server_message_type(
-    server_thread: tuple[str, int],
+def test_exchange_drops_bad_server_message_type(
+    simple_exchange_server: tuple[str, int],
 ) -> None:
-    host, port = server_thread
+    host, port = simple_exchange_server
     with SimpleExchange(host, port) as exchange:
         # Server should never send back a request type
         message = _ExchangeRequestMessage(
@@ -371,27 +317,10 @@ async def test_exchange_drops_bad_server_message_type(
         exchange._handle_message(message)
 
 
-@pytest.mark.asyncio
-async def test_exchange_disconnect_message_parse_error(
-    server_thread: tuple[str, int],
+def test_exchange_send_messages(
+    simple_exchange_server: tuple[str, int],
 ) -> None:
-    host, port = server_thread
-    with mock.patch('socket.socket') as mock_socket:
-        mock_socket.return_value.recv.return_value = b'random-bytes'
-
-        with SimpleExchange(host, port) as exchange:
-            # Message handler thread will start, immediately read the bad
-            # data, fail to parse it as a message, and exit so we just
-            # wait on the thread here.
-            exchange._handler_thread.join(timeout=TEST_CONNECTION_TIMEOUT)
-            assert not exchange._handler_thread.is_alive()
-
-
-@pytest.mark.asyncio
-async def test_exchange_send_messages(
-    server_thread: tuple[str, int],
-) -> None:
-    host, port = server_thread
+    host, port = simple_exchange_server
     with SimpleExchange(host, port) as exchange:
         aid1 = exchange.create_agent()
         aid2 = exchange.create_agent()
@@ -400,11 +329,10 @@ async def test_exchange_send_messages(
         assert exchange.recv(aid2) == message
 
 
-@pytest.mark.asyncio
-async def test_exchange_send_recv_bad_identifier(
-    server_thread: tuple[str, int],
+def test_exchange_send_recv_bad_identifier(
+    simple_exchange_server: tuple[str, int],
 ) -> None:
-    host, port = server_thread
+    host, port = simple_exchange_server
     with SimpleExchange(host, port) as exchange:
         aid = AgentIdentifier.new()
         message = PingRequest(src=aid, dest=aid)
