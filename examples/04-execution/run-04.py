@@ -14,6 +14,7 @@ from aeris.exchange.simple import SimpleExchange
 from aeris.exchange.simple import SimpleServer
 from aeris.handle import Handle
 from aeris.launcher.executor import ExecutorLauncher
+from aeris.logging import init_logging
 
 EXCHANGE_PORT = 5346
 logger = logging.getLogger(__name__)
@@ -53,11 +54,7 @@ def run_exchange_server() -> None:
 
 
 def main() -> int:
-    logging.basicConfig(
-        format='[%(asctime)s] %(levelname)-5s (%(name)s) :: %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        level=logging.INFO,
-    )
+    init_logging(logging.INFO)
 
     # Fork is not safe in multi-threaded context.
     multiprocessing.set_start_method('spawn')

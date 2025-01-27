@@ -57,6 +57,7 @@ from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import AsyncQueue
 from aeris.exchange.queue import QueueClosedError
 from aeris.identifier import Identifier
+from aeris.logging import init_logging
 from aeris.message import Message
 
 logger = logging.getLogger(__name__)
@@ -560,13 +561,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        format='[%(asctime)s] %(levelname)-5s (%(name)s) :: %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        level=args.log_level,
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
-
+    init_logging(args.log_level)
     server = SimpleServer(host=args.host, port=args.port)
     asyncio.run(serve_forever(server))
 

@@ -7,6 +7,7 @@ from aeris.behavior import action
 from aeris.behavior import Behavior
 from aeris.exchange.thread import ThreadExchange
 from aeris.launcher.thread import ThreadLauncher
+from aeris.logging import init_logging
 
 
 class Counter(Behavior):
@@ -25,7 +26,7 @@ class Counter(Behavior):
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.DEBUG)
+    init_logging(logging.DEBUG)
 
     behavior = Counter()
     exchange = ThreadExchange()

@@ -8,6 +8,7 @@ from aeris.behavior import Behavior
 from aeris.exchange.thread import ThreadExchange
 from aeris.handle import Handle
 from aeris.launcher.thread import ThreadLauncher
+from aeris.logging import init_logging
 
 
 class Coordinator(Behavior):
@@ -39,7 +40,7 @@ class Reverser(Behavior):
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.DEBUG)
+    init_logging(logging.DEBUG)
 
     with ThreadLauncher(ThreadExchange()) as launcher:
         lowerer = launcher.launch(Lowerer())
