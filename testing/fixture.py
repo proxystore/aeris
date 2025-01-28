@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import socket
 import threading
-import time
 from collections.abc import Generator
 
 import pytest
@@ -12,8 +10,8 @@ from aeris.exchange import Exchange
 from aeris.exchange.simple import SimpleServer
 from aeris.exchange.thread import ThreadExchange
 from aeris.launcher.thread import ThreadLauncher
+from aeris.socket import wait_connection
 from testing.constant import TEST_CONNECTION_TIMEOUT
-from testing.constant import TEST_LOOP_SLEEP
 from testing.sys import open_port
 
 
@@ -45,22 +43,7 @@ def simple_exchange_server() -> Generator[tuple[str, int]]:
     handle.start()
 
     # Wait for server to be listening
-    waited = 0.0
-    while True:
-        try:
-            start = time.perf_counter()
-            with socket.create_connection(
-                (host, port),
-                timeout=TEST_LOOP_SLEEP,
-            ):
-                break
-        except OSError as e:  # pragma: no cover
-            if waited > TEST_CONNECTION_TIMEOUT:
-                raise TimeoutError from e
-            end = time.perf_counter()
-            sleep = max(0, TEST_LOOP_SLEEP - (end - start))
-            time.sleep(sleep)
-            waited += sleep
+    wait_connection(host, port, timeout=TEST_CONNECTION_TIMEOUT)
 
     yield host, port
 

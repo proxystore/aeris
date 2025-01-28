@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import pickle
 from unittest import mock
 
@@ -20,10 +21,13 @@ from aeris.exchange.simple import _main
 from aeris.exchange.simple import serve_forever
 from aeris.exchange.simple import SimpleExchange
 from aeris.exchange.simple import SimpleServer
+from aeris.exchange.simple import spawn_simple_exchange
 from aeris.identifier import AgentIdentifier
 from aeris.message import PingRequest
 from aeris.message import PingResponse
+from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_SLEEP
+from testing.sys import open_port
 
 
 @pytest.mark.parametrize(
@@ -341,3 +345,13 @@ def test_exchange_send_recv_bad_identifier(
             exchange.send(aid, message)
         with pytest.raises(BadIdentifierError):
             exchange.recv(aid)
+
+
+def test_spawn_simple_exchange() -> None:
+    with spawn_simple_exchange(
+        'localhost',
+        open_port(),
+        level=logging.ERROR,
+        timeout=TEST_CONNECTION_TIMEOUT,
+    ) as exchange:
+        assert isinstance(exchange, SimpleExchange)
