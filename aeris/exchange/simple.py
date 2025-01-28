@@ -26,12 +26,14 @@ import contextlib
 import enum
 import io
 import logging
+import multiprocessing
 import pickle
 import signal
 import socket
 import sys
 import threading
 import uuid
+from collections.abc import Generator
 from collections.abc import Sequence
 from concurrent.futures import Future
 from typing import Any
@@ -59,6 +61,7 @@ from aeris.exchange.queue import QueueClosedError
 from aeris.identifier import Identifier
 from aeris.logging import init_logging
 from aeris.message import Message
+from aeris.socket import wait_connection
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +172,7 @@ class SimpleExchange(ExchangeMixin):
         self,
         hostname: str,
         port: int,
-        timeout: float = DEFAULT_SERVER_TIMEOUT,
+        timeout: float | None = DEFAULT_SERVER_TIMEOUT,
     ) -> None:
         self.hostname = hostname
         self.port = port
@@ -552,6 +555,76 @@ async def serve_forever(
     loop.remove_signal_handler(signal.SIGTERM)
 
 
+def _run(
+    host: str,
+    port: int,
+    *,
+    level: str | int = logging.INFO,
+    logfile: str | None = None,
+) -> None:
+    init_logging(level, logfile=logfile)
+    server = SimpleServer(host=host, port=port)
+    asyncio.run(serve_forever(server))
+
+
+@contextlib.contextmanager
+def spawn_simple_exchange(
+    host: str = '0.0.0.0',
+    port: int = 5463,
+    *,
+    level: int | str = logging.INFO,
+    timeout: float | None = None,
+) -> Generator[SimpleExchange]:
+    """Context manager that spawns a simple exchange in a subprocess.
+
+    This function spawns a new process (rather than forking) and wait to
+    return until a connection with the exchange has been established.
+    When exiting the context manager, `SIGINT` will be sent to the exchange
+    process. If the process does not exit within 5 seconds, it will be
+    killed.
+
+    Args:
+        host: Host the exchange should listen on.
+        port: Port the exchange should listen on.
+        level: Logging level.
+        timeout: Connection timeout when waiting for exchange to start.
+
+    Returns:
+        Exchange interface connected to the spawned exchange.
+    """
+    # Fork is not safe in multi-threaded context.
+    multiprocessing.set_start_method('spawn')
+
+    exchange_process = multiprocessing.Process(
+        target=_run,
+        args=(host, port),
+        kwargs={'level': level},
+    )
+    exchange_process.start()
+
+    logger.info('Starting exchange server...')
+    wait_connection(host, port, timeout=timeout)
+    logger.info('Started exchange server!')
+
+    try:
+        with SimpleExchange(host, port, timeout=timeout) as exchange:
+            yield exchange
+    finally:
+        logger.info('Terminating exchange server...')
+        wait = 5
+        exchange_process.terminate()
+        exchange_process.join(timeout=wait)
+        if exchange_process.exitcode is None:  # pragma: no cover
+            logger.info(
+                'Killing exchange server after waiting %s seconds',
+                wait,
+            )
+            exchange_process.kill()
+        else:
+            logger.info('Terminated exchange server!')
+        exchange_process.close()
+
+
 def _main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', default='0.0.0.0')
@@ -561,9 +634,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     args = parser.parse_args(argv)
 
-    init_logging(args.log_level)
-    server = SimpleServer(host=args.host, port=args.port)
-    asyncio.run(serve_forever(server))
+    _run(args.host, args.port, level=args.log_level)
 
     return 0
 
