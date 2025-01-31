@@ -39,9 +39,8 @@ class ThreadLauncher:
     scalability of agents.
     """
 
-    def __init__(self, exchange: Exchange) -> None:
+    def __init__(self) -> None:
         self._agents: dict[AgentIdentifier, _RunningAgent[Any]] = {}
-        self._exchange = exchange
 
     def __enter__(self) -> Self:
         return self
@@ -55,10 +54,10 @@ class ThreadLauncher:
         self.close()
 
     def __repr__(self) -> str:
-        return f'{type(self).__name__}(exchange={self._exchange!r})'
+        return f'{type(self).__name__}()'
 
     def __str__(self) -> str:
-        return f'{type(self).__name__}<{self._exchange}>'
+        return f'{type(self).__name__}<>'
 
     def close(self) -> None:
         """Close the launcher and shutdown agents."""
@@ -69,21 +68,31 @@ class ThreadLauncher:
             self._agents[aid].thread.join()
         logger.info('Closed %s', self)
 
-    def launch(self, behavior: BehaviorT) -> RemoteHandle[BehaviorT]:
+    def launch(
+        self,
+        behavior: BehaviorT,
+        exchange: Exchange,
+    ) -> RemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
         Args:
             behavior: Behavior the agent should implement.
+            exchange: Exchange the agent will use for messaging.
 
         Returns:
             Mailbox used to communicate with agent.
         """
-        aid = self._exchange.create_agent()
+        aid = exchange.create_agent()
 
-        agent = Agent(behavior, aid=aid, exchange=self._exchange)
+        agent = Agent(
+            behavior,
+            aid=aid,
+            exchange=exchange,
+            close_exchange=False,
+        )
         thread = threading.Thread(target=agent, name=f'{self}-{aid}')
         thread.start()
         self._agents[aid] = _RunningAgent(agent, thread)
         logger.info('Launched %s', agent)
 
-        return self._exchange.create_handle(aid)
+        return exchange.create_handle(aid)

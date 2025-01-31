@@ -42,11 +42,12 @@ class Reverser(Behavior):
 def main() -> int:
     init_logging(logging.DEBUG)
 
-    with ThreadLauncher(ThreadExchange()) as launcher:
-        lowerer = launcher.launch(Lowerer())
-        reverser = launcher.launch(Reverser())
+    with ThreadExchange() as exchange, ThreadLauncher() as launcher:
+        lowerer = launcher.launch(Lowerer(), exchange)
+        reverser = launcher.launch(Reverser(), exchange)
         coordinator = launcher.launch(
             Coordinator(lowerer, reverser),
+            exchange,
         ).bind_as_client()
 
         text = 'DEADBEEF'

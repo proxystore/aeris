@@ -9,8 +9,8 @@ from testing.behavior import SleepBehavior
 from testing.constant import TEST_LOOP_SLEEP
 
 
-def test_protocol(exchange: Exchange) -> None:
-    with ThreadLauncher(exchange) as launcher:
+def test_protocol() -> None:
+    with ThreadLauncher() as launcher:
         assert isinstance(launcher, Launcher)
         assert isinstance(repr(launcher), str)
         assert isinstance(str(launcher), str)
@@ -18,9 +18,9 @@ def test_protocol(exchange: Exchange) -> None:
 
 def test_launch_agents(exchange: Exchange) -> None:
     behavior = SleepBehavior(TEST_LOOP_SLEEP)
-    with ThreadLauncher(exchange) as launcher:
-        handle1 = launcher.launch(behavior).bind_as_client()
-        handle2 = launcher.launch(behavior).bind_as_client()
+    with ThreadLauncher() as launcher:
+        handle1 = launcher.launch(behavior, exchange).bind_as_client()
+        handle2 = launcher.launch(behavior, exchange).bind_as_client()
 
         time.sleep(5 * TEST_LOOP_SLEEP)
 

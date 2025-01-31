@@ -6,7 +6,6 @@ from collections.abc import Generator
 
 import pytest
 
-from aeris.exchange import Exchange
 from aeris.exchange.simple import SimpleServer
 from aeris.exchange.thread import ThreadExchange
 from aeris.launcher.thread import ThreadLauncher
@@ -16,14 +15,14 @@ from testing.sys import open_port
 
 
 @pytest.fixture
-def exchange() -> Generator[Exchange]:
+def exchange() -> Generator[ThreadExchange]:
     with ThreadExchange() as exchange:
         yield exchange
 
 
 @pytest.fixture
-def launcher(exchange: Exchange) -> Generator[ThreadLauncher]:
-    with ThreadLauncher(exchange) as launcher:
+def launcher() -> Generator[ThreadLauncher]:
+    with ThreadLauncher() as launcher:
         yield launcher
 
 
