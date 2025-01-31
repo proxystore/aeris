@@ -3,10 +3,8 @@ from __future__ import annotations
 import enum
 import logging
 import threading
-from concurrent.futures import as_completed
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import wait
 from typing import Any
 from typing import Generic
 from typing import get_args
@@ -34,12 +32,7 @@ logger = logging.getLogger(__name__)
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
-class _AgentMode(enum.Enum):
-    INDIVIDUAL = 'individual'
-    SYSTEM = 'system'
-
-
-class _AgentStatus(enum.Enum):
+class _AgentState(enum.Enum):
     INITIALIZED = 'initialized'
     STARTING = 'starting'
     RUNNING = 'running'
@@ -51,10 +44,16 @@ class _AgentStatus(enum.Enum):
 # of the Agent constructor.
 def _agent_trampoline(
     behavior: BehaviorT,
-    aid: AgentIdentifier | None = None,
-    exchange: Exchange | None = None,
+    aid: AgentIdentifier,
+    exchange: Exchange,
+    close_exchange: bool,
 ) -> Agent[BehaviorT]:
-    return Agent(behavior, aid=aid, exchange=exchange)
+    return Agent(
+        behavior,
+        aid=aid,
+        exchange=exchange,
+        close_exchange=close_exchange,
+    )
 
 
 class Agent(Generic[BehaviorT]):
@@ -64,43 +63,47 @@ class Agent(Generic[BehaviorT]):
     agent can operate independently or as part of a broader multi-agent
     system.
 
+    Note:
+        An agent can only be run once. After `shutdown()` is called, later
+        operations will raise a `RuntimeError`.
+
     Args:
         behavior: Behavior that the agent will exhibit.
         aid: Identifier of this agent in a multi-agent system.
         exchange: Message exchange of multi-agent system. The agent will close
             the exchange when it finished running.
+        close_exchange: Close the `exchange` object when the agent is
+            shutdown.
     """
 
     def __init__(
         self,
         behavior: BehaviorT,
         *,
-        aid: AgentIdentifier | None = None,
-        exchange: Exchange | None = None,
+        aid: AgentIdentifier,
+        exchange: Exchange,
+        close_exchange: bool = False,
     ) -> None:
-        self.aid = aid if aid is not None else AgentIdentifier.new()
+        self.aid = aid
         self.behavior = behavior
         self.exchange = exchange
-        self.done = threading.Event()
-
-        if self.exchange is None:
-            self._mode = _AgentMode.INDIVIDUAL
-        else:
-            self._mode = _AgentMode.SYSTEM
+        self.close_exchange = close_exchange
 
         self._actions = behavior.behavior_actions()
         self._loops = behavior.behavior_loops()
 
-        self._start_loops_lock = threading.Lock()
-        self._loop_futures: tuple[Future[None], ...] | None = None
-        self._action_pool = ThreadPoolExecutor()
+        self._shutdown = threading.Event()
+        self._state_lock = threading.Lock()
+        self._state = _AgentState.INITIALIZED
+
+        self._action_pool: ThreadPoolExecutor | None = None
         self._action_futures: dict[ActionRequest, Future[None]] = {}
+        self._loop_pool: ThreadPoolExecutor | None = None
+        self._loop_futures: set[Future[None]] = set()
         # The key in bound_handles is the identifier of the remote agent
         # the handle targets. Each running agent should only have a single
         # handle to any given remote agent.
         self._bound_handles: dict[Identifier, AgentRemoteHandle[Any]] = {}
-
-        self._status = _AgentStatus.INITIALIZED
 
     def __call__(self) -> None:
         """Alias for [run()][aeris.agent.Agent.run]."""
@@ -108,13 +111,10 @@ class Agent(Generic[BehaviorT]):
 
     def __repr__(self) -> str:
         name = type(self).__name__
-        if self._mode == _AgentMode.INDIVIDUAL:
-            return f'{name}(aid={self.aid!r}, behavior={self.behavior!r})'
-        else:
-            return (
-                f'{name}(aid={self.aid!r}, behavior={self.behavior!r}, '
-                f'exchange={self.exchange!r})'
-            )
+        return (
+            f'{name}(aid={self.aid!r}, behavior={self.behavior!r}, '
+            f'exchange={self.exchange!r})'
+        )
 
     def __str__(self) -> str:
         name = type(self).__name__
@@ -122,7 +122,10 @@ class Agent(Generic[BehaviorT]):
         return f'{name}<{behavior}; {self.aid}>'
 
     def __reduce__(self) -> Any:
-        return (_agent_trampoline, (self.behavior, self.aid, self.exchange))
+        return (
+            _agent_trampoline,
+            (self.behavior, self.aid, self.exchange, self.close_exchange),
+        )
 
     def _bind_handle(
         self,
@@ -163,7 +166,6 @@ class Agent(Generic[BehaviorT]):
                 raise AssertionError('Unreachable.')
 
     def _send_response(self, response: ResponseMessage) -> None:
-        assert self.exchange is not None
         try:
             self.exchange.send(response.dest, response)
         except (BadIdentifierError, MailboxClosedError):
@@ -198,6 +200,10 @@ class Agent(Generic[BehaviorT]):
 
     def _request_handler(self, request: RequestMessage) -> None:
         if isinstance(request, ActionRequest):
+            # The _request_handler should only be called within the message
+            # handler thread which is only started after the _action_pool
+            # is initialized.
+            assert self._action_pool is not None
             future = self._action_pool.submit(self._execute_action, request)
             self._action_futures[request] = future
             future.add_done_callback(
@@ -207,7 +213,7 @@ class Agent(Generic[BehaviorT]):
             logger.info('Ping request received by %s', self.aid)
             self._send_response(request.response())
         elif isinstance(request, ShutdownRequest):
-            self.shutdown()
+            self.signal_shutdown()
         else:
             raise AssertionError('Unreachable.')
 
@@ -220,7 +226,6 @@ class Agent(Generic[BehaviorT]):
             raise AssertionError('Unreachable.')
 
     def _message_listener(self) -> None:
-        assert self.exchange is not None
         logger.info('Message listener started for %s', self.aid)
 
         while True:
@@ -257,74 +262,113 @@ class Agent(Generic[BehaviorT]):
     def run(self) -> None:
         """Run the agent.
 
+        Starts the agent, waits for another thread to call `signal_shutdown()`,
+        and then shuts down the agent.
+
+        Raises:
+            Exception: Any exceptions raised inside threads.
+        """
+        try:
+            self.start()
+            self._shutdown.wait()
+        finally:
+            self.shutdown()
+
+    def start(self) -> None:
+        """Start the agent.
+
+        Note:
+            This method is idempotent; it will return if the agent is
+            already running. However, it will raise an error if the agent
+            is shutdown.
+
         1. Binds all unbound handles to remote agents to this agent.
         1. Calls [`Behavior.setup()`][aeris.behavior.Behavior.setup].
         1. Starts threads for all control loops defined on the agent's
            [`Behavior`][aeris.behavior.Behavior].
         1. Starts a thread for listening to messages from the
            [`Exchange`][aeris.exchange.Exchange] (if provided).
-        1. Waits for the threads to exit.
-        1. Calls [`Behavior.shutdown()`][aeris.behavior.Behavior.shutdown].
-        1. Closes the exchange.
 
         Raises:
-            BadMessageTypeError: if the agent receives a message that is not
-                a valid request type.
+            RuntimeError: If the agent has been shutdown.
         """
-        self._status = _AgentStatus.STARTING
-        self._bind_handles()
-        self.behavior.setup()
+        if self._state is _AgentState.SHUTDOWN:
+            raise RuntimeError('Agent has already been shutdown.')
+        elif self._state is _AgentState.RUNNING:
+            return
 
-        futures: list[Future[None]] = []
-        with ThreadPoolExecutor(max_workers=len(self._loops) + 1) as pool:
-            with self._start_loops_lock:
-                if self.exchange is not None:
-                    futures.append(pool.submit(self._message_listener))
+        with self._state_lock:
+            self._state = _AgentState.STARTING
+            self._bind_handles()
+            self.behavior.setup()
+            self._action_pool = ThreadPoolExecutor()
+            self._loop_pool = ThreadPoolExecutor(
+                max_workers=len(self._loops) + 1,
+            )
 
-                for method in self._loops.values():
-                    futures.append(pool.submit(method, self.done))
+            for method in self._loops.values():
+                loop_future = self._loop_pool.submit(method, self._shutdown)
+                self._loop_futures.add(loop_future)
 
-                self._loop_futures = tuple(futures)
-                self._status = _AgentStatus.RUNNING
+            listener_future = self._loop_pool.submit(self._message_listener)
+            self._loop_futures.add(listener_future)
 
-            logger.info('Started agent with %s', self.aid)
+            self._state = _AgentState.RUNNING
 
-            for future in as_completed(futures):
-                future.result()
-
-        self.behavior.shutdown()
-        if self.exchange is not None:
-            self.exchange.close()
-        self._status = _AgentStatus.SHUTDOWN
-        logger.info('Shutdown agent with %s', self.aid)
+        logger.info('Started agent with %s', self.aid)
 
     def shutdown(self) -> None:
-        """Notify control loops to shutdown.
+        """Shutdown the agent.
 
-        Sets the shutdown event passed to each control loop method and closes
-        the agent's mailbox in the exchange.
+        Note:
+            This method is idempotent.
+
+        1. Sets the shutdown [`Event`][threading.Event] passed to all control
+           loops.
+        1. Waits for any currently executing actions to complete.
+        1. Closes the agent's mailbox indicating that no further messages
+           will be processed.
+        1. Waits for the control loop and message listener threads to exit.
+        1. Optionally closes the exchange.
+        1. Calls [`Behavior.shutdown()`][aeris.behavior.Behavior.shutdown].
+
+        Raises:
+            Exception: Any exceptions raised inside threads.
         """
+        if self._state is _AgentState.SHUTDOWN:
+            return
+
         logger.info('Shutdown requested for %s', self.aid)
-        self.done.set()
-        self._status = _AgentStatus.TERMINTATING
+        with self._state_lock:
+            self._state = _AgentState.TERMINTATING
+            self._shutdown.set()
 
-        with self._start_loops_lock:
-            self._action_pool.shutdown()
-            if self.exchange is not None:
-                self.exchange.close_mailbox(self.aid)
+            # Wait for currently running actions to complete.
+            if self._action_pool is not None:
+                self._action_pool.shutdown(wait=True, cancel_futures=True)
 
-    def wait(self, timeout: float | None = None) -> None:
-        """Wait for control loops to exit.
+            # Cause the message listener thread to exit by closing the mailbox.
+            self.exchange.close_mailbox(self.aid)
 
-        Tip:
-            This should typically be called after
-            [`shutdown()`][aeris.agent.Agent.shutdown] has been called.
+            # Wait on all the loops, raising any exceptions.
+            for future in self._loop_futures:
+                future.result()
+            if self._loop_pool is not None:
+                self._loop_pool.shutdown()
 
-        Args:
-            timeout: How long to wait for threads to exit gracefully.
+            if self.close_exchange:
+                self.exchange.close()
+
+            self.behavior.shutdown()
+            self._state = _AgentState.SHUTDOWN
+
+        logger.info('Shutdown agent with %s', self.aid)
+
+    def signal_shutdown(self) -> None:
+        """Signal that the agent should exit.
+
+        If the agent has not started, this will cause the agent to immediately
+        shutdown when next started. If the agent is shutdown, this has no
+        effect.
         """
-        with self._start_loops_lock:
-            if self._loop_futures is None:
-                return
-
-            wait(self._loop_futures, timeout=timeout)
+        self._shutdown.set()

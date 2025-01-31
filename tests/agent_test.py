@@ -49,32 +49,34 @@ class SignalingBehavior(Behavior):
         shutdown.wait()
 
 
-def test_agent_run() -> None:
-    agent = Agent(SignalingBehavior())
-    assert isinstance(repr(agent), str)
-    assert isinstance(str(agent), str)
+def test_agent_start_shutdown(exchange: Exchange) -> None:
+    aid = exchange.create_agent()
+    agent = Agent(SignalingBehavior(), aid=aid, exchange=exchange)
 
-    def run() -> None:
-        agent()
-
-    thread = threading.Thread(target=run)
-    thread.start()
-    agent.behavior.setup_event.wait()
-    agent.behavior.loop_event.wait()
+    agent.start()
+    agent.start()  # Idempotency check.
     agent.shutdown()
-    agent.wait(timeout=TEST_THREAD_JOIN_TIMEOUT)
-    thread.join(timeout=TEST_THREAD_JOIN_TIMEOUT)
+    agent.shutdown()  # Idempotency check.
+
+    with pytest.raises(RuntimeError, match='Agent has already been shutdown.'):
+        agent.start()
 
     assert agent.behavior.setup_event.is_set()
     assert agent.behavior.shutdown_event.is_set()
 
 
-def test_agent_shutdown() -> None:
-    agent = Agent(SignalingBehavior())
+def test_agent_run_in_thread(exchange: Exchange) -> None:
+    aid = exchange.create_agent()
+    agent = Agent(SignalingBehavior(), aid=aid, exchange=exchange)
+    assert isinstance(repr(agent), str)
+    assert isinstance(str(agent), str)
 
-    agent.shutdown()
-    agent.wait()
-    agent.run()
+    thread = threading.Thread(target=agent)
+    thread.start()
+    agent.behavior.setup_event.wait()
+    agent.behavior.loop_event.wait()
+    agent.signal_shutdown()
+    thread.join(timeout=TEST_THREAD_JOIN_TIMEOUT)
 
     assert agent.behavior.setup_event.is_set()
     assert agent.behavior.shutdown_event.is_set()
@@ -192,8 +194,9 @@ def test_agent_action_message_unknown(exchange: Exchange) -> None:
     assert not thread.is_alive()
 
 
-def test_agent_log_bad_response() -> None:
-    agent = Agent(EmptyBehavior())
+def test_agent_log_bad_response(exchange: Exchange) -> None:
+    aid = exchange.create_agent()
+    agent = Agent(EmptyBehavior(), aid=aid, exchange=exchange)
     response = PingResponse(
         src=AgentIdentifier.new(),
         dest=AgentIdentifier.new(),
@@ -248,9 +251,12 @@ def test_agent_run_bind_handles(exchange: Exchange) -> None:
     )
     agent = Agent(behavior, aid=aid, exchange=exchange)
 
-    agent.shutdown()
-    agent.wait()
-    agent.run()  # Exits immediately because we called shutdown
+    agent._bind_handles()
+    agent._bind_handles()  # Idempotency check
+    agent.behavior.setup()
+    agent.behavior.shutdown()
+    # The client-bound and self-bound remote handles should be ignored.
+    assert len(agent._bound_handles) == 2  # noqa: PLR2004
 
 
 class DuplicateBindingsBehavior(Behavior):

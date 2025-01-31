@@ -87,7 +87,12 @@ class ExecutorLauncher:
         """
         aid = self._exchange.create_agent()
 
-        agent = Agent(behavior, aid=aid, exchange=self._exchange)
+        agent = Agent(
+            behavior,
+            aid=aid,
+            exchange=self._exchange,
+            close_exchange=True,
+        )
         future = self._executor.submit(agent)
         future.add_done_callback(self._callback)
         self._futures[future] = aid
