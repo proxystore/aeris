@@ -9,6 +9,7 @@ import pytest
 from aeris.exception import HandleClosedError
 from aeris.exception import HandleNotBoundError
 from aeris.exchange import Exchange
+from aeris.exchange.thread import ThreadExchange
 from aeris.handle import AgentRemoteHandle
 from aeris.handle import ClientRemoteHandle
 from aeris.handle import Handle
@@ -173,10 +174,12 @@ def test_client_remote_handle_bind(exchange: Exchange) -> None:
 
 
 def test_client_remote_handle_log_bad_response(
+    exchange: ThreadExchange,
     launcher: ThreadLauncher,
 ) -> None:
+    behavior = EmptyBehavior()
     handle: RemoteHandle[Any]
-    with launcher.launch(EmptyBehavior()) as handle:
+    with launcher.launch(behavior, exchange) as handle:
         client = handle.bind_as_client()
         assert client.hid is not None
         # Should log but not crash
@@ -206,8 +209,12 @@ def test_client_remote_handle_recv_thread_crash(exchange: Exchange) -> None:
         handle.close()
 
 
-def test_client_remote_handle_actions(launcher: ThreadLauncher) -> None:
-    with launcher.launch(CounterBehavior()).bind_as_client() as handle:
+def test_client_remote_handle_actions(
+    exchange: ThreadExchange,
+    launcher: ThreadLauncher,
+) -> None:
+    behavior = CounterBehavior()
+    with launcher.launch(behavior, exchange).bind_as_client() as handle:
         assert handle.ping() > 0
 
         add_future: Future[None] = handle.action('add', 1)
@@ -219,26 +226,36 @@ def test_client_remote_handle_actions(launcher: ThreadLauncher) -> None:
         handle.shutdown()
 
 
-def test_client_remote_handle_errors(launcher: ThreadLauncher) -> None:
-    with launcher.launch(ErrorBehavior()).bind_as_client() as handle:
+def test_client_remote_handle_errors(
+    exchange: ThreadExchange,
+    launcher: ThreadLauncher,
+) -> None:
+    behavior = ErrorBehavior()
+    with launcher.launch(behavior, exchange).bind_as_client() as handle:
         with pytest.raises(RuntimeError, match='This action always fails.'):
             handle.action('fails').result()
         with pytest.raises(AttributeError, match='null'):
             handle.action('null').result()
 
 
-def test_client_remote_handle_wait_futures(launcher: ThreadLauncher) -> None:
+def test_client_remote_handle_wait_futures(
+    exchange: ThreadExchange,
+    launcher: ThreadLauncher,
+) -> None:
     behavior = SleepBehavior()
-    handle = launcher.launch(behavior).bind_as_client()
+    handle = launcher.launch(behavior, exchange).bind_as_client()
 
     future: Future[None] = handle.action('sleep', TEST_SLEEP)
     handle.close(wait_futures=True)
     future.result(timeout=0)
 
 
-def test_client_remote_handle_cancel_futures(launcher: ThreadLauncher) -> None:
+def test_client_remote_handle_cancel_futures(
+    exchange: ThreadExchange,
+    launcher: ThreadLauncher,
+) -> None:
     behavior = SleepBehavior()
-    handle = launcher.launch(behavior).bind_as_client()
+    handle = launcher.launch(behavior, exchange).bind_as_client()
 
     future: Future[None] = handle.action('sleep', TEST_SLEEP)
     handle.close(wait_futures=False)

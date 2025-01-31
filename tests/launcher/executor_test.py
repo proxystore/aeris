@@ -14,9 +14,9 @@ from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_LOOP_SLEEP
 
 
-def test_protocol(exchange: Exchange) -> None:
+def test_protocol() -> None:
     executor = ThreadPoolExecutor(max_workers=1)
-    with ExecutorLauncher(exchange, executor) as launcher:
+    with ExecutorLauncher(executor) as launcher:
         assert isinstance(launcher, Launcher)
         assert isinstance(repr(launcher), str)
         assert isinstance(str(launcher), str)
@@ -25,9 +25,9 @@ def test_protocol(exchange: Exchange) -> None:
 def test_launch_agents_threads(exchange: Exchange) -> None:
     behavior = SleepBehavior(TEST_LOOP_SLEEP)
     executor = ThreadPoolExecutor(max_workers=2)
-    with ExecutorLauncher(exchange, executor) as launcher:
-        handle1 = launcher.launch(behavior).bind_as_client()
-        handle2 = launcher.launch(behavior).bind_as_client()
+    with ExecutorLauncher(executor) as launcher:
+        handle1 = launcher.launch(behavior, exchange).bind_as_client()
+        handle2 = launcher.launch(behavior, exchange).bind_as_client()
 
         time.sleep(5 * TEST_LOOP_SLEEP)
 
@@ -47,9 +47,9 @@ def test_launch_agents_processes(
     host, port = simple_exchange_server
 
     with SimpleExchange(host, port) as exchange:
-        with ExecutorLauncher(exchange, executor) as launcher:
-            handle1 = launcher.launch(behavior).bind_as_client()
-            handle2 = launcher.launch(behavior).bind_as_client()
+        with ExecutorLauncher(executor) as launcher:
+            handle1 = launcher.launch(behavior, exchange).bind_as_client()
+            handle2 = launcher.launch(behavior, exchange).bind_as_client()
 
             assert handle1.ping(timeout=TEST_CONNECTION_TIMEOUT) > 0
             assert handle2.ping(timeout=TEST_CONNECTION_TIMEOUT) > 0

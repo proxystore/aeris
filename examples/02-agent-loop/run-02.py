@@ -33,11 +33,9 @@ class Counter(Behavior):
 def main() -> int:
     init_logging(logging.DEBUG)
 
-    behavior = Counter()
-    exchange = ThreadExchange()
-
-    with ThreadLauncher(exchange) as launcher:
-        agent = launcher.launch(behavior).bind_as_client()
+    with ThreadExchange() as exchange, ThreadLauncher() as launcher:
+        behavior = Counter()
+        agent = launcher.launch(behavior, exchange).bind_as_client()
 
         time.sleep(2)
 

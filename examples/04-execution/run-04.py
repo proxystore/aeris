@@ -59,17 +59,15 @@ def main() -> int:
         # any concurrent.futures.Executor (here, a ProcessPoolExecutor) to
         # execute agents. The launcher is initialized to use the simple
         # exchange that we just set up for agent and client communication.
-        with ExecutorLauncher(
-            exchange=exchange,
-            executor=ProcessPoolExecutor(max_workers=3),
-        ) as launcher:
+        with ExecutorLauncher(ProcessPoolExecutor(max_workers=3)) as launcher:
             # Initialize and launch each of the three agents. The
             # bind_as_client method returns a client handle to the agent that
             # can be used to send commands to that agent.
-            lowerer = launcher.launch(Lowerer()).bind_as_client()
-            reverser = launcher.launch(Reverser()).bind_as_client()
+            lowerer = launcher.launch(Lowerer(), exchange).bind_as_client()
+            reverser = launcher.launch(Reverser(), exchange).bind_as_client()
             coordinator = launcher.launch(
                 Coordinator(lowerer, reverser),
+                exchange,
             ).bind_as_client()
 
             text = 'DEADBEEF'
