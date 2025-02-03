@@ -83,7 +83,7 @@ class ExecutorLauncher:
             exchange: Exchange the agent will use for messaging.
 
         Returns:
-            Mailbox used to communicate with agent.
+            Handle (unbound) used to interact with the agent.
         """
         aid = exchange.create_agent()
 
