@@ -9,6 +9,7 @@ from aeris.exchange.thread import ThreadExchange
 from aeris.handle import Handle
 from aeris.launcher.thread import ThreadLauncher
 from aeris.logging import init_logging
+from aeris.manager import Manager
 
 
 class Coordinator(Behavior):
@@ -42,23 +43,19 @@ class Reverser(Behavior):
 def main() -> int:
     init_logging(logging.DEBUG)
 
-    with ThreadExchange() as exchange, ThreadLauncher() as launcher:
-        lowerer = launcher.launch(Lowerer(), exchange)
-        reverser = launcher.launch(Reverser(), exchange)
-        coordinator = launcher.launch(
-            Coordinator(lowerer, reverser),
-            exchange,
-        ).bind_as_client()
+    with Manager(
+        exchange=ThreadExchange(),
+        launcher=ThreadLauncher(),
+    ) as manager:
+        lowerer = manager.launch(Lowerer())
+        reverser = manager.launch(Reverser())
+        coordinator = manager.launch(Coordinator(lowerer, reverser))
 
         text = 'DEADBEEF'
         expected = 'feebdaed'
 
         future: Future[str] = coordinator.action('process', text)
         assert future.result() == expected
-
-        coordinator.close()
-        reverser.close()
-        lowerer.close()
 
     return 0
 

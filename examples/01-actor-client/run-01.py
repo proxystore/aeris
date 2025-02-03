@@ -8,6 +8,7 @@ from aeris.behavior import Behavior
 from aeris.exchange.thread import ThreadExchange
 from aeris.launcher.thread import ThreadLauncher
 from aeris.logging import init_logging
+from aeris.manager import Manager
 
 
 class Counter(Behavior):
@@ -28,9 +29,12 @@ class Counter(Behavior):
 def main() -> int:
     init_logging(logging.DEBUG)
 
-    with ThreadExchange() as exchange, ThreadLauncher() as launcher:
+    with Manager(
+        exchange=ThreadExchange(),
+        launcher=ThreadLauncher(),
+    ) as manager:
         behavior = Counter()
-        agent = launcher.launch(behavior, exchange).bind_as_client()
+        agent = manager.launch(behavior)
 
         future: Future[int] = agent.action('get_count')
         assert future.result() == 0
@@ -39,8 +43,6 @@ def main() -> int:
 
         future = agent.action('get_count')
         assert future.result() == 1
-
-        agent.close()
 
     return 0
 
