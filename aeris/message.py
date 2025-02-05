@@ -29,7 +29,7 @@ class BaseMessage(BaseModel):
         and message ID.
 
     Args:
-        mid: Unique message ID.
+        tag: Unique message tag. Used to match requests and responses.
         src: Source entity.
         dest: Destination entity.
     """
@@ -42,12 +42,12 @@ class BaseMessage(BaseModel):
         validate_default=True,
     )
 
-    mid: uuid.UUID = Field(default_factory=uuid.uuid4)
+    tag: uuid.UUID = Field(default_factory=uuid.uuid4)
     src: Identifier
     dest: Identifier
 
     def __hash__(self) -> int:
-        return hash(type(self)) + hash(self.mid)
+        return hash(type(self)) + hash(self.tag)
 
     @classmethod
     def model_from_json(cls, data: str) -> Message:
@@ -102,7 +102,7 @@ class ActionRequest(BaseMessage):
             exception: Error of the action.
         """
         return ActionResponse(
-            mid=self.mid,
+            tag=self.tag,
             src=self.dest,
             dest=self.src,
             action=self.action,
@@ -117,7 +117,7 @@ class ActionRequest(BaseMessage):
             result: Result of the action.
         """
         return ActionResponse(
-            mid=self.mid,
+            tag=self.tag,
             src=self.dest,
             dest=self.src,
             action=self.action,
@@ -165,7 +165,7 @@ class ActionResponse(BaseMessage):
         if not isinstance(other, ActionResponse):
             return False
         return (
-            self.mid == other.mid
+            self.tag == other.tag
             and self.src == other.src
             and self.dest == other.dest
             and self.action == other.action
@@ -185,7 +185,7 @@ class PingRequest(BaseMessage):
     def response(self) -> PingResponse:
         """Construct a ping response message."""
         return PingResponse(
-            mid=self.mid,
+            tag=self.tag,
             src=self.dest,
             dest=self.src,
             exception=None,
@@ -198,7 +198,7 @@ class PingRequest(BaseMessage):
             exception: Error of the action.
         """
         return PingResponse(
-            mid=self.mid,
+            tag=self.tag,
             src=self.dest,
             dest=self.src,
             exception=exception,
@@ -229,7 +229,7 @@ class PingResponse(BaseMessage):
         if not isinstance(other, PingResponse):
             return False
         return (
-            self.mid == other.mid
+            self.tag == other.tag
             and self.src == other.src
             and self.dest == other.dest
             # Custom __eq__ is required because exception instances need
@@ -257,7 +257,7 @@ class ShutdownRequest(BaseMessage):
     def response(self) -> ShutdownResponse:
         """Construct a shutdown response message."""
         return ShutdownResponse(
-            mid=self.mid,
+            tag=self.tag,
             src=self.dest,
             dest=self.src,
             exception=None,
@@ -270,7 +270,7 @@ class ShutdownRequest(BaseMessage):
             exception: Error of the action.
         """
         return ShutdownResponse(
-            mid=self.mid,
+            tag=self.tag,
             src=self.dest,
             dest=self.src,
             exception=exception,
@@ -301,7 +301,7 @@ class ShutdownResponse(BaseMessage):
         if not isinstance(other, ShutdownResponse):
             return False
         return (
-            self.mid == other.mid
+            self.tag == other.tag
             and self.src == other.src
             and self.dest == other.dest
             # Custom __eq__ is required because exception instances need

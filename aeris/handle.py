@@ -199,7 +199,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
 
     def _process_response(self, response: ResponseMessage) -> None:
         if isinstance(response, (ActionResponse, PingResponse)):
-            future = self._futures.pop(response.mid)
+            future = self._futures.pop(response.tag)
             if response.exception is not None:
                 future.set_exception(response.exception)
             elif isinstance(response, ActionResponse):
@@ -314,7 +314,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
             kwargs=kwargs,
         )
         future: Future[R] = Future()
-        self._futures[request.mid] = future
+        self._futures[request.tag] = future
         self._send_request(request)
         logger.debug(
             'Sent action request from %s to %s (action=%r)',
@@ -353,7 +353,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
         start = time.perf_counter()
         request = PingRequest(src=self.mailbox_id, dest=self.agent_id)
         future: Future[None] = Future()
-        self._futures[request.mid] = future
+        self._futures[request.tag] = future
         self._send_request(request)
         logger.debug('Sent ping from %s to %s', self.mailbox_id, self.agent_id)
         future.result(timeout=timeout)
