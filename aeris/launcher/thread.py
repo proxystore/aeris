@@ -82,17 +82,17 @@ class ThreadLauncher:
         Returns:
             Mailbox used to communicate with agent.
         """
-        aid = exchange.create_agent()
+        agent_id = exchange.create_agent()
 
         agent = Agent(
             behavior,
-            aid=aid,
+            agent_id=agent_id,
             exchange=exchange,
             close_exchange=False,
         )
-        thread = threading.Thread(target=agent, name=f'{self}-{aid}')
+        thread = threading.Thread(target=agent, name=f'{self}-{agent_id}')
         thread.start()
-        self._agents[aid] = _RunningAgent(agent, thread)
+        self._agents[agent_id] = _RunningAgent(agent, thread)
         logger.info('Launched %s', agent)
 
-        return exchange.create_handle(aid)
+        return exchange.create_handle(agent_id)

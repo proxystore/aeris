@@ -29,9 +29,13 @@ class BaseMessage(BaseModel):
         and message ID.
 
     Args:
-        mid: Unique message ID.
-        src: Source entity.
-        dest: Destination entity.
+        tag: Unique message tag. Used to match requests and responses.
+        src: Source mailbox identifier.
+        dest: Destination mailbox identifier.
+        label: Optional label used to disambiguate response messages when
+            multiple objects (i.e., handles) share the same mailbox.
+            Note that is is distinct from the tag which is just for matching
+            requests to responses.
     """
 
     model_config = ConfigDict(
@@ -42,12 +46,13 @@ class BaseMessage(BaseModel):
         validate_default=True,
     )
 
-    mid: uuid.UUID = Field(default_factory=uuid.uuid4)
+    tag: uuid.UUID = Field(default_factory=uuid.uuid4)
     src: Identifier
     dest: Identifier
+    label: Optional[uuid.UUID] = Field(None)  # noqa: UP007
 
     def __hash__(self) -> int:
-        return hash(type(self)) + hash(self.mid)
+        return hash(type(self)) + hash(self.tag) + hash(self.label)
 
     @classmethod
     def model_from_json(cls, data: str) -> Message:
@@ -102,9 +107,10 @@ class ActionRequest(BaseMessage):
             exception: Error of the action.
         """
         return ActionResponse(
-            mid=self.mid,
+            tag=self.tag,
             src=self.dest,
             dest=self.src,
+            label=self.label,
             action=self.action,
             result=None,
             exception=exception,
@@ -117,9 +123,10 @@ class ActionRequest(BaseMessage):
             result: Result of the action.
         """
         return ActionResponse(
-            mid=self.mid,
+            tag=self.tag,
             src=self.dest,
             dest=self.src,
+            label=self.label,
             action=self.action,
             result=result,
             exception=None,
@@ -165,9 +172,10 @@ class ActionResponse(BaseMessage):
         if not isinstance(other, ActionResponse):
             return False
         return (
-            self.mid == other.mid
+            self.tag == other.tag
             and self.src == other.src
             and self.dest == other.dest
+            and self.label == other.label
             and self.action == other.action
             and self.result == other.result
             # Custom __eq__ is required because exception instances need
@@ -185,9 +193,10 @@ class PingRequest(BaseMessage):
     def response(self) -> PingResponse:
         """Construct a ping response message."""
         return PingResponse(
-            mid=self.mid,
+            tag=self.tag,
             src=self.dest,
             dest=self.src,
+            label=self.label,
             exception=None,
         )
 
@@ -198,9 +207,10 @@ class PingRequest(BaseMessage):
             exception: Error of the action.
         """
         return PingResponse(
-            mid=self.mid,
+            tag=self.tag,
             src=self.dest,
             dest=self.src,
+            label=self.label,
             exception=exception,
         )
 
@@ -229,9 +239,10 @@ class PingResponse(BaseMessage):
         if not isinstance(other, PingResponse):
             return False
         return (
-            self.mid == other.mid
+            self.tag == other.tag
             and self.src == other.src
             and self.dest == other.dest
+            and self.label == other.label
             # Custom __eq__ is required because exception instances need
             # to be compared by type. I.e., Exception() == Exception() is
             # always False.
@@ -257,9 +268,10 @@ class ShutdownRequest(BaseMessage):
     def response(self) -> ShutdownResponse:
         """Construct a shutdown response message."""
         return ShutdownResponse(
-            mid=self.mid,
+            tag=self.tag,
             src=self.dest,
             dest=self.src,
+            label=self.label,
             exception=None,
         )
 
@@ -270,9 +282,10 @@ class ShutdownRequest(BaseMessage):
             exception: Error of the action.
         """
         return ShutdownResponse(
-            mid=self.mid,
+            tag=self.tag,
             src=self.dest,
             dest=self.src,
+            label=self.label,
             exception=exception,
         )
 
@@ -301,7 +314,7 @@ class ShutdownResponse(BaseMessage):
         if not isinstance(other, ShutdownResponse):
             return False
         return (
-            self.mid == other.mid
+            self.tag == other.tag
             and self.src == other.src
             and self.dest == other.dest
             # Custom __eq__ is required because exception instances need

@@ -10,11 +10,10 @@ from aeris.behavior import action
 from aeris.behavior import Behavior
 from aeris.behavior import loop
 from aeris.exchange import Exchange
-from aeris.handle import AgentRemoteHandle
+from aeris.handle import BoundRemoteHandle
 from aeris.handle import ClientRemoteHandle
 from aeris.handle import Handle
 from aeris.handle import UnboundRemoteHandle
-from aeris.identifier import AgentIdentifier
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
 from aeris.message import PingRequest
@@ -50,8 +49,8 @@ class SignalingBehavior(Behavior):
 
 
 def test_agent_start_shutdown(exchange: Exchange) -> None:
-    aid = exchange.create_agent()
-    agent = Agent(SignalingBehavior(), aid=aid, exchange=exchange)
+    agent_id = exchange.create_agent()
+    agent = Agent(SignalingBehavior(), agent_id=agent_id, exchange=exchange)
 
     agent.start()
     agent.start()  # Idempotency check.
@@ -65,9 +64,19 @@ def test_agent_start_shutdown(exchange: Exchange) -> None:
     assert agent.behavior.shutdown_event.is_set()
 
 
+def test_agent_shutdown_without_start(exchange: Exchange) -> None:
+    agent_id = exchange.create_agent()
+    agent = Agent(SignalingBehavior(), agent_id=agent_id, exchange=exchange)
+
+    agent.shutdown()
+
+    assert not agent.behavior.setup_event.is_set()
+    assert agent.behavior.shutdown_event.is_set()
+
+
 def test_agent_run_in_thread(exchange: Exchange) -> None:
-    aid = exchange.create_agent()
-    agent = Agent(SignalingBehavior(), aid=aid, exchange=exchange)
+    agent_id = exchange.create_agent()
+    agent = Agent(SignalingBehavior(), agent_id=agent_id, exchange=exchange)
     assert isinstance(repr(agent), str)
     assert isinstance(str(agent), str)
 
@@ -83,125 +92,120 @@ def test_agent_run_in_thread(exchange: Exchange) -> None:
 
 
 def test_agent_shutdown_message(exchange: Exchange) -> None:
-    aid = exchange.create_agent()
-    cid = exchange.create_client()
+    agent_id = exchange.create_agent()
+    client_id = exchange.create_client()
 
-    agent = Agent(EmptyBehavior(), aid=aid, exchange=exchange)
+    agent = Agent(EmptyBehavior(), agent_id=agent_id, exchange=exchange)
     thread = threading.Thread(target=agent)
     thread.start()
 
-    shutdown = ShutdownRequest(src=cid, dest=aid)
-    exchange.send(aid, shutdown)
+    shutdown = ShutdownRequest(src=client_id, dest=agent_id)
+    exchange.send(agent_id, shutdown)
 
     thread.join(timeout=TEST_THREAD_JOIN_TIMEOUT)
     assert not thread.is_alive()
 
 
 def test_agent_ping_message(exchange: Exchange) -> None:
-    aid = exchange.create_agent()
-    cid = exchange.create_client()
+    agent_id = exchange.create_agent()
+    client_id = exchange.create_client()
 
-    agent = Agent(EmptyBehavior(), aid=aid, exchange=exchange)
+    agent = Agent(EmptyBehavior(), agent_id=agent_id, exchange=exchange)
     assert isinstance(repr(agent), str)
     assert isinstance(str(agent), str)
 
     thread = threading.Thread(target=agent)
     thread.start()
 
-    ping = PingRequest(src=cid, dest=aid)
-    exchange.send(aid, ping)
-    message = exchange.recv(cid)
+    ping = PingRequest(src=client_id, dest=agent_id)
+    exchange.send(agent_id, ping)
+    message = exchange.recv(client_id)
     assert isinstance(message, PingResponse)
 
-    shutdown = ShutdownRequest(src=cid, dest=aid)
-    exchange.send(aid, shutdown)
+    shutdown = ShutdownRequest(src=client_id, dest=agent_id)
+    exchange.send(agent_id, shutdown)
 
     thread.join(timeout=TEST_THREAD_JOIN_TIMEOUT)
     assert not thread.is_alive()
 
 
 def test_agent_action_message(exchange: Exchange) -> None:
-    aid = exchange.create_agent()
-    cid = exchange.create_client()
+    agent_id = exchange.create_agent()
+    client_id = exchange.create_client()
 
-    agent = Agent(CounterBehavior(), aid=aid, exchange=exchange)
+    agent = Agent(CounterBehavior(), agent_id=agent_id, exchange=exchange)
     thread = threading.Thread(target=agent)
     thread.start()
 
     value = 42
-    request = ActionRequest(src=cid, dest=aid, action='add', args=(value,))
-    exchange.send(aid, request)
-    message = exchange.recv(cid)
+    request = ActionRequest(
+        src=client_id,
+        dest=agent_id,
+        action='add',
+        args=(value,),
+    )
+    exchange.send(agent_id, request)
+    message = exchange.recv(client_id)
     assert isinstance(message, ActionResponse)
     assert message.exception is None
     assert message.result is None
 
-    request = ActionRequest(src=cid, dest=aid, action='count')
-    exchange.send(aid, request)
-    message = exchange.recv(cid)
+    request = ActionRequest(src=client_id, dest=agent_id, action='count')
+    exchange.send(agent_id, request)
+    message = exchange.recv(client_id)
     assert isinstance(message, ActionResponse)
     assert message.exception is None
     assert message.result == value
 
-    shutdown = ShutdownRequest(src=cid, dest=aid)
-    exchange.send(aid, shutdown)
+    shutdown = ShutdownRequest(src=client_id, dest=agent_id)
+    exchange.send(agent_id, shutdown)
 
     thread.join(timeout=TEST_THREAD_JOIN_TIMEOUT)
     assert not thread.is_alive()
 
 
 def test_agent_action_message_error(exchange: Exchange) -> None:
-    aid = exchange.create_agent()
-    cid = exchange.create_client()
+    agent_id = exchange.create_agent()
+    client_id = exchange.create_client()
 
-    agent = Agent(ErrorBehavior(), aid=aid, exchange=exchange)
+    agent = Agent(ErrorBehavior(), agent_id=agent_id, exchange=exchange)
     thread = threading.Thread(target=agent)
     thread.start()
 
-    request = ActionRequest(src=cid, dest=aid, action='fails')
-    exchange.send(aid, request)
-    message = exchange.recv(cid)
+    request = ActionRequest(src=client_id, dest=agent_id, action='fails')
+    exchange.send(agent_id, request)
+    message = exchange.recv(client_id)
     assert isinstance(message, ActionResponse)
     assert isinstance(message.exception, RuntimeError)
     assert 'This action always fails.' in str(message.exception)
 
-    shutdown = ShutdownRequest(src=cid, dest=aid)
-    exchange.send(aid, shutdown)
+    shutdown = ShutdownRequest(src=client_id, dest=agent_id)
+    exchange.send(agent_id, shutdown)
 
     thread.join(timeout=TEST_THREAD_JOIN_TIMEOUT)
     assert not thread.is_alive()
 
 
 def test_agent_action_message_unknown(exchange: Exchange) -> None:
-    aid = exchange.create_agent()
-    cid = exchange.create_client()
+    agent_id = exchange.create_agent()
+    client_id = exchange.create_client()
 
-    agent = Agent(EmptyBehavior(), aid=aid, exchange=exchange)
+    agent = Agent(EmptyBehavior(), agent_id=agent_id, exchange=exchange)
     thread = threading.Thread(target=agent)
     thread.start()
 
-    request = ActionRequest(src=cid, dest=aid, action='null')
-    exchange.send(aid, request)
-    message = exchange.recv(cid)
+    request = ActionRequest(src=client_id, dest=agent_id, action='null')
+    exchange.send(agent_id, request)
+    message = exchange.recv(client_id)
     assert isinstance(message, ActionResponse)
     assert isinstance(message.exception, AttributeError)
     assert 'null' in str(message.exception)
 
-    shutdown = ShutdownRequest(src=cid, dest=aid)
-    exchange.send(aid, shutdown)
+    shutdown = ShutdownRequest(src=client_id, dest=agent_id)
+    exchange.send(agent_id, shutdown)
 
     thread.join(timeout=TEST_THREAD_JOIN_TIMEOUT)
     assert not thread.is_alive()
-
-
-def test_agent_log_bad_response(exchange: Exchange) -> None:
-    aid = exchange.create_agent()
-    agent = Agent(EmptyBehavior(), aid=aid, exchange=exchange)
-    response = PingResponse(
-        src=AgentIdentifier.new(),
-        dest=AgentIdentifier.new(),
-    )
-    agent._response_handler(response)
 
 
 class HandleBindingBehavior(Behavior):
@@ -209,8 +213,8 @@ class HandleBindingBehavior(Behavior):
         self,
         unbound: UnboundRemoteHandle[EmptyBehavior],
         client_bound: ClientRemoteHandle[EmptyBehavior],
-        agent_bound: AgentRemoteHandle[EmptyBehavior],
-        self_bound: AgentRemoteHandle[EmptyBehavior],
+        agent_bound: BoundRemoteHandle[EmptyBehavior],
+        self_bound: BoundRemoteHandle[EmptyBehavior],
     ) -> None:
         self.unbound = unbound
         self.client_bound = client_bound
@@ -218,13 +222,17 @@ class HandleBindingBehavior(Behavior):
         self.self_bound = self_bound
 
     def setup(self) -> None:
-        assert isinstance(self.unbound, AgentRemoteHandle)
+        assert isinstance(self.unbound, BoundRemoteHandle)
         assert isinstance(self.client_bound, ClientRemoteHandle)
-        assert isinstance(self.agent_bound, AgentRemoteHandle)
-        assert isinstance(self.self_bound, AgentRemoteHandle)
+        assert isinstance(self.agent_bound, BoundRemoteHandle)
+        assert isinstance(self.self_bound, BoundRemoteHandle)
 
-        assert self.unbound.hid is not None
-        assert self.unbound.hid == self.agent_bound.hid == self.self_bound.hid
+        assert self.unbound.mailbox_id is not None
+        assert (
+            self.unbound.mailbox_id
+            == self.agent_bound.mailbox_id
+            == self.self_bound.mailbox_id
+        )
 
     def shutdown(self) -> None:
         self.unbound.close()
@@ -234,56 +242,29 @@ class HandleBindingBehavior(Behavior):
 
 
 def test_agent_run_bind_handles(exchange: Exchange) -> None:
-    aid = exchange.create_agent()
+    agent_id = exchange.create_agent()
     behavior = HandleBindingBehavior(
         unbound=UnboundRemoteHandle(exchange, exchange.create_agent()),
         client_bound=ClientRemoteHandle(exchange, exchange.create_agent()),
-        agent_bound=AgentRemoteHandle(
+        agent_bound=BoundRemoteHandle(
             exchange,
             exchange.create_agent(),
             exchange.create_agent(),
         ),
-        self_bound=AgentRemoteHandle(
+        self_bound=BoundRemoteHandle(
             exchange,
             exchange.create_agent(),
-            aid,
+            agent_id,
         ),
     )
-    agent = Agent(behavior, aid=aid, exchange=exchange)
+    agent = Agent(behavior, agent_id=agent_id, exchange=exchange)
 
     agent._bind_handles()
     agent._bind_handles()  # Idempotency check
     agent.behavior.setup()
     agent.behavior.shutdown()
     # The client-bound and self-bound remote handles should be ignored.
-    assert len(agent._bound_handles) == 2  # noqa: PLR2004
-
-
-class DuplicateBindingsBehavior(Behavior):
-    def __init__(
-        self,
-        handle1: UnboundRemoteHandle[EmptyBehavior],
-        handle2: UnboundRemoteHandle[EmptyBehavior],
-    ) -> None:
-        self.handle1 = handle1
-        self.handle2 = handle2
-
-
-def test_agent_run_duplicate_handles_error(exchange: Exchange) -> None:
-    self_aid = exchange.create_agent()
-    remote_aid = exchange.create_agent()
-    behavior = DuplicateBindingsBehavior(
-        handle1=UnboundRemoteHandle(exchange, remote_aid),
-        handle2=UnboundRemoteHandle(exchange, remote_aid),
-    )
-    agent = Agent(behavior, aid=self_aid, exchange=exchange)
-
-    error = (
-        f'{agent} already has a handle bound to a remote agent '
-        f'with {remote_aid}.'
-    )
-    with pytest.raises(RuntimeError, match=error):
-        agent.run()
+    assert len(agent._multiplexer.bound_handles) == 2  # noqa: PLR2004
 
 
 class RunBehavior(Behavior):
@@ -291,7 +272,7 @@ class RunBehavior(Behavior):
         self.doubler = doubler
 
     def shutdown(self) -> None:
-        assert isinstance(self.doubler, AgentRemoteHandle)
+        assert isinstance(self.doubler, BoundRemoteHandle)
         self.doubler.shutdown()
 
     @action
@@ -319,8 +300,16 @@ def test_agent_to_handle_handles(exchange: Exchange) -> None:
     runner_behavior = RunBehavior(doubler_handle)
     doubler_behavior = DoubleBehavior()
 
-    runner_agent = Agent(runner_behavior, aid=runner_id, exchange=exchange)
-    doubler_agent = Agent(doubler_behavior, aid=doubler_id, exchange=exchange)
+    runner_agent = Agent(
+        runner_behavior,
+        agent_id=runner_id,
+        exchange=exchange,
+    )
+    doubler_agent = Agent(
+        doubler_behavior,
+        agent_id=doubler_id,
+        exchange=exchange,
+    )
 
     runner_thread = threading.Thread(target=runner_agent)
     doubler_thread = threading.Thread(target=doubler_agent)

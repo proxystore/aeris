@@ -7,25 +7,23 @@ from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from typing import Generic
-from typing import get_args
 from typing import TypeVar
 
 from aeris.behavior import Behavior
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
-from aeris.handle import AgentRemoteHandle
+from aeris.handle import BoundRemoteHandle
 from aeris.handle import ClientRemoteHandle
 from aeris.handle import ProxyHandle
 from aeris.handle import UnboundRemoteHandle
 from aeris.identifier import AgentIdentifier
-from aeris.identifier import Identifier
 from aeris.message import ActionRequest
-from aeris.message import Message
 from aeris.message import PingRequest
 from aeris.message import RequestMessage
 from aeris.message import ResponseMessage
 from aeris.message import ShutdownRequest
+from aeris.multiplex import MailboxMultiplexer
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +42,13 @@ class _AgentState(enum.Enum):
 # of the Agent constructor.
 def _agent_trampoline(
     behavior: BehaviorT,
-    aid: AgentIdentifier,
+    agent_id: AgentIdentifier,
     exchange: Exchange,
     close_exchange: bool,
 ) -> Agent[BehaviorT]:
     return Agent(
         behavior,
-        aid=aid,
+        agent_id=agent_id,
         exchange=exchange,
         close_exchange=close_exchange,
     )
@@ -69,7 +67,7 @@ class Agent(Generic[BehaviorT]):
 
     Args:
         behavior: Behavior that the agent will exhibit.
-        aid: Identifier of this agent in a multi-agent system.
+        agent_id: Identifier of this agent in a multi-agent system.
         exchange: Message exchange of multi-agent system. The agent will close
             the exchange when it finished running.
         close_exchange: Close the `exchange` object when the agent is
@@ -80,11 +78,11 @@ class Agent(Generic[BehaviorT]):
         self,
         behavior: BehaviorT,
         *,
-        aid: AgentIdentifier,
+        agent_id: AgentIdentifier,
         exchange: Exchange,
         close_exchange: bool = False,
     ) -> None:
-        self.aid = aid
+        self.agent_id = agent_id
         self.behavior = behavior
         self.exchange = exchange
         self.close_exchange = close_exchange
@@ -100,10 +98,12 @@ class Agent(Generic[BehaviorT]):
         self._action_futures: dict[ActionRequest, Future[None]] = {}
         self._loop_pool: ThreadPoolExecutor | None = None
         self._loop_futures: set[Future[None]] = set()
-        # The key in bound_handles is the identifier of the remote agent
-        # the handle targets. Each running agent should only have a single
-        # handle to any given remote agent.
-        self._bound_handles: dict[Identifier, AgentRemoteHandle[Any]] = {}
+
+        self._multiplexer = MailboxMultiplexer(
+            self.agent_id,
+            self.exchange,
+            request_handler=self._request_handler,
+        )
 
     def __call__(self) -> None:
         """Alias for [run()][aeris.agent.Agent.run]."""
@@ -112,41 +112,34 @@ class Agent(Generic[BehaviorT]):
     def __repr__(self) -> str:
         name = type(self).__name__
         return (
-            f'{name}(aid={self.aid!r}, behavior={self.behavior!r}, '
+            f'{name}(agent_id={self.agent_id!r}, behavior={self.behavior!r}, '
             f'exchange={self.exchange!r})'
         )
 
     def __str__(self) -> str:
         name = type(self).__name__
         behavior = type(self.behavior).__name__
-        return f'{name}<{behavior}; {self.aid}>'
+        return f'{name}<{behavior}; {self.agent_id}>'
 
     def __reduce__(self) -> Any:
         return (
             _agent_trampoline,
-            (self.behavior, self.aid, self.exchange, self.close_exchange),
+            (self.behavior, self.agent_id, self.exchange, self.close_exchange),
         )
 
     def _bind_handle(
         self,
         attr: str,
-        handle: AgentRemoteHandle[Any] | UnboundRemoteHandle[Any],
+        handle: BoundRemoteHandle[Any] | UnboundRemoteHandle[Any],
     ) -> None:
-        if handle.aid in self._bound_handles:
-            raise RuntimeError(
-                f'{self} already has a handle bound to a remote agent with '
-                f'{handle.aid}. The duplicate handle should be removed from '
-                'the behavior instance.',
-            )
-        bound = handle.bind_to_agent(self.aid)
+        bound = self._multiplexer.bind(handle)
         # Replace the handle attribute on the behavior with a handle bound
         # to this agent.
         setattr(self.behavior, attr, bound)
-        self._bound_handles[bound.aid] = bound
         logger.debug(
             'Bound remote handle to %s to running agent with %s',
-            handle.aid,
-            self.aid,
+            handle.agent_id,
+            self.agent_id,
         )
 
     def _bind_handles(self) -> None:
@@ -159,8 +152,8 @@ class Agent(Generic[BehaviorT]):
                 pass
             elif isinstance(handle, UnboundRemoteHandle):
                 self._bind_handle(attr, handle)
-            elif isinstance(handle, AgentRemoteHandle):
-                if handle.hid != self.aid:
+            elif isinstance(handle, BoundRemoteHandle):
+                if handle.mailbox_id != self.agent_id:
                     self._bind_handle(attr, handle)
             else:
                 raise AssertionError('Unreachable.')
@@ -173,7 +166,7 @@ class Agent(Generic[BehaviorT]):
                 'Failed to send response from %s to %s. '
                 'This likely means the destination mailbox was '
                 'removed from the exchange.',
-                self.aid,
+                self.agent_id,
                 response.dest,
             )
 
@@ -185,18 +178,6 @@ class Agent(Generic[BehaviorT]):
         else:
             response = request.response(result=result)
         self._send_response(response)
-
-    def _response_handler(self, response: ResponseMessage) -> None:
-        try:
-            handle = self._bound_handles[response.src]
-        except KeyError:
-            logger.exception(
-                'Receieved a response message from %s but no handle to '
-                'that agent is bound to this agent.',
-                response.src,
-            )
-        else:
-            handle._process_response(response)
 
     def _request_handler(self, request: RequestMessage) -> None:
         if isinstance(request, ActionRequest):
@@ -210,31 +191,12 @@ class Agent(Generic[BehaviorT]):
                 lambda _: self._action_futures.pop(request),
             )
         elif isinstance(request, PingRequest):
-            logger.info('Ping request received by %s', self.aid)
+            logger.info('Ping request received by %s', self.agent_id)
             self._send_response(request.response())
         elif isinstance(request, ShutdownRequest):
             self.signal_shutdown()
         else:
             raise AssertionError('Unreachable.')
-
-    def _message_handler(self, message: Message) -> None:
-        if isinstance(message, get_args(ResponseMessage)):
-            self._response_handler(message)
-        elif isinstance(message, get_args(RequestMessage)):
-            self._request_handler(message)
-        else:
-            raise AssertionError('Unreachable.')
-
-    def _message_listener(self) -> None:
-        logger.info('Message listener started for %s', self.aid)
-
-        while True:
-            try:
-                message = self.exchange.recv(self.aid)
-            except MailboxClosedError:
-                break
-            else:
-                self._message_handler(message)
 
     def action(self, action: str, args: Any, kwargs: Any) -> Any:
         """Invoke an action of the agent.
@@ -251,7 +213,7 @@ class Agent(Generic[BehaviorT]):
             AttributeError: if an action with this name is not implemented by
                 the behavior of the agent.
         """
-        logger.debug('Invoking "%s" action on %s', action, self.aid)
+        logger.debug('Invoking "%s" action on %s', action, self.agent_id)
         if action not in self._actions:
             raise AttributeError(
                 f'Agent[{type(self.behavior).__name__}] does not have an '
@@ -310,12 +272,12 @@ class Agent(Generic[BehaviorT]):
                 loop_future = self._loop_pool.submit(method, self._shutdown)
                 self._loop_futures.add(loop_future)
 
-            listener_future = self._loop_pool.submit(self._message_listener)
+            listener_future = self._loop_pool.submit(self._multiplexer.listen)
             self._loop_futures.add(listener_future)
 
             self._state = _AgentState.RUNNING
 
-        logger.info('Started agent with %s', self.aid)
+        logger.info('Started agent with %s', self.agent_id)
 
     def shutdown(self) -> None:
         """Shutdown the agent.
@@ -338,7 +300,7 @@ class Agent(Generic[BehaviorT]):
         if self._state is _AgentState.SHUTDOWN:
             return
 
-        logger.info('Shutdown requested for %s', self.aid)
+        logger.info('Shutdown requested for %s', self.agent_id)
         with self._state_lock:
             self._state = _AgentState.TERMINTATING
             self._shutdown.set()
@@ -347,8 +309,9 @@ class Agent(Generic[BehaviorT]):
             if self._action_pool is not None:
                 self._action_pool.shutdown(wait=True, cancel_futures=True)
 
-            # Cause the message listener thread to exit by closing the mailbox.
-            self.exchange.close_mailbox(self.aid)
+            # Cause the multiplexer message listener thread to exit by closing
+            # the mailbox the multiplexer is listening to.
+            self._multiplexer.close_mailbox()
 
             # Wait on all the loops, raising any exceptions.
             for future in self._loop_futures:
@@ -362,7 +325,7 @@ class Agent(Generic[BehaviorT]):
             self.behavior.shutdown()
             self._state = _AgentState.SHUTDOWN
 
-        logger.info('Shutdown agent with %s', self.aid)
+        logger.info('Shutdown agent with %s', self.agent_id)
 
     def signal_shutdown(self) -> None:
         """Signal that the agent should exit.

@@ -90,7 +90,7 @@ class _BaseExchangeMessage(BaseModel):
         validate_default=True,
     )
 
-    mid: uuid.UUID = Field(default_factory=uuid.uuid4)
+    tag: uuid.UUID = Field(default_factory=uuid.uuid4)
     kind: _ExchangeMessageType = Field()
     src: Identifier = Field()
     dest: Optional[Identifier] = Field(None)  # noqa: UP007
@@ -116,7 +116,7 @@ class _ExchangeRequestMessage(_BaseExchangeMessage):
         payload: Message | None = None,
     ) -> _ExchangeResponseMessage:
         return _ExchangeResponseMessage(
-            mid=self.mid,
+            tag=self.tag,
             kind=self.kind,
             src=self.src,
             dest=self.dest,
@@ -216,10 +216,10 @@ class SimpleExchange(ExchangeMixin):
                 message,
             )
             if message.success:
-                self._pending[message.mid].set_result(message)
+                self._pending[message.tag].set_result(message)
             else:
                 assert message.error is not None
-                self._pending[message.mid].set_exception(message.error)
+                self._pending[message.tag].set_exception(message.error)
         else:
             logger.warning(
                 'Dropping bad message from server with type %s (exchange=%s)',
@@ -277,7 +277,7 @@ class SimpleExchange(ExchangeMixin):
         request: _ExchangeRequestMessage,
     ) -> _ExchangeResponseMessage:
         future: Future[_ExchangeResponseMessage] = Future()
-        self._pending[request.mid] = future
+        self._pending[request.tag] = future
         self._socket.send(request.model_serialize() + b'\n')
         logger.debug(
             'Sent message to server (exchange=%s, message=%r)',
@@ -285,7 +285,7 @@ class SimpleExchange(ExchangeMixin):
             request,
         )
         response = future.result(timeout=self.timeout)
-        del self._pending[request.mid]
+        del self._pending[request.tag]
         return response
 
     def close(self) -> None:
