@@ -10,7 +10,7 @@ from aeris.exception import HandleClosedError
 from aeris.exception import HandleNotBoundError
 from aeris.exchange import Exchange
 from aeris.exchange.thread import ThreadExchange
-from aeris.handle import AgentRemoteHandle
+from aeris.handle import BoundRemoteHandle
 from aeris.handle import ClientRemoteHandle
 from aeris.handle import Handle
 from aeris.handle import ProxyHandle
@@ -69,9 +69,9 @@ def test_unbound_remote_handle_bind(exchange: Exchange) -> None:
         client_bound: ClientRemoteHandle[Any]
         with handle.bind_as_client() as client_bound:
             assert isinstance(client_bound, ClientRemoteHandle)
-        agent_bound: AgentRemoteHandle[Any]
-        with handle.bind_to_agent(AgentIdentifier.new()) as agent_bound:
-            assert isinstance(agent_bound, AgentRemoteHandle)
+        agent_bound: BoundRemoteHandle[Any]
+        with handle.bind_to_mailbox(AgentIdentifier.new()) as agent_bound:
+            assert isinstance(agent_bound, BoundRemoteHandle)
 
 
 def test_unbound_remote_handle_errors(exchange: Exchange) -> None:
@@ -92,7 +92,7 @@ def test_unbound_remote_handle_errors(exchange: Exchange) -> None:
 def test_remote_handle_closed_error(exchange: Exchange) -> None:
     aid = exchange.create_agent()
     handles: list[RemoteHandle[Any]] = [
-        AgentRemoteHandle(exchange, aid, exchange.create_agent()),
+        BoundRemoteHandle(exchange, aid, exchange.create_agent()),
         ClientRemoteHandle(exchange, aid, exchange.create_client()),
     ]
     for handle in handles:
@@ -109,8 +109,8 @@ def test_remote_handle_closed_error(exchange: Exchange) -> None:
 def test_agent_remote_handle_serialize(exchange: Exchange) -> None:
     aid = exchange.create_agent()
     hid = exchange.create_agent()
-    handle: AgentRemoteHandle[Any]
-    with AgentRemoteHandle(exchange, aid, hid) as handle:
+    handle: BoundRemoteHandle[Any]
+    with BoundRemoteHandle(exchange, aid, hid) as handle:
         # Note: don't call pickle.dumps here because ThreadExchange
         # is not pickleable so we test __reduce__ directly.
         class_, args = handle.__reduce__()
@@ -124,8 +124,8 @@ def test_agent_remote_handle_serialize(exchange: Exchange) -> None:
 def test_agent_remote_handle_bind(exchange: Exchange) -> None:
     aid = exchange.create_agent()
     hid = exchange.create_agent()
-    handle: AgentRemoteHandle[Any]
-    with AgentRemoteHandle(exchange, aid, hid) as handle:
+    handle: BoundRemoteHandle[Any]
+    with BoundRemoteHandle(exchange, aid, hid) as handle:
         assert isinstance(handle.hid, AgentIdentifier)
         client_bound: ClientRemoteHandle[Any]
         with handle.bind_as_client() as client_bound:
@@ -134,13 +134,13 @@ def test_agent_remote_handle_bind(exchange: Exchange) -> None:
             ValueError,
             match=f'Cannot create handle to {handle.aid}',
         ):
-            handle.bind_to_agent(handle.aid)
-        agent_bound: AgentRemoteHandle[Any]
-        with handle.bind_to_agent(handle.hid) as agent_bound:
+            handle.bind_to_mailbox(handle.aid)
+        agent_bound: BoundRemoteHandle[Any]
+        with handle.bind_to_mailbox(handle.hid) as agent_bound:
             assert agent_bound is handle
-        with handle.bind_to_agent(AgentIdentifier.new()) as agent_bound:
+        with handle.bind_to_mailbox(AgentIdentifier.new()) as agent_bound:
             assert agent_bound is not handle
-            assert isinstance(agent_bound, AgentRemoteHandle)
+            assert isinstance(agent_bound, BoundRemoteHandle)
 
 
 def test_client_remote_handle_serialize(exchange: Exchange) -> None:
@@ -168,9 +168,9 @@ def test_client_remote_handle_bind(exchange: Exchange) -> None:
         with handle.bind_as_client(exchange.create_client()) as client_bound:
             assert client_bound is not handle
             assert isinstance(client_bound, ClientRemoteHandle)
-        agent_bound: AgentRemoteHandle[Any]
-        with handle.bind_to_agent(AgentIdentifier.new()) as agent_bound:
-            assert isinstance(agent_bound, AgentRemoteHandle)
+        agent_bound: BoundRemoteHandle[Any]
+        with handle.bind_to_mailbox(AgentIdentifier.new()) as agent_bound:
+            assert isinstance(agent_bound, BoundRemoteHandle)
 
 
 def test_client_remote_handle_log_bad_response(

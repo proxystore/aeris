@@ -10,11 +10,10 @@ from aeris.behavior import action
 from aeris.behavior import Behavior
 from aeris.behavior import loop
 from aeris.exchange import Exchange
-from aeris.handle import AgentRemoteHandle
+from aeris.handle import BoundRemoteHandle
 from aeris.handle import ClientRemoteHandle
 from aeris.handle import Handle
 from aeris.handle import UnboundRemoteHandle
-from aeris.identifier import AgentIdentifier
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
 from aeris.message import PingRequest
@@ -194,23 +193,13 @@ def test_agent_action_message_unknown(exchange: Exchange) -> None:
     assert not thread.is_alive()
 
 
-def test_agent_log_bad_response(exchange: Exchange) -> None:
-    aid = exchange.create_agent()
-    agent = Agent(EmptyBehavior(), aid=aid, exchange=exchange)
-    response = PingResponse(
-        src=AgentIdentifier.new(),
-        dest=AgentIdentifier.new(),
-    )
-    agent._response_handler(response)
-
-
 class HandleBindingBehavior(Behavior):
     def __init__(
         self,
         unbound: UnboundRemoteHandle[EmptyBehavior],
         client_bound: ClientRemoteHandle[EmptyBehavior],
-        agent_bound: AgentRemoteHandle[EmptyBehavior],
-        self_bound: AgentRemoteHandle[EmptyBehavior],
+        agent_bound: BoundRemoteHandle[EmptyBehavior],
+        self_bound: BoundRemoteHandle[EmptyBehavior],
     ) -> None:
         self.unbound = unbound
         self.client_bound = client_bound
@@ -218,10 +207,10 @@ class HandleBindingBehavior(Behavior):
         self.self_bound = self_bound
 
     def setup(self) -> None:
-        assert isinstance(self.unbound, AgentRemoteHandle)
+        assert isinstance(self.unbound, BoundRemoteHandle)
         assert isinstance(self.client_bound, ClientRemoteHandle)
-        assert isinstance(self.agent_bound, AgentRemoteHandle)
-        assert isinstance(self.self_bound, AgentRemoteHandle)
+        assert isinstance(self.agent_bound, BoundRemoteHandle)
+        assert isinstance(self.self_bound, BoundRemoteHandle)
 
         assert self.unbound.hid is not None
         assert self.unbound.hid == self.agent_bound.hid == self.self_bound.hid
@@ -238,12 +227,12 @@ def test_agent_run_bind_handles(exchange: Exchange) -> None:
     behavior = HandleBindingBehavior(
         unbound=UnboundRemoteHandle(exchange, exchange.create_agent()),
         client_bound=ClientRemoteHandle(exchange, exchange.create_agent()),
-        agent_bound=AgentRemoteHandle(
+        agent_bound=BoundRemoteHandle(
             exchange,
             exchange.create_agent(),
             exchange.create_agent(),
         ),
-        self_bound=AgentRemoteHandle(
+        self_bound=BoundRemoteHandle(
             exchange,
             exchange.create_agent(),
             aid,
@@ -256,7 +245,7 @@ def test_agent_run_bind_handles(exchange: Exchange) -> None:
     agent.behavior.setup()
     agent.behavior.shutdown()
     # The client-bound and self-bound remote handles should be ignored.
-    assert len(agent._bound_handles) == 2  # noqa: PLR2004
+    assert len(agent._multiplexer.bound_handles) == 2  # noqa: PLR2004
 
 
 class DuplicateBindingsBehavior(Behavior):
@@ -278,10 +267,7 @@ def test_agent_run_duplicate_handles_error(exchange: Exchange) -> None:
     )
     agent = Agent(behavior, aid=self_aid, exchange=exchange)
 
-    error = (
-        f'{agent} already has a handle bound to a remote agent '
-        f'with {remote_aid}.'
-    )
+    error = f'already has a handle bound to a remote agent with {remote_aid}.'
     with pytest.raises(RuntimeError, match=error):
         agent.run()
 
@@ -291,7 +277,7 @@ class RunBehavior(Behavior):
         self.doubler = doubler
 
     def shutdown(self) -> None:
-        assert isinstance(self.doubler, AgentRemoteHandle)
+        assert isinstance(self.doubler, BoundRemoteHandle)
         self.doubler.shutdown()
 
     @action

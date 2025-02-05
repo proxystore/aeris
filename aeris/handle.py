@@ -240,21 +240,17 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
         ...
 
     @abc.abstractmethod
-    def bind_to_agent(
+    def bind_to_mailbox(
         self,
-        aid: AgentIdentifier,
-    ) -> AgentRemoteHandle[BehaviorT_co]:
-        """Bind the handle to a running agent.
-
-        Note:
-            This is an abstract method. Each remote handle variant implements
-            different semantics.
+        uid: Identifier,
+    ) -> BoundRemoteHandle[BehaviorT_co]:
+        """Bind the handle to an existing mailbox.
 
         Args:
-            aid: Identifier of the running agent to bind to.
+            uid: Identifier of the mailbox to bind to.
 
         Returns:
-            Remote handle bound to the agent identifier.
+            Remote handle bound to the identifier.
         """
         ...
 
@@ -435,19 +431,19 @@ class UnboundRemoteHandle(RemoteHandle[BehaviorT_co]):
         """
         return ClientRemoteHandle(self.exchange, self.aid, cid)
 
-    def bind_to_agent(
+    def bind_to_mailbox(
         self,
-        aid: AgentIdentifier,
-    ) -> AgentRemoteHandle[BehaviorT_co]:
-        """Bind the handle to a running agent.
+        uid: Identifier,
+    ) -> BoundRemoteHandle[BehaviorT_co]:
+        """Bind the handle to an existing mailbox.
 
         Args:
-            aid: Identifier of the running agent to bind to.
+            uid: Identifier of the mailbox to bind to.
 
         Returns:
-            Remote handle bound to the agent identifier.
+            Remote handle bound to the identifier.
         """
-        return AgentRemoteHandle(self.exchange, self.aid, aid)
+        return BoundRemoteHandle(self.exchange, self.aid, uid)
 
     def action(
         self,
@@ -468,7 +464,7 @@ class UnboundRemoteHandle(RemoteHandle[BehaviorT_co]):
         raise HandleNotBoundError(self.aid)
 
 
-class AgentRemoteHandle(RemoteHandle[BehaviorT_co]):
+class BoundRemoteHandle(RemoteHandle[BehaviorT_co]):
     """Handle to a remote agent bound to a running agent.
 
     Note:
@@ -480,14 +476,15 @@ class AgentRemoteHandle(RemoteHandle[BehaviorT_co]):
     Args:
         exchange: Message exchange used for agent communication.
         aid: Identifier of the target agent of this handle.
-        hid: Identifier of the running agent that this handle is bound to.
+        hid: Identifier of the mailbox that this handle is bound to (e.g.,
+            the mailbox of a running agent that holds this handle).
     """
 
     def __init__(
         self,
         exchange: Exchange,
         aid: AgentIdentifier,
-        hid: AgentIdentifier,
+        hid: Identifier,
     ) -> None:
         if aid == hid:
             raise ValueError(
@@ -512,23 +509,22 @@ class AgentRemoteHandle(RemoteHandle[BehaviorT_co]):
         """
         return ClientRemoteHandle(self.exchange, self.aid, cid)
 
-    def bind_to_agent(
+    def bind_to_mailbox(
         self,
-        aid: AgentIdentifier,
-    ) -> AgentRemoteHandle[BehaviorT_co]:
-        """Bind the handle to a running agent.
+        uid: Identifier,
+    ) -> BoundRemoteHandle[BehaviorT_co]:
+        """Bind the handle to an existing mailbox.
 
         Args:
-            aid: Identifier of the running agent to bind to. If this handle
-                is already bound to `aid`, `self` is returned.
+            uid: Identifier of the mailbox to bind to.
 
         Returns:
-            Remote handle bound to the agent identifier.
+            Remote handle bound to the identifier.
         """
-        if aid == self.hid:
+        if uid == self.hid:
             return self
         else:
-            return AgentRemoteHandle(self.exchange, self.aid, aid)
+            return BoundRemoteHandle(self.exchange, self.aid, uid)
 
     def close(
         self,
@@ -614,19 +610,19 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
         else:
             return ClientRemoteHandle(self.exchange, self.aid, cid)
 
-    def bind_to_agent(
+    def bind_to_mailbox(
         self,
-        aid: AgentIdentifier,
-    ) -> AgentRemoteHandle[BehaviorT_co]:
-        """Bind the handle to a running agent.
+        uid: Identifier,
+    ) -> BoundRemoteHandle[BehaviorT_co]:
+        """Bind the handle to an existing mailbox.
 
         Args:
-            aid: Identifier of the running agent to bind to.
+            uid: Identifier of the mailbox to bind to.
 
         Returns:
-            Remote handle bound to the agent identifier.
+            Remote handle bound to the identifier.
         """
-        return AgentRemoteHandle(self.exchange, self.aid, aid)
+        return BoundRemoteHandle(self.exchange, self.aid, uid)
 
     def close(
         self,
