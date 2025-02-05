@@ -48,7 +48,7 @@ class MailboxMultiplexer:
         which use multiple handles concurrently.
 
     Args:
-        uid: Identifier of the mailbox to multiplex. For example, the
+        mailbox_id: Identifier of the mailbox to multiplex. For example, the
             identifier of an agent.
         exchange: The exchange interface managing the mailbox.
         request_handler: A callable invoked when the request message is
@@ -57,11 +57,11 @@ class MailboxMultiplexer:
 
     def __init__(
         self,
-        uid: Identifier,
+        mailbox_id: Identifier,
         exchange: Exchange,
         request_handler: Callable[[RequestMessage], None],
     ) -> None:
-        self.uid = uid
+        self.mailbox_id = mailbox_id
         self.exchange = exchange
         self.request_handler = request_handler
         self.bound_handles: dict[Identifier, BoundRemoteHandle[Any]] = {}
@@ -79,10 +79,13 @@ class MailboxMultiplexer:
 
     def __repr__(self) -> str:
         name = type(self).__name__
-        return f'{name}(uid={self.uid!r}, exchange={self.exchange!r})'
+        return (
+            f'{name}(mailbox_id={self.mailbox_id!r}, '
+            f'exchange={self.exchange!r})'
+        )
 
     def __str__(self) -> str:
-        return f'{type(self).__name__}<{self.uid}; {self.exchange}>'
+        return f'{type(self).__name__}<{self.mailbox_id}; {self.exchange}>'
 
     def _message_handler(self, message: Message) -> None:
         if isinstance(message, get_args(RequestMessage)):
@@ -117,18 +120,18 @@ class MailboxMultiplexer:
             RuntimeError: If a handle to the same agent has already been
                 bound to this mailbox.
         """
-        if handle.aid in self.bound_handles:
+        if handle.agent_id in self.bound_handles:
             raise RuntimeError(
                 f'{self} already has a handle bound to a remote agent with '
-                f'{handle.aid}. The duplicate handle should be removed from '
-                'the behavior instance.',
+                f'{handle.agent_id}. The duplicate handle should be removed '
+                'from the behavior instance.',
             )
-        bound = handle.bind_to_mailbox(self.uid)
-        self.bound_handles[bound.aid] = bound
+        bound = handle.bind_to_mailbox(self.mailbox_id)
+        self.bound_handles[bound.agent_id] = bound
         logger.debug(
             'Bound remote handle to %s to client multiplexer with %s',
-            handle.aid,
-            self.uid,
+            handle.agent_id,
+            self.mailbox_id,
         )
         return bound
 
@@ -148,7 +151,7 @@ class MailboxMultiplexer:
 
     def close_mailbox(self) -> None:
         """Close the mailbox."""
-        self.exchange.close_mailbox(self.uid)
+        self.exchange.close_mailbox(self.mailbox_id)
 
     def listen(self) -> None:
         """Listen for new messages in the mailbox and process them.
@@ -165,11 +168,11 @@ class MailboxMultiplexer:
             Response messages intended for a handle that does not exist
             will be logged and discarded.
         """
-        logger.info('Message listener started for %s', self.uid)
+        logger.info('Message listener started for %s', self.mailbox_id)
 
         while True:
             try:
-                message = self.exchange.recv(self.uid)
+                message = self.exchange.recv(self.mailbox_id)
             except MailboxClosedError:
                 break
             else:

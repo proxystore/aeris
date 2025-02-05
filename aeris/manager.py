@@ -51,15 +51,15 @@ class Manager:
         self._exchange = exchange
         self._launcher = launcher
 
-        self._cid = exchange.create_client()
+        self._mailbox_id = exchange.create_client()
         self._multiplexer = MailboxMultiplexer(
-            self._cid,
+            self.mailbox_id,
             self._exchange,
             self._handle_request,
         )
         self._listener_thread = threading.Thread(
             target=self._multiplexer.listen,
-            name=f'multiplexer-{self._cid.uid}-listener',
+            name=f'multiplexer-{self.mailbox_id.uid}-listener',
         )
         self._listener_thread.start()
 
@@ -82,14 +82,9 @@ class Manager:
 
     def __str__(self) -> str:
         return (
-            f'{type(self).__name__}<{self._cid}, {self._exchange}, '
+            f'{type(self).__name__}<{self.mailbox_id}, {self._exchange}, '
             f'{self._launcher}>'
         )
-
-    @property
-    def uid(self) -> ClientIdentifier:
-        """Identifier of the manager which is a client of the exchange."""
-        return self._cid
 
     @property
     def exchange(self) -> Exchange:
@@ -101,9 +96,16 @@ class Manager:
         """Launcher interface."""
         return self._launcher
 
+    @property
+    def mailbox_id(self) -> ClientIdentifier:
+        """Identifier of the mailbox used by this manager."""
+        return self._mailbox_id
+
     def _handle_request(self, request: RequestMessage) -> None:
         response = request.error(
-            TypeError(f'Client with {self._cid} cannot fulfill requests.'),
+            TypeError(
+                f'Client with {self.mailbox_id} cannot fulfill requests.',
+            ),
         )
         self.exchange.send(response.dest, response)
 

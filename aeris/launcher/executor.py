@@ -54,14 +54,14 @@ class ExecutorLauncher:
         return f'{type(self).__name__}<{self._executor}>'
 
     def _callback(self, future: Future[None]) -> None:
-        aid = self._futures.pop(future)
+        agent_id = self._futures.pop(future)
         try:
             future.result()
-            logger.info('Safely completed agent with %s', aid)
+            logger.info('Safely completed agent with %s', agent_id)
         except CancelledError:  # pragma: no cover
-            logger.warning('Cancelled agent future with %s', aid)
+            logger.warning('Cancelled agent future with %s', agent_id)
         except Exception:  # pragma: no cover
-            logger.exception('Runtime exception in agent with %s', aid)
+            logger.exception('Runtime exception in agent with %s', agent_id)
 
     def close(self) -> None:
         """Close the launcher and shutdown agents."""
@@ -85,17 +85,17 @@ class ExecutorLauncher:
         Returns:
             Handle (unbound) used to interact with the agent.
         """
-        aid = exchange.create_agent()
+        agent_id = exchange.create_agent()
 
         agent = Agent(
             behavior,
-            aid=aid,
+            agent_id=agent_id,
             exchange=exchange,
             close_exchange=True,
         )
         future = self._executor.submit(agent)
         future.add_done_callback(self._callback)
-        self._futures[future] = aid
+        self._futures[future] = agent_id
         logger.info('Launched agent with %s', agent)
 
-        return exchange.create_handle(aid)
+        return exchange.create_handle(agent_id)
