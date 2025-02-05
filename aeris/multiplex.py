@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import uuid
 from types import TracebackType
 from typing import Any
 from typing import Callable
@@ -64,7 +65,7 @@ class MailboxMultiplexer:
         self.mailbox_id = mailbox_id
         self.exchange = exchange
         self.request_handler = request_handler
-        self.bound_handles: dict[Identifier, BoundRemoteHandle[Any]] = {}
+        self.bound_handles: dict[uuid.UUID, BoundRemoteHandle[Any]] = {}
 
     def __enter__(self) -> Self:
         return self
@@ -92,7 +93,7 @@ class MailboxMultiplexer:
             self.request_handler(message)
         elif isinstance(message, get_args(ResponseMessage)):
             try:
-                handle = self.bound_handles[message.src]
+                handle = self.bound_handles[message.label]
             except KeyError:
                 logger.exception(
                     'Receieved a response message from %s but no handle to '
@@ -115,19 +116,9 @@ class MailboxMultiplexer:
 
         Returns:
             Remote handle bound to this mailbox.
-
-        Raises:
-            RuntimeError: If a handle to the same agent has already been
-                bound to this mailbox.
         """
-        if handle.agent_id in self.bound_handles:
-            raise RuntimeError(
-                f'{self} already has a handle bound to a remote agent with '
-                f'{handle.agent_id}. The duplicate handle should be removed '
-                'from the behavior instance.',
-            )
         bound = handle.bind_to_mailbox(self.mailbox_id)
-        self.bound_handles[bound.agent_id] = bound
+        self.bound_handles[bound.handle_id] = bound
         logger.debug(
             'Bound remote handle to %s to client multiplexer with %s',
             handle.agent_id,

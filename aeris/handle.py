@@ -164,6 +164,9 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
         self.exchange = exchange
         self.agent_id = agent_id
         self.mailbox_id = mailbox_id
+        # Unique identifier for each handle object; used to disambiguate
+        # messages when multiple handles are bound to the same mailbox.
+        self.handle_id = uuid.uuid4()
 
         self._futures: dict[uuid.UUID, Future[Any]] = {}
         self._closed = False
@@ -309,6 +312,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
         request = ActionRequest(
             src=self.mailbox_id,
             dest=self.agent_id,
+            label=self.handle_id,
             action=action,
             args=args,
             kwargs=kwargs,
@@ -351,7 +355,11 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
             raise HandleClosedError(self.agent_id, self.mailbox_id)
 
         start = time.perf_counter()
-        request = PingRequest(src=self.mailbox_id, dest=self.agent_id)
+        request = PingRequest(
+            src=self.mailbox_id,
+            dest=self.agent_id,
+            label=self.handle_id,
+        )
         future: Future[None] = Future()
         self._futures[request.tag] = future
         self._send_request(request)
@@ -383,7 +391,11 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
         if self._closed:
             raise HandleClosedError(self.agent_id, self.mailbox_id)
 
-        request = ShutdownRequest(src=self.mailbox_id, dest=self.agent_id)
+        request = ShutdownRequest(
+            src=self.mailbox_id,
+            dest=self.agent_id,
+            label=self.handle_id,
+        )
         self._send_request(request)
         logger.debug(
             'Sent shutdown request from %s to %s',

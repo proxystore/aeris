@@ -65,8 +65,7 @@ def test_bind_duplicate_handle(exchange: ThreadExchange) -> None:
         request_handler=lambda _: None,
     ) as multiplexer:
         multiplexer.bind(unbound)
-        with pytest.raises(RuntimeError, match='already has a handle bound'):
-            multiplexer.bind(unbound)
+        multiplexer.bind(unbound)
 
 
 def test_request_message_handler(exchange: ThreadExchange) -> None:
@@ -93,22 +92,22 @@ def test_response_message_handler(exchange: ThreadExchange) -> None:
     uid = exchange.create_client()
     aid = exchange.create_agent()
     unbound: UnboundRemoteHandle[Any] = UnboundRemoteHandle(exchange, aid)
-    response = PingResponse(src=aid, dest=uid)
 
-    with mock.patch.object(
+    with MailboxMultiplexer(
+        uid,
         exchange,
-        'recv',
-        side_effect=(response, MailboxClosedError(uid)),
-    ):
-        with MailboxMultiplexer(
-            uid,
-            exchange,
-            request_handler=lambda _: None,
-        ) as multiplexer:
-            bound = multiplexer.bind(unbound)
-            with mock.patch.object(bound, '_process_response') as mocked:
+        request_handler=lambda _: None,
+    ) as multiplexer:
+        bound = multiplexer.bind(unbound)
+        response = PingResponse(src=aid, dest=uid, label=bound.handle_id)
+        with mock.patch.object(bound, '_process_response') as mocked:
+            with mock.patch.object(
+                exchange,
+                'recv',
+                side_effect=(response, MailboxClosedError(uid)),
+            ):
                 multiplexer.listen()
-                mocked.assert_called_once()
+            mocked.assert_called_once()
 
 
 def test_response_message_handler_bad_src(exchange: ThreadExchange) -> None:

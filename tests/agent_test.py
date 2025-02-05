@@ -64,6 +64,16 @@ def test_agent_start_shutdown(exchange: Exchange) -> None:
     assert agent.behavior.shutdown_event.is_set()
 
 
+def test_agent_shutdown_without_start(exchange: Exchange) -> None:
+    agent_id = exchange.create_agent()
+    agent = Agent(SignalingBehavior(), agent_id=agent_id, exchange=exchange)
+
+    agent.shutdown()
+
+    assert not agent.behavior.setup_event.is_set()
+    assert agent.behavior.shutdown_event.is_set()
+
+
 def test_agent_run_in_thread(exchange: Exchange) -> None:
     agent_id = exchange.create_agent()
     agent = Agent(SignalingBehavior(), agent_id=agent_id, exchange=exchange)
@@ -255,32 +265,6 @@ def test_agent_run_bind_handles(exchange: Exchange) -> None:
     agent.behavior.shutdown()
     # The client-bound and self-bound remote handles should be ignored.
     assert len(agent._multiplexer.bound_handles) == 2  # noqa: PLR2004
-
-
-class DuplicateBindingsBehavior(Behavior):
-    def __init__(
-        self,
-        handle1: UnboundRemoteHandle[EmptyBehavior],
-        handle2: UnboundRemoteHandle[EmptyBehavior],
-    ) -> None:
-        self.handle1 = handle1
-        self.handle2 = handle2
-
-
-def test_agent_run_duplicate_handles_error(exchange: Exchange) -> None:
-    self_agent_id = exchange.create_agent()
-    remote_agent_id = exchange.create_agent()
-    behavior = DuplicateBindingsBehavior(
-        handle1=UnboundRemoteHandle(exchange, remote_agent_id),
-        handle2=UnboundRemoteHandle(exchange, remote_agent_id),
-    )
-    agent = Agent(behavior, agent_id=self_agent_id, exchange=exchange)
-
-    error = (
-        f'already has a handle bound to a remote agent with {remote_agent_id}.'
-    )
-    with pytest.raises(RuntimeError, match=error):
-        agent.run()
 
 
 class RunBehavior(Behavior):
