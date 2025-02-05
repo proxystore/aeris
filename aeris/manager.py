@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 from types import TracebackType
 from typing import TypeVar
 
@@ -13,8 +14,10 @@ else:  # pragma: <3.11 cover
 from aeris.behavior import Behavior
 from aeris.exchange import Exchange
 from aeris.handle import RemoteHandle
-from aeris.identifier import AgentIdentifier
+from aeris.identifier import ClientIdentifier
 from aeris.launcher import Launcher
+from aeris.message import RequestMessage
+from aeris.multiplex import MailboxMultiplexer
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +28,9 @@ class Manager:
     """Launch and manage running agents.
 
     The manager is provided as convenience to reduce common boilerplate code
-    for spawning agents and managing handles.
+    for spawning agents and managing handles. Each manager registers itself
+    as a client in the exchange (i.e., each manager has its own mailbox).
+    Handles created by the manager are bound to this mailbox.
 
     Tip:
         This class can be used as a context manager. Upon exiting the context,
@@ -46,7 +51,17 @@ class Manager:
         self._exchange = exchange
         self._launcher = launcher
 
-        self._agents: dict[AgentIdentifier, RemoteHandle[Behavior]] = {}
+        self._cid = exchange.create_client()
+        self._multiplexer = MailboxMultiplexer(
+            self._cid,
+            self._exchange,
+            self._handle_request,
+        )
+        self._listener_thread = threading.Thread(
+            target=self._multiplexer.listen,
+            name=f'multiplexer-{self._cid.uid}-listener',
+        )
+        self._listener_thread.start()
 
     def __enter__(self) -> Self:
         return self
@@ -66,7 +81,15 @@ class Manager:
         )
 
     def __str__(self) -> str:
-        return f'{type(self).__name__}<{self._exchange}, {self._launcher}>'
+        return (
+            f'{type(self).__name__}<{self._cid}, {self._exchange}, '
+            f'{self._launcher}>'
+        )
+
+    @property
+    def uid(self) -> ClientIdentifier:
+        """Identifier of the manager which is a client of the exchange."""
+        return self._cid
 
     @property
     def exchange(self) -> Exchange:
@@ -78,11 +101,26 @@ class Manager:
         """Launcher interface."""
         return self._launcher
 
+    def _handle_request(self, request: RequestMessage) -> None:
+        response = request.error(
+            TypeError(f'Client with {self._cid} cannot fulfill requests.'),
+        )
+        self.exchange.send(response.dest, response)
+
     def close(self) -> None:
-        """Close the manager and cleanup resources."""
-        for handle in self._agents.values():
+        """Close the manager and cleanup resources.
+
+        1. Call shutdown on all launched agents.
+        1. Close all handles created by the manager.
+        1. Close the mailbox associated with the manager.
+        1. Close the exchange.
+        1. Close the launcher.
+        """
+        for handle in self._multiplexer.bound_handles.values():
             handle.shutdown()
-            handle.close()
+        self._multiplexer.close_bound_handles()
+        self._multiplexer.close_mailbox()
+        self._listener_thread.join()
         self.exchange.close()
         self.launcher.close()
 
@@ -99,7 +137,6 @@ class Manager:
         Returns:
             Handle (client bound) used to interact with the agent.
         """
-        handle = self.launcher.launch(behavior, exchange=self.exchange)
-        client = handle.bind_as_client()
-        self._agents[client.aid] = client
-        return client
+        unbound = self.launcher.launch(behavior, exchange=self.exchange)
+        bound = self._multiplexer.bind(unbound)
+        return bound

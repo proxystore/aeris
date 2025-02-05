@@ -5,6 +5,8 @@ import time
 from aeris.exchange.thread import ThreadExchange
 from aeris.launcher.thread import ThreadLauncher
 from aeris.manager import Manager
+from aeris.message import PingRequest
+from aeris.message import PingResponse
 from testing.behavior import SleepBehavior
 from testing.constant import TEST_LOOP_SLEEP
 
@@ -28,3 +30,16 @@ def test_basic_usage() -> None:
         manager.launch(behavior)
 
         time.sleep(5 * TEST_LOOP_SLEEP)
+
+
+def test_reply_to_requests_with_error() -> None:
+    with Manager(
+        exchange=ThreadExchange(),
+        launcher=ThreadLauncher(),
+    ) as manager:
+        cid = manager.exchange.create_client()
+        request = PingRequest(src=cid, dest=manager.uid)
+        manager.exchange.send(request.dest, request)
+        response = manager.exchange.recv(cid)
+        assert isinstance(response, PingResponse)
+        assert isinstance(response.exception, TypeError)
