@@ -549,11 +549,7 @@ class BoundRemoteHandle(RemoteHandle[BehaviorT_co]):
             timeout: Optional timeout used when `wait=True`.
         """
         super().close(wait_futures, timeout=timeout)
-        logger.info(
-            'Closed handle to %s with %s',
-            self.agent_id,
-            self.mailbox_id,
-        )
+        logger.debug('Closed handle (%s)', self)
 
 
 class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
@@ -583,7 +579,7 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
         self._recv_thread.start()
 
     def _recv_responses(self) -> None:
-        logger.debug('Started result listener thread for %s', self.mailbox_id)
+        logger.debug('Started result listener thread for %s', self)
         assert self.mailbox_id is not None
 
         while True:
@@ -601,7 +597,7 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
                     self.agent_id,
                 )
 
-        logger.debug('Exiting result listener thread for %s', self.mailbox_id)
+        logger.debug('Exiting result listener thread for %s', self)
 
     def bind_as_client(
         self,
@@ -666,8 +662,4 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
         self.exchange.close_mailbox(self.mailbox_id)
         self._recv_thread.join()
 
-        logger.info(
-            'Closed handle to %s with %s',
-            self.agent_id,
-            self.mailbox_id,
-        )
+        logger.debug('Closed handle (%s)', self)

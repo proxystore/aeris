@@ -97,8 +97,9 @@ class MailboxMultiplexer:
             except KeyError:
                 logger.exception(
                     'Receieved a response message from %s but no handle to '
-                    'that agent is bound to this multiplexer.',
+                    'that agent is bound to %s.',
                     message.src,
+                    self,
                 )
             else:
                 handle._process_response(message)
@@ -120,9 +121,9 @@ class MailboxMultiplexer:
         bound = handle.bind_to_mailbox(self.mailbox_id)
         self.bound_handles[bound.handle_id] = bound
         logger.debug(
-            'Bound remote handle to %s to client multiplexer with %s',
-            handle.agent_id,
-            self.mailbox_id,
+            'Bound handle to %s to multiplexer (%s)',
+            bound.agent_id,
+            self,
         )
         return bound
 
@@ -139,10 +140,12 @@ class MailboxMultiplexer:
         for key in tuple(self.bound_handles):
             handle = self.bound_handles.pop(key)
             handle.close(wait_futures=False)
+        logger.debug('Closed all handles bound to multiplexer (%s)', self)
 
     def close_mailbox(self) -> None:
         """Close the mailbox."""
         self.exchange.close_mailbox(self.mailbox_id)
+        logger.debug('Closed mailbox of multiplexer (%s)', self)
 
     def listen(self) -> None:
         """Listen for new messages in the mailbox and process them.
@@ -159,7 +162,7 @@ class MailboxMultiplexer:
             Response messages intended for a handle that does not exist
             will be logged and discarded.
         """
-        logger.info('Message listener started for %s', self.mailbox_id)
+        logger.debug('Listening for messages in %s', self)
 
         while True:
             try:
@@ -168,3 +171,5 @@ class MailboxMultiplexer:
                 break
             else:
                 self._message_handler(message)
+
+        logger.debug('Finished listening for messages in %s', self)

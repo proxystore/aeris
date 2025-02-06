@@ -210,11 +210,6 @@ class SimpleExchange(ExchangeMixin):
         message: _ExchangeMessage,
     ) -> None:
         if isinstance(message, _ExchangeResponseMessage):
-            logger.debug(
-                'Received message from server (exchange=%s, message=%r)',
-                self,
-                message,
-            )
             if message.success:
                 self._pending[message.tag].set_result(message)
             else:
@@ -222,13 +217,13 @@ class SimpleExchange(ExchangeMixin):
                 self._pending[message.tag].set_exception(message.error)
         else:
             logger.warning(
-                'Dropping bad message from server with type %s (exchange=%s)',
+                'Dropping bad message from %s with type %s',
                 type(message).__name__,
                 self,
             )
 
     def _listen_server_messages(self) -> None:
-        logging.debug('Listening for server messages in %s', self)
+        logging.debug('Listening for messages from %s', self)
         buffer = io.BytesIO()
         while True:
             try:
@@ -255,7 +250,7 @@ class SimpleExchange(ExchangeMixin):
                     message = _BaseExchangeMessage.model_deserialize(raw)
                 except Exception:  # pragma: no cover
                     logger.exception(
-                        'Failed to deserialize message from server in %s',
+                        'Failed to deserialize message from %s',
                         self,
                     )
                     return
@@ -270,7 +265,7 @@ class SimpleExchange(ExchangeMixin):
             else:  # pragma: no cover
                 buffer.seek(0, 2)
         buffer.close()
-        logging.debug('Finished listening for server messages in %s', self)
+        logging.debug('Finished listening for messages from %s', self)
 
     def _send_request(
         self,
@@ -279,11 +274,6 @@ class SimpleExchange(ExchangeMixin):
         future: Future[_ExchangeResponseMessage] = Future()
         self._pending[request.tag] = future
         self._socket.send(request.model_serialize() + b'\n')
-        logger.debug(
-            'Sent message to server (exchange=%s, message=%r)',
-            self,
-            request,
-        )
         response = future.result(timeout=self.timeout)
         del self._pending[request.tag]
         return response
@@ -292,7 +282,7 @@ class SimpleExchange(ExchangeMixin):
         """Close this exchange client."""
         self._socket.close()
         self._handler_thread.join(timeout=1)
-        logger.debug('Closed exchange client %s', self)
+        logger.debug('Closed exchange (%s)', self)
 
     def create_mailbox(self, uid: Identifier) -> None:
         """Create the mailbox in the exchange for a new entity.
@@ -309,6 +299,7 @@ class SimpleExchange(ExchangeMixin):
         )
         response = self._send_request(request)
         assert response.success
+        logger.debug('Created mailbox for %s (%s)', uid, self)
 
     def close_mailbox(self, uid: Identifier) -> None:
         """Close the mailbox for an entity from the exchange.
@@ -325,6 +316,7 @@ class SimpleExchange(ExchangeMixin):
         )
         response = self._send_request(request)
         assert response.success
+        logger.debug('Closed mailbox for %s (%s)', uid, self)
 
     def send(self, uid: Identifier, message: Message) -> None:
         """Send a message to a mailbox.
@@ -345,6 +337,7 @@ class SimpleExchange(ExchangeMixin):
         )
         response = self._send_request(request)
         assert response.success
+        logger.debug('Sent %s to %s', type(message).__name__, uid)
 
     def recv(self, uid: Identifier) -> Message:
         """Receive the next message address to an entity.
@@ -366,6 +359,7 @@ class SimpleExchange(ExchangeMixin):
         response = self._send_request(request)
         assert response.success
         assert response.payload is not None
+        logger.debug('Received %s to %s', type(response).__name__, uid)
         return response.payload
 
 
@@ -514,14 +508,14 @@ class SimpleServer:
         async with server:
             await server.start_serving()
             logger.info(
-                'Server listening on %s:%s (ctrl-C to exit)',
+                'Exchange listening on %s:%s (ctrl-C to exit)',
                 self.host,
                 self.port,
             )
             await stop
-            logger.info('Closing server...')
+            logger.info('Closing exchange...')
             for task in tuple(self._handle_request_tasks):  # pragma: no cover
-                task.cancel('Server has been closed.')
+                task.cancel('Exchange has been closed.')
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
 
@@ -572,7 +566,7 @@ def spawn_simple_exchange(
     host: str = '0.0.0.0',
     port: int = 5463,
     *,
-    level: int | str = logging.INFO,
+    level: int | str = logging.WARNING,
     timeout: float | None = None,
 ) -> Generator[SimpleExchange]:
     """Context manager that spawns a simple exchange in a subprocess.

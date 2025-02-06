@@ -62,6 +62,12 @@ class Manager:
             name=f'multiplexer-{self.mailbox_id.uid}-listener',
         )
         self._listener_thread.start()
+        logger.info(
+            'Initialized manager (%s; %s; %s',
+            self._mailbox_id,
+            self._exchange,
+            self._launcher,
+        )
 
     def __enter__(self) -> Self:
         return self
@@ -120,11 +126,13 @@ class Manager:
         """
         for handle in self._multiplexer.bound_handles.values():
             handle.shutdown()
+        logger.debug('Instructing managed agents to shutdown')
         self._multiplexer.close_bound_handles()
         self._multiplexer.close_mailbox()
         self._listener_thread.join()
         self.exchange.close()
         self.launcher.close()
+        logger.info('Closed manager (%s)', self.mailbox_id)
 
     def launch(self, behavior: BehaviorT) -> RemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
@@ -140,5 +148,7 @@ class Manager:
             Handle (client bound) used to interact with the agent.
         """
         unbound = self.launcher.launch(behavior, exchange=self.exchange)
+        logger.info('Launched agent (%s; %s)', unbound.agent_id, behavior)
         bound = self._multiplexer.bind(unbound)
+        logger.debug('Bound agent handle to manager (%s)', bound)
         return bound

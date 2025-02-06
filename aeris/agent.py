@@ -137,7 +137,7 @@ class Agent(Generic[BehaviorT]):
         # to this agent.
         setattr(self.behavior, attr, bound)
         logger.debug(
-            'Bound remote handle to %s to running agent with %s',
+            'Bound handle to %s to running agent with %s',
             handle.agent_id,
             self.agent_id,
         )
@@ -277,7 +277,7 @@ class Agent(Generic[BehaviorT]):
 
             self._state = _AgentState.RUNNING
 
-        logger.info('Started agent with %s', self.agent_id)
+        logger.info('Running agent (%s; %s)', self.agent_id, self.behavior)
 
     def shutdown(self) -> None:
         """Shutdown the agent.
@@ -300,7 +300,7 @@ class Agent(Generic[BehaviorT]):
         if self._state is _AgentState.SHUTDOWN:
             return
 
-        logger.info('Shutdown requested for %s', self.agent_id)
+        logger.debug('Shutting down agent... (%s)', self.agent_id)
         with self._state_lock:
             self._state = _AgentState.TERMINTATING
             self._shutdown.set()
@@ -325,7 +325,7 @@ class Agent(Generic[BehaviorT]):
             self.behavior.shutdown()
             self._state = _AgentState.SHUTDOWN
 
-        logger.info('Shutdown agent with %s', self.agent_id)
+        logger.info('Shutdown agent (%s)', self.agent_id)
 
     def signal_shutdown(self) -> None:
         """Signal that the agent should exit.

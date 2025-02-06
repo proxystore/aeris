@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import logging
 from typing import Any
 from typing import get_args
 
@@ -17,6 +18,8 @@ from aeris.exchange import ExchangeMixin
 from aeris.identifier import Identifier
 from aeris.message import BaseMessage
 from aeris.message import Message
+
+logger = logging.getLogger(__name__)
 
 
 class _MailboxState(enum.Enum):
@@ -90,6 +93,7 @@ class RedisExchange(ExchangeMixin):
     def close(self) -> None:
         """Close the exchange interface."""
         self._client.close()
+        logger.debug('Closed exchange (%s)', self)
 
     def create_mailbox(self, uid: Identifier) -> None:
         """Create the mailbox in the exchange for a new entity.
@@ -101,6 +105,7 @@ class RedisExchange(ExchangeMixin):
             uid: Entity identifier used as the mailbox address.
         """
         self._client.set(self._active_key(uid), _MailboxState.ACTIVE.value)
+        logger.debug('Created mailbox for %s (%s)', uid, self)
 
     def close_mailbox(self, uid: Identifier) -> None:
         """Close the mailbox for an entity from the exchange.
@@ -113,6 +118,7 @@ class RedisExchange(ExchangeMixin):
         """
         self._client.set(self._active_key(uid), _MailboxState.INACTIVE.value)
         self._client.delete(self._queue_key(uid))
+        logger.debug('Closed mailbox for %s (%s)', uid, self)
 
     def send(self, uid: Identifier, message: Message) -> None:
         """Send a message to a mailbox.
@@ -132,6 +138,7 @@ class RedisExchange(ExchangeMixin):
             raise MailboxClosedError(uid)
         else:
             self._client.rpush(self._queue_key(uid), message.model_dump_json())
+            logger.debug('Sent %s to %s', type(message).__name__, uid)
 
     def recv(self, uid: Identifier) -> Message:
         """Receive the next message addressed to an entity.
@@ -168,4 +175,5 @@ class RedisExchange(ExchangeMixin):
             assert len(raw) == 2  # noqa: PLR2004
             message = BaseMessage.model_from_json(raw[1])
             assert isinstance(message, get_args(Message))
+            logger.debug('Received %s to %s', type(message).__name__, uid)
             return message

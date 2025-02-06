@@ -65,11 +65,11 @@ class Behavior:
             )
         return super().__new__(cls)
 
-    def __str__(self) -> str:
-        return f'<Behavior[{type(self).__name__}] @ 0x{id(self):x}>'
-
     def __repr__(self) -> str:
-        return str(self)
+        return f'{type(self).__name__}()'
+
+    def __str__(self) -> str:
+        return f'Behavior<{type(self).__name__}>'
 
     def behavior_actions(self) -> dict[str, Action[Any, Any]]:
         """Get methods of this behavior type that are decorated as actions.
@@ -230,9 +230,9 @@ def loop(
 
     @functools.wraps(method)
     def _wrapped(self: BehaviorT, *args: P.args, **kwargs: P.kwargs) -> R:
-        logger.debug('Started "%s" loop for %s', method.__name__, self)
+        logger.debug('Started %r loop for %s', method.__name__, self)
         result = method(self, *args, **kwargs)
-        logger.debug('Exited "%s" loop for %s', method.__name__, self)
+        logger.debug('Exited %r loop for %s', method.__name__, self)
         return result
 
     return _wrapped

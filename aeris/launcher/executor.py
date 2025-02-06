@@ -51,25 +51,25 @@ class ExecutorLauncher:
         return f'{type(self).__name__}(executor={self._executor!r})'
 
     def __str__(self) -> str:
-        return f'{type(self).__name__}<{self._executor}>'
+        return f'{type(self).__name__}<{type(self._executor).__name__}>'
 
     def _callback(self, future: Future[None]) -> None:
         agent_id = self._futures.pop(future)
         try:
             future.result()
-            logger.info('Safely completed agent with %s', agent_id)
+            logger.debug('Completed agent future (%s)', agent_id)
         except CancelledError:  # pragma: no cover
-            logger.warning('Cancelled agent future with %s', agent_id)
+            logger.warning('Cancelled agent future (%s)', agent_id)
         except Exception:  # pragma: no cover
-            logger.exception('Runtime exception in agent with %s', agent_id)
+            logger.exception('Received agent exception (%s)', agent_id)
 
     def close(self) -> None:
         """Close the launcher and shutdown agents."""
-        logger.debug('Waiting for all agents to shutdown...')
+        logger.debug('Waiting for agents to shutdown...')
         for fut in self._futures.copy():
             fut.result()
         self._executor.shutdown(wait=True, cancel_futures=True)
-        logger.info('Closed %s', self)
+        logger.debug('Closed launcher (%s)', self)
 
     def launch(
         self,
@@ -96,6 +96,6 @@ class ExecutorLauncher:
         future = self._executor.submit(agent)
         future.add_done_callback(self._callback)
         self._futures[future] = agent_id
-        logger.info('Launched agent with %s', agent)
+        logger.debug('Launched agent (%s; %s)', agent_id, behavior)
 
         return exchange.create_handle(agent_id)
