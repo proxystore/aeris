@@ -65,7 +65,13 @@ def main() -> int:
             expected = 'feebdaed'
 
             future: Future[str] = coordinator.action('process', text)
+            logger.info(
+                'Invoking process("%s") on %s',
+                text,
+                coordinator.agent_id,
+            )
             assert future.result() == expected
+            logger.info('Received result: "%s"', future.result())
 
         # Upon exit, the Manager context will instruct each agent to shutdown
         # and then close the handles, exchange, and launcher interfaces.

@@ -45,4 +45,8 @@ def init_logging(
     # warnings get logged to a 'py.warnings' logger.
     logging.captureWarnings(True)
 
-    logging.info('Configured logger (level=%s, file=%s)', level, path)
+    logging.info(
+        'Configured logger (level=%s, file=%s)',
+        logging.getLevelName(level) if isinstance(level, int) else level,
+        path,
+    )

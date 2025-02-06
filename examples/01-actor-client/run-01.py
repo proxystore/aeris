@@ -27,7 +27,7 @@ class Counter(Behavior):
 
 
 def main() -> int:
-    init_logging(logging.DEBUG)
+    init_logging(logging.INFO)
 
     with Manager(
         exchange=ThreadExchange(),

@@ -11,6 +11,8 @@ from aeris.launcher.thread import ThreadLauncher
 from aeris.logging import init_logging
 from aeris.manager import Manager
 
+logger = logging.getLogger(__name__)
+
 
 class Coordinator(Behavior):
     def __init__(
@@ -41,7 +43,7 @@ class Reverser(Behavior):
 
 
 def main() -> int:
-    init_logging(logging.DEBUG)
+    init_logging(logging.INFO)
 
     with Manager(
         exchange=ThreadExchange(),
@@ -55,7 +57,9 @@ def main() -> int:
         expected = 'feebdaed'
 
         future: Future[str] = coordinator.action('process', text)
+        logger.info('Invoking process("%s") on %s', text, coordinator.agent_id)
         assert future.result() == expected
+        logger.info('Received result: "%s"', future.result())
 
     return 0
 

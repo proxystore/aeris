@@ -13,6 +13,8 @@ from aeris.launcher.thread import ThreadLauncher
 from aeris.logging import init_logging
 from aeris.manager import Manager
 
+logger = logging.getLogger(__name__)
+
 
 class Counter(Behavior):
     count: int
@@ -32,7 +34,7 @@ class Counter(Behavior):
 
 
 def main() -> int:
-    init_logging(logging.DEBUG)
+    init_logging(logging.INFO)
 
     with Manager(
         exchange=ThreadExchange(),
@@ -41,10 +43,12 @@ def main() -> int:
         behavior = Counter()
         agent = manager.launch(behavior)
 
+        logger.info('Waiting 2s for agent loops to execute...')
         time.sleep(2)
 
         future: Future[int] = agent.action('get_count')
         assert future.result() >= 1
+        logger.info('Agent loop executed %s time(s)', future.result())
 
     return 0
 
