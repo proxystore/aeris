@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 import sys
 import threading
 from types import TracebackType
+from typing import Any
 from typing import TypeVar
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
@@ -12,8 +14,10 @@ else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
 from aeris.behavior import Behavior
+from aeris.exception import BadIdentifierError
+from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
-from aeris.handle import RemoteHandle
+from aeris.handle import BoundRemoteHandle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.launcher import Launcher
@@ -58,6 +62,7 @@ class Manager:
             self._exchange,
             self._handle_request,
         )
+        self._handles: dict[AgentIdentifier, BoundRemoteHandle[Any]] = {}
         self._listener_thread = threading.Thread(
             target=self._multiplexer.listen,
             name=f'multiplexer-{self.mailbox_id.uid}-listener',
@@ -119,15 +124,17 @@ class Manager:
     def close(self) -> None:
         """Close the manager and cleanup resources.
 
-        1. Call shutdown on all launched agents.
+        1. Call shutdown on all running agents.
         1. Close all handles created by the manager.
         1. Close the mailbox associated with the manager.
         1. Close the exchange.
         1. Close the launcher.
         """
-        for handle in self._multiplexer.bound_handles.values():
-            handle.shutdown()
-        logger.debug('Instructing managed agents to shutdown')
+        for agent_id in self.launcher.running():
+            handle = self._handles[agent_id]
+            with contextlib.suppress(MailboxClosedError):
+                handle.shutdown()
+        logger.debug('Instructed managed agents to shutdown')
         self._multiplexer.close_bound_handles()
         self._multiplexer.close_mailbox()
         self._listener_thread.join()
@@ -140,7 +147,7 @@ class Manager:
         behavior: BehaviorT,
         *,
         agent_id: AgentIdentifier | None = None,
-    ) -> RemoteHandle[BehaviorT]:
+    ) -> BoundRemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
         Note:
@@ -162,5 +169,55 @@ class Manager:
         )
         logger.info('Launched agent (%s; %s)', unbound.agent_id, behavior)
         bound = self._multiplexer.bind(unbound)
+        self._handles[bound.agent_id] = bound
         logger.debug('Bound agent handle to manager (%s)', bound)
         return bound
+
+    def shutdown(
+        self,
+        agent_id: AgentIdentifier,
+        *,
+        blocking: bool = True,
+        timeout: float | None = None,
+    ) -> None:
+        """Shutdown a launched agent.
+
+        Args:
+            agent_id: ID of launched agent.
+            blocking: Wait for the agent to exit before returning.
+            timeout: Optional timeout is seconds when `blocking=True`.
+
+        Raises:
+            BadIdentifierError: If an agent with `agent_id` was not
+                launched by this launcher.
+            TimeoutError: If `timeout` was exceeded while blocking for agent.
+        """
+        try:
+            handle = self._handles[agent_id]
+        except KeyError:
+            raise BadIdentifierError(agent_id) from None
+
+        with contextlib.suppress(MailboxClosedError):
+            handle.shutdown()
+
+        if blocking:
+            self.wait(agent_id, timeout=timeout)
+
+    def wait(
+        self,
+        agent_id: AgentIdentifier,
+        *,
+        timeout: float | None = None,
+    ) -> None:
+        """Wait for a launched agent to exit.
+
+        Args:
+            agent_id: ID of launched agent.
+            timeout: Optional timeout in seconds to wait for agent.
+
+        Raises:
+            BadIdentifierError: If an agent with `agent_id` was not
+                launched by this launcher.
+            TimeoutError: If `timeout` was exceeded while waiting for agent.
+        """
+        self.launcher.wait(agent_id, timeout=timeout)

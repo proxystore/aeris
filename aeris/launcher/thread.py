@@ -16,6 +16,7 @@ else:  # pragma: <3.11 cover
 
 from aeris.agent import Agent
 from aeris.behavior import Behavior
+from aeris.exception import BadIdentifierError
 from aeris.exchange import Exchange
 from aeris.handle import RemoteHandle
 from aeris.identifier import AgentIdentifier
@@ -100,3 +101,42 @@ class ThreadLauncher:
         logger.debug('Launched agent (%s; %s)', agent_id, behavior)
 
         return exchange.create_handle(agent_id)
+
+    def running(self) -> set[AgentIdentifier]:
+        """Get a set of IDs for all running agents.
+
+        Returns:
+            Set of agent IDs corresponding to all agents launched by this \
+            launcher that have not completed yet.
+        """
+        running: set[AgentIdentifier] = set()
+        for agent_id, agent in self._agents.items():
+            if agent.thread.is_alive():
+                running.add(agent_id)
+        return running
+
+    def wait(
+        self,
+        agent_id: AgentIdentifier,
+        *,
+        timeout: float | None = None,
+    ) -> None:
+        """Wait for a launched agent to exit.
+
+        Args:
+            agent_id: ID of launched agent.
+            timeout: Optional timeout in seconds to wait for agent.
+
+        Raises:
+            BadIdentifierError: If an agent with `agent_id` was not
+                launched by this launcher.
+            TimeoutError: If `timeout` was exceeded while waiting for agent.
+        """
+        try:
+            agent = self._agents[agent_id]
+        except KeyError:
+            raise BadIdentifierError(agent_id) from None
+
+        agent.thread.join(timeout=timeout)
+        if agent.thread.is_alive():
+            raise TimeoutError()

@@ -298,7 +298,10 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
             Future to the result of the action.
 
         Raises:
-            HandleClosedError: if the handle was closed.
+            HandleClosedError: If the handle was closed.
+            MailboxClosedError: If the agent's mailbox was closed. This
+                typically indicates the agent shutdown for another reason
+                (it self terminated or via another handle).
         """
         if self.mailbox_id is None:
             # UnboundRemoteHandle overrides these methods and is the only
@@ -342,8 +345,11 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
             Round-trip time in seconds.
 
         Raises:
-            HandleClosedError: if the handle was closed.
-            TimeoutError: if the timeout is exceeded.
+            HandleClosedError: If the handle was closed.
+            MailboxClosedError: If the agent's mailbox was closed. This
+                typically indicates the agent shutdown for another reason
+                (it self terminated or via another handle).
+            TimeoutError: If the timeout is exceeded.
         """
         if self.mailbox_id is None:
             # UnboundRemoteHandle overrides these methods and is the only
@@ -380,7 +386,10 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
         This is non-blocking and will only send the message.
 
         Raises:
-            HandleClosedError: if the handle was closed.
+            HandleClosedError: If the handle was closed.
+            MailboxClosedError: If the agent's mailbox was closed. This
+                typically indicates the agent shutdown for another reason
+                (it self terminated or via another handle).
         """
         if self.mailbox_id is None:
             # UnboundRemoteHandle overrides these methods and is the only
