@@ -14,6 +14,7 @@ else:  # pragma: <3.11 cover
 from aeris.behavior import Behavior
 from aeris.exchange import Exchange
 from aeris.handle import RemoteHandle
+from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.launcher import Launcher
 from aeris.message import RequestMessage
@@ -134,7 +135,12 @@ class Manager:
         self.launcher.close()
         logger.info('Closed manager (%s)', self.mailbox_id)
 
-    def launch(self, behavior: BehaviorT) -> RemoteHandle[BehaviorT]:
+    def launch(
+        self,
+        behavior: BehaviorT,
+        *,
+        agent_id: AgentIdentifier | None = None,
+    ) -> RemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
         Note:
@@ -143,11 +149,17 @@ class Manager:
 
         Args:
             behavior: Behavior the agent should implement.
+            agent_id: Specify ID of the launched agent. If `None`, a new
+                agent ID will be created within the exchange.
 
         Returns:
             Handle (client bound) used to interact with the agent.
         """
-        unbound = self.launcher.launch(behavior, exchange=self.exchange)
+        unbound = self.launcher.launch(
+            behavior,
+            exchange=self.exchange,
+            agent_id=agent_id,
+        )
         logger.info('Launched agent (%s; %s)', unbound.agent_id, behavior)
         bound = self._multiplexer.bind(unbound)
         logger.debug('Bound agent handle to manager (%s)', bound)

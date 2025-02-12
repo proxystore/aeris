@@ -7,6 +7,7 @@ from typing import TypeVar
 from aeris.behavior import Behavior
 from aeris.exchange import Exchange
 from aeris.handle import RemoteHandle
+from aeris.identifier import AgentIdentifier
 
 __all__ = ['Launcher']
 
@@ -28,12 +29,16 @@ class Launcher(Protocol):
         self,
         behavior: BehaviorT,
         exchange: Exchange,
+        *,
+        agent_id: AgentIdentifier | None = None,
     ) -> RemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
         Args:
             behavior: Behavior the agent should implement.
             exchange: Exchange the agent will use for messaging.
+            agent_id: Specify ID of the launched agent. If `None`, a new
+                agent ID will be created within the exchange.
 
         Returns:
             Handle to the agent.
