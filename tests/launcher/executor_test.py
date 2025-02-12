@@ -5,6 +5,10 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import ThreadPoolExecutor
 
+import pytest
+
+from aeris.behavior import Behavior
+from aeris.exception import BadIdentifierError
 from aeris.exchange import Exchange
 from aeris.exchange.simple import SimpleExchange
 from aeris.launcher import Launcher
@@ -37,6 +41,9 @@ def test_launch_agents_threads(exchange: Exchange) -> None:
         handle1.close()
         handle2.close()
 
+        launcher.wait(handle1.agent_id)
+        launcher.wait(handle2.agent_id)
+
 
 def test_launch_agents_processes(
     simple_exchange_server: tuple[str, int],
@@ -59,3 +66,44 @@ def test_launch_agents_processes(
 
             handle1.close()
             handle2.close()
+
+
+def test_wait_bad_identifier(exchange: Exchange) -> None:
+    executor = ThreadPoolExecutor(max_workers=1)
+    with ExecutorLauncher(executor) as launcher:
+        agent_id = exchange.create_agent()
+
+        with pytest.raises(BadIdentifierError):
+            launcher.wait(agent_id)
+
+
+def test_wait_timeout(exchange: Exchange) -> None:
+    behavior = SleepBehavior(TEST_LOOP_SLEEP)
+    executor = ThreadPoolExecutor(max_workers=1)
+    with ExecutorLauncher(executor) as launcher:
+        handle = launcher.launch(behavior, exchange).bind_as_client()
+
+        with pytest.raises(TimeoutError):
+            launcher.wait(handle.agent_id, timeout=TEST_LOOP_SLEEP)
+
+        handle.shutdown()
+        handle.close()
+
+
+class FailOnStartupBehavior(Behavior):
+    def setup(self) -> None:
+        raise RuntimeError('Agent startup failed')
+
+
+def test_wait_ignore_agent_errors(exchange: Exchange) -> None:
+    behavior = FailOnStartupBehavior()
+    executor = ThreadPoolExecutor(max_workers=1)
+    launcher = ExecutorLauncher(executor)
+
+    handle = launcher.launch(behavior, exchange).bind_as_client()
+    launcher.wait(handle.agent_id)
+    handle.close()
+
+    with pytest.raises(RuntimeError, match='Agent startup failed'):
+        launcher.close()
+    executor.shutdown()

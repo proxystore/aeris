@@ -44,3 +44,22 @@ class Launcher(Protocol):
             Handle to the agent.
         """
         ...
+
+    def wait(
+        self,
+        agent_id: AgentIdentifier,
+        *,
+        timeout: float | None = None,
+    ) -> None:
+        """Wait for a launched agent to exit.
+
+        Args:
+            agent_id: ID of launched agent.
+            timeout: Optional timeout in seconds to wait for agent.
+
+        Raises:
+            BadIdentifierError: If an agent with `agent_id` was not
+                launched by this launcher.
+            TimeoutError: If `timeout` was exceeded while waiting for agent.
+        """
+        ...

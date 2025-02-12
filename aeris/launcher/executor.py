@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import sys
 from concurrent.futures import CancelledError
@@ -15,6 +16,7 @@ else:  # pragma: <3.11 cover
 
 from aeris.agent import Agent
 from aeris.behavior import Behavior
+from aeris.exception import BadIdentifierError
 from aeris.exchange import Exchange
 from aeris.handle import RemoteHandle
 from aeris.identifier import AgentIdentifier
@@ -34,7 +36,8 @@ class ExecutorLauncher:
 
     def __init__(self, executor: Executor) -> None:
         self._executor = executor
-        self._futures: dict[Future[None], AgentIdentifier] = {}
+        self._future_to_id: dict[Future[None], AgentIdentifier] = {}
+        self._id_to_future: dict[AgentIdentifier, Future[None]] = {}
 
     def __enter__(self) -> Self:
         return self
@@ -54,7 +57,7 @@ class ExecutorLauncher:
         return f'{type(self).__name__}<{type(self._executor).__name__}>'
 
     def _callback(self, future: Future[None]) -> None:
-        agent_id = self._futures.pop(future)
+        agent_id = self._future_to_id[future]
         try:
             future.result()
             logger.debug('Completed agent future (%s)', agent_id)
@@ -66,8 +69,8 @@ class ExecutorLauncher:
     def close(self) -> None:
         """Close the launcher and shutdown agents."""
         logger.debug('Waiting for agents to shutdown...')
-        for fut in self._futures.copy():
-            fut.result()
+        for future in self._future_to_id.copy():
+            future.result()
         self._executor.shutdown(wait=True, cancel_futures=True)
         logger.debug('Closed launcher (%s)', self)
 
@@ -99,7 +102,45 @@ class ExecutorLauncher:
         )
         future = self._executor.submit(agent)
         future.add_done_callback(self._callback)
-        self._futures[future] = agent_id
+        self._future_to_id[future] = agent_id
+        self._id_to_future[agent_id] = future
         logger.debug('Launched agent (%s; %s)', agent_id, behavior)
 
         return exchange.create_handle(agent_id)
+
+    def wait(
+        self,
+        agent_id: AgentIdentifier,
+        *,
+        timeout: float | None = None,
+    ) -> None:
+        """Wait for a launched agent to exit.
+
+        Args:
+            agent_id: ID of launched agent.
+            timeout: Optional timeout in seconds to wait for agent.
+
+        Raises:
+            BadIdentifierError: If an agent with `agent_id` was not
+                launched by this launcher.
+            TimeoutError: If `timeout` was exceeded while waiting for agent.
+        """
+        try:
+            future = self._id_to_future[agent_id]
+        except KeyError:
+            raise BadIdentifierError(agent_id) from None
+
+        if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
+            try:
+                future.result(timeout=timeout)
+            except TimeoutError:
+                raise
+            except Exception:
+                pass
+        else:  # pragma: <3.11 cover
+            try:
+                future.result(timeout=timeout)
+            except concurrent.futures.TimeoutError:
+                raise TimeoutError() from None
+            except Exception:
+                pass
