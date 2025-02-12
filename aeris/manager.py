@@ -124,13 +124,14 @@ class Manager:
     def close(self) -> None:
         """Close the manager and cleanup resources.
 
-        1. Call shutdown on all launched agents.
+        1. Call shutdown on all running agents.
         1. Close all handles created by the manager.
         1. Close the mailbox associated with the manager.
         1. Close the exchange.
         1. Close the launcher.
         """
-        for handle in self._handles.values():
+        for agent_id in self.launcher.running():
+            handle = self._handles[agent_id]
             with contextlib.suppress(MailboxClosedError):
                 handle.shutdown()
         logger.debug('Instructed managed agents to shutdown')
