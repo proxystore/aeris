@@ -102,6 +102,19 @@ class ThreadLauncher:
 
         return exchange.create_handle(agent_id)
 
+    def running(self) -> set[AgentIdentifier]:
+        """Get a set of IDs for all running agents.
+
+        Returns:
+            Set of agent IDs corresponding to all agents launched by this \
+            launcher that have not completed yet.
+        """
+        running: set[AgentIdentifier] = set()
+        for agent_id, agent in self._agents.items():
+            if agent.thread.is_alive():
+                running.add(agent_id)
+        return running
+
     def wait(
         self,
         agent_id: AgentIdentifier,

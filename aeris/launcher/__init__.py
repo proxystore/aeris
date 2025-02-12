@@ -45,6 +45,15 @@ class Launcher(Protocol):
         """
         ...
 
+    def running(self) -> set[AgentIdentifier]:
+        """Get a set of IDs for all running agents.
+
+        Returns:
+            Set of agent IDs corresponding to all agents launched by this \
+            launcher that have not completed yet.
+        """
+        ...
+
     def wait(
         self,
         agent_id: AgentIdentifier,

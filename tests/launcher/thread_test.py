@@ -25,6 +25,8 @@ def test_launch_agents(exchange: Exchange) -> None:
         handle1 = launcher.launch(behavior, exchange).bind_as_client()
         handle2 = launcher.launch(behavior, exchange).bind_as_client()
 
+        assert len(launcher.running()) == 2  # noqa: PLR2004
+
         time.sleep(5 * TEST_LOOP_SLEEP)
 
         handle1.shutdown()
@@ -35,6 +37,8 @@ def test_launch_agents(exchange: Exchange) -> None:
 
         launcher.wait(handle1.agent_id)
         launcher.wait(handle2.agent_id)
+
+        assert len(launcher.running()) == 0
 
 
 def test_wait_bad_identifier(exchange: Exchange) -> None:

@@ -108,6 +108,19 @@ class ExecutorLauncher:
 
         return exchange.create_handle(agent_id)
 
+    def running(self) -> set[AgentIdentifier]:
+        """Get a set of IDs for all running agents.
+
+        Returns:
+            Set of agent IDs corresponding to all agents launched by this \
+            launcher that have not completed yet.
+        """
+        running: set[AgentIdentifier] = set()
+        for future, agent_id in self._future_to_id.items():
+            if not future.done():
+                running.add(agent_id)
+        return running
+
     def wait(
         self,
         agent_id: AgentIdentifier,
