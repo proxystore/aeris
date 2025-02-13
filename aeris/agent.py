@@ -65,6 +65,10 @@ class Agent(Generic[BehaviorT]):
         An agent can only be run once. After `shutdown()` is called, later
         operations will raise a `RuntimeError`.
 
+    Note:
+        If any `@loop` method raises an error, the agent will be signaled
+        to shutdown.
+
     Args:
         behavior: Behavior that the agent will exhibit.
         agent_id: Identifier of this agent in a multi-agent system.
@@ -97,7 +101,7 @@ class Agent(Generic[BehaviorT]):
         self._action_pool: ThreadPoolExecutor | None = None
         self._action_futures: dict[ActionRequest, Future[None]] = {}
         self._loop_pool: ThreadPoolExecutor | None = None
-        self._loop_futures: set[Future[None]] = set()
+        self._loop_futures: dict[Future[None], str] = {}
 
         self._multiplexer = MailboxMultiplexer(
             self.agent_id,
@@ -198,6 +202,16 @@ class Agent(Generic[BehaviorT]):
         else:
             raise AssertionError('Unreachable.')
 
+    def _loop_callback(self, future: Future[None]) -> None:
+        if future.exception() is not None:
+            name = self._loop_futures[future]
+            logger.warning(
+                'Error in loop %r (signaling shutdown): %r',
+                name,
+                future.exception(),
+            )
+            self.signal_shutdown()
+
     def action(self, action: str, args: Any, kwargs: Any) -> Any:
         """Invoke an action of the agent.
 
@@ -268,12 +282,13 @@ class Agent(Generic[BehaviorT]):
                 max_workers=len(self._loops) + 1,
             )
 
-            for method in self._loops.values():
+            for name, method in self._loops.items():
                 loop_future = self._loop_pool.submit(method, self._shutdown)
-                self._loop_futures.add(loop_future)
+                self._loop_futures[loop_future] = name
+                loop_future.add_done_callback(self._loop_callback)
 
             listener_future = self._loop_pool.submit(self._multiplexer.listen)
-            self._loop_futures.add(listener_future)
+            self._loop_futures[listener_future] = '_multiplexer.listen'
 
             self._state = _AgentState.RUNNING
 
@@ -313,11 +328,9 @@ class Agent(Generic[BehaviorT]):
             # the mailbox the multiplexer is listening to.
             self._multiplexer.close_mailbox()
 
-            # Wait on all the loops, raising any exceptions.
-            for future in self._loop_futures:
-                future.result()
+            # Shutdown the loop pool after waiting on the loops to exit.
             if self._loop_pool is not None:
-                self._loop_pool.shutdown()
+                self._loop_pool.shutdown(wait=True)
 
             if self.close_exchange:
                 self.exchange.close()
@@ -326,6 +339,10 @@ class Agent(Generic[BehaviorT]):
             self._state = _AgentState.SHUTDOWN
 
             logger.info('Shutdown agent (%s)', self.agent_id)
+
+            # Raise any exceptions from the loop threads as the final step.
+            for future in self._loop_futures:
+                future.result()
 
     def signal_shutdown(self) -> None:
         """Signal that the agent should exit.
