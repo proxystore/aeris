@@ -297,11 +297,11 @@ class Agent(Generic[BehaviorT]):
         Raises:
             Exception: Any exceptions raised inside threads.
         """
-        if self._state is _AgentState.SHUTDOWN:
-            return
-
-        logger.debug('Shutting down agent... (%s)', self.agent_id)
         with self._state_lock:
+            if self._state is _AgentState.SHUTDOWN:
+                return
+
+            logger.debug('Shutting down agent... (%s)', self.agent_id)
             self._state = _AgentState.TERMINTATING
             self._shutdown.set()
 
@@ -325,7 +325,7 @@ class Agent(Generic[BehaviorT]):
             self.behavior.shutdown()
             self._state = _AgentState.SHUTDOWN
 
-        logger.info('Shutdown agent (%s)', self.agent_id)
+            logger.info('Shutdown agent (%s)', self.agent_id)
 
     def signal_shutdown(self) -> None:
         """Signal that the agent should exit.
