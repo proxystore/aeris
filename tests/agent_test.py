@@ -74,6 +74,24 @@ def test_agent_shutdown_without_start(exchange: Exchange) -> None:
     assert agent.behavior.shutdown_event.is_set()
 
 
+class LoopFailureBehavior(Behavior):
+    @loop
+    def bad(self, shutdown: threading.Event) -> None:
+        raise RuntimeError('Expected failure in loop.')
+
+
+def test_loop_failure_triggers_shutdown(exchange: Exchange) -> None:
+    agent_id = exchange.create_agent()
+    agent = Agent(LoopFailureBehavior(), agent_id=agent_id, exchange=exchange)
+
+    agent.start()
+    assert agent._shutdown.is_set()
+
+    # Still need to clean up resources...
+    with pytest.raises(RuntimeError, match='Expected failure in loop.'):
+        agent.shutdown()
+
+
 def test_agent_run_in_thread(exchange: Exchange) -> None:
     agent_id = exchange.create_agent()
     agent = Agent(SignalingBehavior(), agent_id=agent_id, exchange=exchange)
