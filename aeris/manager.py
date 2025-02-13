@@ -69,7 +69,7 @@ class Manager:
         )
         self._listener_thread.start()
         logger.info(
-            'Initialized manager (%s; %s; %s',
+            'Initialized manager (%s; %s; %s)',
             self._mailbox_id,
             self._exchange,
             self._launcher,
