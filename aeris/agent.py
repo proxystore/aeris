@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import enum
 import logging
+import sys
 import threading
+from collections.abc import Sequence
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -348,8 +350,7 @@ class Agent(Generic[BehaviorT]):
             self._state = _AgentState.SHUTDOWN
 
             # Raise any exceptions from the loop threads as the final step.
-            for future in self._loop_futures:
-                future.result()
+            _raise_future_exceptions(tuple(self._loop_futures))
 
             logger.info(
                 'Shutdown agent (%s; %s)',
@@ -365,3 +366,26 @@ class Agent(Generic[BehaviorT]):
         effect.
         """
         self._shutdown.set()
+
+
+def _raise_future_exceptions(futures: Sequence[Future[Any]]) -> None:
+    if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
+        exceptions: list[Exception] = []
+        for future in futures:
+            exception = future.exception()
+            if isinstance(exception, Exception):
+                exceptions.append(exception)
+        if len(exceptions) > 0:
+            raise ExceptionGroup(  # noqa: F821
+                'Caught failures in agent loops while shutting down.',
+                exceptions,
+            )
+    else:  # pragma: <3.11 cover
+        for future in futures:
+            try:
+                future.result()
+            except Exception as e:
+                raise RuntimeError(
+                    'Caught at least one failure in agent loops '
+                    'while shutting down.',
+                ) from e
