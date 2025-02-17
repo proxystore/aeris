@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import threading
 from concurrent.futures import Future
 
@@ -76,8 +77,12 @@ def test_agent_shutdown_without_start(exchange: Exchange) -> None:
 
 class LoopFailureBehavior(Behavior):
     @loop
-    def bad(self, shutdown: threading.Event) -> None:
-        raise RuntimeError('Expected failure in loop.')
+    def bad1(self, shutdown: threading.Event) -> None:
+        raise RuntimeError('Loop failure 1.')
+
+    @loop
+    def bad2(self, shutdown: threading.Event) -> None:
+        raise RuntimeError('Loop failure 2.')
 
 
 def test_loop_failure_triggers_shutdown(exchange: Exchange) -> None:
@@ -87,9 +92,15 @@ def test_loop_failure_triggers_shutdown(exchange: Exchange) -> None:
     agent.start()
     assert agent._shutdown.is_set()
 
-    # Still need to clean up resources...
-    with pytest.raises(RuntimeError, match='Expected failure in loop.'):
-        agent.shutdown()
+    if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
+        # In Python 3.11 and later, all exceptions are raised in a group.
+        with pytest.raises(ExceptionGroup) as exc_info:  # noqa: F821
+            agent.shutdown()
+        assert len(exc_info.value.exceptions) == 2  # noqa: PLR2004
+    else:  # pragma: <3.11 cover
+        # In Python 3.10 and older, only the first error will be raised.
+        with pytest.raises(RuntimeError, match='Caught at least one failure'):
+            agent.shutdown()
 
 
 def test_agent_run_in_thread(exchange: Exchange) -> None:
