@@ -268,12 +268,17 @@ class Agent(Generic[BehaviorT]):
         Raises:
             RuntimeError: If the agent has been shutdown.
         """
-        if self._state is _AgentState.SHUTDOWN:
-            raise RuntimeError('Agent has already been shutdown.')
-        elif self._state is _AgentState.RUNNING:
-            return
-
         with self._state_lock:
+            if self._state is _AgentState.SHUTDOWN:
+                raise RuntimeError('Agent has already been shutdown.')
+            elif self._state is _AgentState.RUNNING:
+                return
+
+            logger.debug(
+                'Starting agent... (%s; %s)',
+                self.agent_id,
+                self.behavior,
+            )
             self._state = _AgentState.STARTING
             self._bind_handles()
             self.behavior.setup()
@@ -292,7 +297,7 @@ class Agent(Generic[BehaviorT]):
 
             self._state = _AgentState.RUNNING
 
-        logger.info('Running agent (%s; %s)', self.agent_id, self.behavior)
+            logger.info('Running agent (%s; %s)', self.agent_id, self.behavior)
 
     def shutdown(self) -> None:
         """Shutdown the agent.
@@ -316,7 +321,11 @@ class Agent(Generic[BehaviorT]):
             if self._state is _AgentState.SHUTDOWN:
                 return
 
-            logger.debug('Shutting down agent... (%s)', self.agent_id)
+            logger.debug(
+                'Shutting down agent... (%s; %s)',
+                self.agent_id,
+                self.behavior,
+            )
             self._state = _AgentState.TERMINTATING
             self._shutdown.set()
 
@@ -338,11 +347,15 @@ class Agent(Generic[BehaviorT]):
             self.behavior.shutdown()
             self._state = _AgentState.SHUTDOWN
 
-            logger.info('Shutdown agent (%s)', self.agent_id)
-
             # Raise any exceptions from the loop threads as the final step.
             for future in self._loop_futures:
                 future.result()
+
+            logger.info(
+                'Shutdown agent (%s; %s)',
+                self.agent_id,
+                self.behavior,
+            )
 
     def signal_shutdown(self) -> None:
         """Signal that the agent should exit.
