@@ -32,10 +32,10 @@ class SignalingBehavior(Behavior):
         self.loop_event = threading.Event()
         self.shutdown_event = threading.Event()
 
-    def setup(self) -> None:
+    def on_setup(self) -> None:
         self.setup_event.set()
 
-    def shutdown(self) -> None:
+    def on_shutdown(self) -> None:
         self.shutdown_event.set()
 
     @loop
@@ -250,7 +250,7 @@ class HandleBindingBehavior(Behavior):
         self.agent_bound = agent_bound
         self.self_bound = self_bound
 
-    def setup(self) -> None:
+    def on_setup(self) -> None:
         assert isinstance(self.unbound, BoundRemoteHandle)
         assert isinstance(self.client_bound, ClientRemoteHandle)
         assert isinstance(self.agent_bound, BoundRemoteHandle)
@@ -263,7 +263,7 @@ class HandleBindingBehavior(Behavior):
             == self.self_bound.mailbox_id
         )
 
-    def shutdown(self) -> None:
+    def on_shutdown(self) -> None:
         self.unbound.close()
         self.client_bound.close()
         self.agent_bound.close()
@@ -290,8 +290,8 @@ def test_agent_run_bind_handles(exchange: Exchange) -> None:
 
     agent._bind_handles()
     agent._bind_handles()  # Idempotency check
-    agent.behavior.setup()
-    agent.behavior.shutdown()
+    agent.behavior.on_setup()
+    agent.behavior.on_shutdown()
     # The client-bound and self-bound remote handles should be ignored.
     assert len(agent._multiplexer.bound_handles) == 2  # noqa: PLR2004
 
@@ -300,7 +300,7 @@ class RunBehavior(Behavior):
     def __init__(self, doubler: Handle[DoubleBehavior]) -> None:
         self.doubler = doubler
 
-    def shutdown(self) -> None:
+    def on_shutdown(self) -> None:
         assert isinstance(self.doubler, BoundRemoteHandle)
         self.doubler.shutdown()
 

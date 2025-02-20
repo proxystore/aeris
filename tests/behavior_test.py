@@ -21,7 +21,7 @@ def test_initialize_base_type_error() -> None:
 
 def test_behavior_empty() -> None:
     behavior = EmptyBehavior()
-    behavior.setup()
+    behavior.on_setup()
 
     assert isinstance(behavior, EmptyBehavior)
     assert isinstance(str(behavior), str)
@@ -31,24 +31,24 @@ def test_behavior_empty() -> None:
     assert len(behavior.behavior_loops()) == 0
     assert len(behavior.behavior_handles()) == 0
 
-    behavior.shutdown()
+    behavior.on_shutdown()
 
 
 def test_behavior_actions() -> None:
     behavior = IdentityBehavior()
-    behavior.setup()
+    behavior.on_setup()
 
     actions = behavior.behavior_actions()
     assert set(actions) == {'identity'}
 
     assert behavior.identity(1) == 1
 
-    behavior.shutdown()
+    behavior.on_shutdown()
 
 
 def test_behavior_loops() -> None:
     behavior = WaitBehavior()
-    behavior.setup()
+    behavior.on_setup()
 
     loops = behavior.behavior_loops()
     assert set(loops) == {'wait'}
@@ -57,18 +57,18 @@ def test_behavior_loops() -> None:
     shutdown.set()
     behavior.wait(shutdown)
 
-    behavior.shutdown()
+    behavior.on_shutdown()
 
 
 def test_behavior_handles() -> None:
     handle = ProxyHandle(EmptyBehavior())
     behavior = HandleBehavior(handle)
-    behavior.setup()
+    behavior.on_setup()
 
     handles = behavior.behavior_handles()
     assert set(handles) == {'handle'}
 
-    behavior.shutdown()
+    behavior.on_shutdown()
 
 
 def test_invalid_loop_signature() -> None:

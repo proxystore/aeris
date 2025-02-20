@@ -261,7 +261,7 @@ class Agent(Generic[BehaviorT]):
             is shutdown.
 
         1. Binds all unbound handles to remote agents to this agent.
-        1. Calls [`Behavior.setup()`][aeris.behavior.Behavior.setup].
+        1. Calls [`Behavior.on_setup()`][aeris.behavior.Behavior.on_setup].
         1. Starts threads for all control loops defined on the agent's
            [`Behavior`][aeris.behavior.Behavior].
         1. Starts a thread for listening to messages from the
@@ -283,7 +283,7 @@ class Agent(Generic[BehaviorT]):
             )
             self._state = _AgentState.STARTING
             self._bind_handles()
-            self.behavior.setup()
+            self.behavior.on_setup()
             self._action_pool = ThreadPoolExecutor()
             self._loop_pool = ThreadPoolExecutor(
                 max_workers=len(self._loops) + 1,
@@ -314,7 +314,8 @@ class Agent(Generic[BehaviorT]):
            will be processed.
         1. Waits for the control loop and message listener threads to exit.
         1. Optionally closes the exchange.
-        1. Calls [`Behavior.shutdown()`][aeris.behavior.Behavior.shutdown].
+        1. Calls
+           [`Behavior.on_shutdown()`][aeris.behavior.Behavior.on_shutdown].
 
         Raises:
             Exception: Any exceptions raised inside threads.
@@ -346,7 +347,7 @@ class Agent(Generic[BehaviorT]):
             if self.close_exchange:
                 self.exchange.close()
 
-            self.behavior.shutdown()
+            self.behavior.on_shutdown()
             self._state = _AgentState.SHUTDOWN
 
             # Raise any exceptions from the loop threads as the final step.

@@ -43,7 +43,7 @@ class CounterBehavior(Behavior):
     def __init__(self) -> None:
         self._count = 0
 
-    def setup(self) -> None:
+    def on_setup(self) -> None:
         self._count = 0
 
     @action
@@ -60,7 +60,7 @@ class SleepBehavior(Behavior):
         self.loop_sleep = loop_sleep
         self.steps = 0
 
-    def shutdown(self) -> None:
+    def on_shutdown(self) -> None:
         assert self.steps > 0
 
     @action

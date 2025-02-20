@@ -95,7 +95,7 @@ def test_wait_timeout(exchange: Exchange) -> None:
 
 
 class FailOnStartupBehavior(Behavior):
-    def setup(self) -> None:
+    def on_setup(self) -> None:
         raise RuntimeError('Agent startup failed')
 
 

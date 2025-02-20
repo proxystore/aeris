@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class Counter(Behavior):
     count: int
 
-    def setup(self) -> None:
+    def on_setup(self) -> None:
         self.count = 0
 
     @loop
