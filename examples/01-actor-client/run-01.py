@@ -14,7 +14,7 @@ from aeris.manager import Manager
 class Counter(Behavior):
     count: int
 
-    def setup(self) -> None:
+    def on_setup(self) -> None:
         self.count = 0
 
     @action

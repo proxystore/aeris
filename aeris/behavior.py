@@ -41,12 +41,12 @@ class Behavior:
     All [`Agent`][aeris.agent.Agent] instances execute a behavior which is
     defined by a subclass of the [`Behavior`][aeris.behavior.Behavior]. Each
     behavior is composed of three parts:
-      1. The [`startup()`][aeris.behavior.Behavior.setup] and
-         [`shutdown()`][aeris.behavior.Behavior.shutdown] methods that are
-         invoked once and the start and end of an agent's execution,
-         respectively. The methods should be used to initialize and cleanup
-         stateful resources. Resource initialization should not be performed
-         in `__init__`.
+      1. The [`on_startup()`][aeris.behavior.Behavior.setup] and
+         [`on_shutdown()`][aeris.behavior.Behavior.shutdown] methods define
+         callbacks that are invoked once at the start and end of an agent's
+         execution, respectively. The methods should be used to initialize and
+         cleanup stateful resources. Resource initialization should not be
+         performed in `__init__`.
       2. Action methods annotated with [`@action`][aeris.behavior.action]
          are methods that other agents can invoke on this agent. An agent
          may also call it's own action methods as normal methods.
@@ -113,14 +113,14 @@ class Behavior:
                 handles[name] = attr
         return handles
 
-    def setup(self) -> None:
+    def on_setup(self) -> None:
         """Setup up resources needed for the agents execution.
 
         This is called before any control loop threads are started.
         """
         pass
 
-    def shutdown(self) -> None:
+    def on_shutdown(self) -> None:
         """Shutdown resources after the agents execution.
 
         This is called after control loop threads have exited.
