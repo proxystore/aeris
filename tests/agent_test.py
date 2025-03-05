@@ -148,8 +148,10 @@ def test_agent_ping_message(exchange: Exchange) -> None:
 
     ping = PingRequest(src=client_id, dest=agent_id)
     exchange.send(agent_id, ping)
-    message = exchange.recv(client_id)
+    mailbox = exchange.get_mailbox(client_id)
+    message = mailbox.recv()
     assert isinstance(message, PingResponse)
+    mailbox.close()
 
     shutdown = ShutdownRequest(src=client_id, dest=agent_id)
     exchange.send(agent_id, shutdown)
@@ -161,6 +163,7 @@ def test_agent_ping_message(exchange: Exchange) -> None:
 def test_agent_action_message(exchange: Exchange) -> None:
     agent_id = exchange.create_agent()
     client_id = exchange.create_client()
+    mailbox = exchange.get_mailbox(client_id)
 
     agent = Agent(CounterBehavior(), agent_id=agent_id, exchange=exchange)
     thread = threading.Thread(target=agent)
@@ -174,14 +177,14 @@ def test_agent_action_message(exchange: Exchange) -> None:
         args=(value,),
     )
     exchange.send(agent_id, request)
-    message = exchange.recv(client_id)
+    message = mailbox.recv()
     assert isinstance(message, ActionResponse)
     assert message.exception is None
     assert message.result is None
 
     request = ActionRequest(src=client_id, dest=agent_id, action='count')
     exchange.send(agent_id, request)
-    message = exchange.recv(client_id)
+    message = mailbox.recv()
     assert isinstance(message, ActionResponse)
     assert message.exception is None
     assert message.result == value
@@ -192,10 +195,13 @@ def test_agent_action_message(exchange: Exchange) -> None:
     thread.join(timeout=TEST_THREAD_JOIN_TIMEOUT)
     assert not thread.is_alive()
 
+    mailbox.close()
+
 
 def test_agent_action_message_error(exchange: Exchange) -> None:
     agent_id = exchange.create_agent()
     client_id = exchange.create_client()
+    mailbox = exchange.get_mailbox(client_id)
 
     agent = Agent(ErrorBehavior(), agent_id=agent_id, exchange=exchange)
     thread = threading.Thread(target=agent)
@@ -203,7 +209,7 @@ def test_agent_action_message_error(exchange: Exchange) -> None:
 
     request = ActionRequest(src=client_id, dest=agent_id, action='fails')
     exchange.send(agent_id, request)
-    message = exchange.recv(client_id)
+    message = mailbox.recv()
     assert isinstance(message, ActionResponse)
     assert isinstance(message.exception, RuntimeError)
     assert 'This action always fails.' in str(message.exception)
@@ -214,10 +220,13 @@ def test_agent_action_message_error(exchange: Exchange) -> None:
     thread.join(timeout=TEST_THREAD_JOIN_TIMEOUT)
     assert not thread.is_alive()
 
+    mailbox.close()
+
 
 def test_agent_action_message_unknown(exchange: Exchange) -> None:
     agent_id = exchange.create_agent()
     client_id = exchange.create_client()
+    mailbox = exchange.get_mailbox(client_id)
 
     agent = Agent(EmptyBehavior(), agent_id=agent_id, exchange=exchange)
     thread = threading.Thread(target=agent)
@@ -225,7 +234,7 @@ def test_agent_action_message_unknown(exchange: Exchange) -> None:
 
     request = ActionRequest(src=client_id, dest=agent_id, action='null')
     exchange.send(agent_id, request)
-    message = exchange.recv(client_id)
+    message = mailbox.recv()
     assert isinstance(message, ActionResponse)
     assert isinstance(message.exception, AttributeError)
     assert 'null' in str(message.exception)
@@ -235,6 +244,8 @@ def test_agent_action_message_unknown(exchange: Exchange) -> None:
 
     thread.join(timeout=TEST_THREAD_JOIN_TIMEOUT)
     assert not thread.is_alive()
+
+    mailbox.close()
 
 
 class HandleBindingBehavior(Behavior):

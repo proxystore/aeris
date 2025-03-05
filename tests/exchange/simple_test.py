@@ -46,6 +46,10 @@ from testing.sys import open_port
                 dest=AgentIdentifier.new(),
             ),
         ),
+        _ExchangeRequestMessage(
+            kind=_ExchangeMessageType.CHECK_MAILBOX,
+            src=AgentIdentifier.new(),
+        ),
         _ExchangeResponseMessage(
             kind=_ExchangeMessageType.CREATE_MAILBOX,
             src=AgentIdentifier.new(),
@@ -93,7 +97,9 @@ def test_exchange_response_success() -> None:
 async def test_mailbox_manager_create_close() -> None:
     manager = _MailboxManager()
     uid = AgentIdentifier.new()
+    assert not manager.check_mailbox(uid)
     manager.create_mailbox(uid)
+    assert manager.check_mailbox(uid)
     manager.create_mailbox(uid)  # Idempotent check
     await manager.close_mailbox(uid)
     await manager.close_mailbox(uid)  # Idempotent check
@@ -165,6 +171,25 @@ async def test_server_handle_create_mailbox() -> None:
     request = _ExchangeRequestMessage(
         kind=_ExchangeMessageType.CREATE_MAILBOX,
         src=AgentIdentifier.new(),
+    )
+    expected = request.response()
+
+    response = await server._handle_request(request)
+    assert response == expected
+
+    response = await server._handle_request(request)  # Idempotent check
+    assert response == expected
+
+
+@pytest.mark.asyncio
+async def test_server_handle_check_mailbox() -> None:
+    server = SimpleServer('localhost', port=0)
+    uid = AgentIdentifier.new()
+    server.manager.create_mailbox(uid)
+
+    request = _ExchangeRequestMessage(
+        kind=_ExchangeMessageType.CHECK_MAILBOX,
+        src=uid,
     )
     expected = request.response()
 
@@ -330,10 +355,12 @@ def test_exchange_send_messages(
         aid2 = exchange.create_agent()
         message = PingRequest(src=aid1, dest=aid2)
         exchange.send(aid2, message)
-        assert exchange.recv(aid2) == message
+        mailbox = exchange.get_mailbox(aid2)
+        assert mailbox.recv() == message
+        mailbox.close()
 
 
-def test_exchange_send_recv_bad_identifier(
+def test_exchange_bad_identifier(
     simple_exchange_server: tuple[str, int],
 ) -> None:
     host, port = simple_exchange_server
@@ -344,7 +371,7 @@ def test_exchange_send_recv_bad_identifier(
         with pytest.raises(BadIdentifierError):
             exchange.send(aid, message)
         with pytest.raises(BadIdentifierError):
-            exchange.recv(aid)
+            exchange.get_mailbox(aid)
 
 
 def test_spawn_simple_exchange() -> None:

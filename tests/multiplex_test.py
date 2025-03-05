@@ -73,16 +73,16 @@ def test_request_message_handler(exchange: ThreadExchange) -> None:
     handler = mock.MagicMock()
     request = PingRequest(src=ClientIdentifier.new(), dest=uid)
 
-    with mock.patch.object(
+    with MailboxMultiplexer(
+        uid,
         exchange,
-        'recv',
-        side_effect=(request, MailboxClosedError(uid)),
-    ):
-        with MailboxMultiplexer(
-            uid,
-            exchange,
-            request_handler=handler,
-        ) as multiplexer:
+        request_handler=handler,
+    ) as multiplexer:
+        with mock.patch.object(
+            multiplexer._mailbox,
+            'recv',
+            side_effect=(request, MailboxClosedError(uid)),
+        ):
             multiplexer.listen()
 
         handler.assert_called_once()
@@ -102,7 +102,7 @@ def test_response_message_handler(exchange: ThreadExchange) -> None:
         response = PingResponse(src=aid, dest=uid, label=bound.handle_id)
         with mock.patch.object(bound, '_process_response') as mocked:
             with mock.patch.object(
-                exchange,
+                multiplexer._mailbox,
                 'recv',
                 side_effect=(response, MailboxClosedError(uid)),
             ):
@@ -116,16 +116,16 @@ def test_response_message_handler_bad_src(exchange: ThreadExchange) -> None:
     unbound: UnboundRemoteHandle[Any] = UnboundRemoteHandle(exchange, aid)
     response = PingResponse(src=ClientIdentifier.new(), dest=uid)
 
-    with mock.patch.object(
+    with MailboxMultiplexer(
+        uid,
         exchange,
-        'recv',
-        side_effect=(response, MailboxClosedError(uid)),
-    ):
-        with MailboxMultiplexer(
-            uid,
-            exchange,
-            request_handler=lambda _: None,
-        ) as multiplexer:
+        request_handler=lambda _: None,
+    ) as multiplexer:
+        with mock.patch.object(
+            multiplexer._mailbox,
+            'recv',
+            side_effect=(response, MailboxClosedError(uid)),
+        ):
             bound = multiplexer.bind(unbound)
             with mock.patch.object(bound, '_process_response') as mocked:
                 multiplexer.listen()

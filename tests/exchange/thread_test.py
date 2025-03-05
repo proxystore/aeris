@@ -28,11 +28,15 @@ def test_basic_usage() -> None:
         assert isinstance(aid, AgentIdentifier)
         assert isinstance(cid, ClientIdentifier)
 
+        mailbox = exchange.get_mailbox(aid)
+        assert mailbox.exchange is exchange
+
         for _ in range(3):
             message = PingRequest(src=cid, dest=aid)
             exchange.send(aid, message)
-            assert exchange.recv(aid) == message
+            assert mailbox.recv() == message
 
+        mailbox.close()
         exchange.close_mailbox(aid)
         exchange.close_mailbox(cid)
         exchange.close_mailbox(cid)  # Idempotency check
@@ -44,17 +48,19 @@ def test_bad_identifier_error() -> None:
         with pytest.raises(BadIdentifierError):
             exchange.send(uid, PingRequest(src=uid, dest=uid))
         with pytest.raises(BadIdentifierError):
-            exchange.recv(uid)
+            exchange.get_mailbox(uid)
 
 
 def test_mailbox_closed_error() -> None:
     with ThreadExchange() as exchange:
         aid = exchange.create_agent()
+        mailbox = exchange.get_mailbox(aid)
         exchange.close_mailbox(aid)
         with pytest.raises(MailboxClosedError):
             exchange.send(aid, PingRequest(src=aid, dest=aid))
         with pytest.raises(MailboxClosedError):
-            exchange.recv(aid)
+            mailbox.recv()
+        mailbox.close()
 
 
 def test_create_handle_to_client() -> None:

@@ -44,9 +44,11 @@ def test_reply_to_requests_with_error() -> None:
         client_id = manager.exchange.create_client()
         request = PingRequest(src=client_id, dest=manager.mailbox_id)
         manager.exchange.send(request.dest, request)
-        response = manager.exchange.recv(client_id)
+        mailbox = manager.exchange.get_mailbox(client_id)
+        response = mailbox.recv()
         assert isinstance(response, PingResponse)
         assert isinstance(response.exception, TypeError)
+        mailbox.close()
 
 
 def test_wait_bad_identifier(exchange: ThreadExchange) -> None:

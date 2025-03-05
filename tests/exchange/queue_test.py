@@ -34,6 +34,9 @@ def test_queue() -> None:
     received = queue.get()
     assert message == received
 
+    with pytest.raises(TimeoutError):
+        queue.get(timeout=0.001)
+
     queue.close()
     queue.close()  # Idempotent check
 

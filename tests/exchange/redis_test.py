@@ -32,10 +32,15 @@ def test_basic_usage(mock_redis) -> None:
         assert isinstance(aid, AgentIdentifier)
         assert isinstance(cid, ClientIdentifier)
 
+        mailbox = exchange.get_mailbox(aid)
+
         for _ in range(3):
             message = PingRequest(src=cid, dest=aid)
             exchange.send(aid, message)
-            assert exchange.recv(aid) == message
+            assert mailbox.recv() == message
+
+        mailbox.close()
+        mailbox.close()  # Idempotency check
 
         exchange.close_mailbox(aid)
         exchange.close_mailbox(cid)
@@ -49,18 +54,20 @@ def test_bad_identifier_error(mock_redis) -> None:
         with pytest.raises(BadIdentifierError):
             exchange.send(uid, PingRequest(src=uid, dest=uid))
         with pytest.raises(BadIdentifierError):
-            exchange.recv(uid)
+            exchange.get_mailbox(uid)
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_mailbox_closed_error(mock_redis) -> None:
     with RedisExchange('localhost', port=0) as exchange:
         aid = exchange.create_agent()
+        mailbox = exchange.get_mailbox(aid)
         exchange.close_mailbox(aid)
         with pytest.raises(MailboxClosedError):
             exchange.send(aid, PingRequest(src=aid, dest=aid))
         with pytest.raises(MailboxClosedError):
-            exchange.recv(aid)
+            mailbox.recv()
+        mailbox.close()
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
@@ -75,16 +82,17 @@ def test_create_handle_to_client(mock_redis) -> None:
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
-def test_exchange_timeout(mock_redis) -> None:
+def test_mailbox_timeout(mock_redis) -> None:
     with RedisExchange(
         'localhost',
         port=0,
         timeout=TEST_CONNECTION_TIMEOUT,
     ) as exchange:
         aid = exchange.create_agent()
-
+        mailbox = exchange.get_mailbox(aid)
         with pytest.raises(TimeoutError):
-            exchange.recv(aid)
+            mailbox.recv(timeout=0.001)
+        mailbox.close()
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)

@@ -74,6 +74,7 @@ class _BadRequestError(Exception):
 
 class _ExchangeMessageType(enum.Enum):
     CREATE_MAILBOX = 'create-mailbox'
+    CHECK_MAILBOX = 'check-mailbox'
     CLOSE_MAILBOX = 'close-mailbox'
     SEND_MESSAGE = 'send-message'
     REQUEST_MESSAGE = 'request-message'
@@ -270,11 +271,12 @@ class SimpleExchange(ExchangeMixin):
     def _send_request(
         self,
         request: _ExchangeRequestMessage,
+        timeout: float | None = None,
     ) -> _ExchangeResponseMessage:
         future: Future[_ExchangeResponseMessage] = Future()
         self._pending[request.tag] = future
         self._socket.send(request.model_serialize() + b'\n')
-        response = future.result(timeout=self.timeout)
+        response = future.result(timeout=timeout)
         del self._pending[request.tag]
         return response
 
@@ -297,7 +299,7 @@ class SimpleExchange(ExchangeMixin):
             kind=_ExchangeMessageType.CREATE_MAILBOX,
             src=uid,
         )
-        response = self._send_request(request)
+        response = self._send_request(request, timeout=self.timeout)
         assert response.success
         logger.debug('Created mailbox for %s (%s)', uid, self)
 
@@ -314,9 +316,23 @@ class SimpleExchange(ExchangeMixin):
             kind=_ExchangeMessageType.CLOSE_MAILBOX,
             src=uid,
         )
-        response = self._send_request(request)
+        response = self._send_request(request, timeout=self.timeout)
         assert response.success
         logger.debug('Closed mailbox for %s (%s)', uid, self)
+
+    def get_mailbox(self, uid: Identifier) -> SimpleMailbox:
+        """Get a client to a specific mailbox.
+
+        Args:
+            uid: Identifier of the mailbox.
+
+        Returns:
+            Mailbox client.
+
+        Raises:
+            BadIdentifierError: if a mailbox for `uid` does not exist.
+        """
+        return SimpleMailbox(uid, self, timeout=self.timeout)
 
     def send(self, uid: Identifier, message: Message) -> None:
         """Send a message to a mailbox.
@@ -339,33 +355,93 @@ class SimpleExchange(ExchangeMixin):
         assert response.success
         logger.debug('Sent %s to %s', type(message).__name__, uid)
 
-    def recv(self, uid: Identifier) -> Message:
-        """Receive the next message address to an entity.
+
+class SimpleMailbox:
+    """Client protocol that listens to incoming messages to a mailbox.
+
+    Args:
+        uid: Identifier of the mailbox.
+        exchange: Exchange client.
+        timeout: Optional timeout when querying mailbox status in exchange.
+
+    Raises:
+        BadIdentifierError: if a mailbox with `uid` does not exist.
+    """
+
+    def __init__(
+        self,
+        uid: Identifier,
+        exchange: SimpleExchange,
+        *,
+        timeout: float | None = None,
+    ) -> None:
+        self._uid = uid
+        self._exchange = exchange
+
+        request = _ExchangeRequestMessage(
+            kind=_ExchangeMessageType.CHECK_MAILBOX,
+            src=self._uid,
+        )
+        # This will raise BadIdentifierError if the mailbox does not exist.
+        response = self._exchange._send_request(request, timeout=timeout)
+        assert response.success
+
+    @property
+    def exchange(self) -> SimpleExchange:
+        """Exchange client."""
+        return self._exchange
+
+    @property
+    def mailbox_id(self) -> Identifier:
+        """Mailbox address/identifier."""
+        return self._uid
+
+    def close(self) -> None:
+        """Close this mailbox client.
+
+        Warning:
+            This does not close the mailbox in the exchange. I.e., the exchange
+            will still accept new messages to this mailbox, but this client
+            will no longer be listening for them.
+        """
+        pass
+
+    def recv(self, timeout: float | None = None) -> Message:
+        """Receive the next message in the mailbox.
+
+        This blocks until the next message is received or the mailbox
+        is closed.
 
         Args:
-            uid: Identifier of the entity request it's next message.
-
-        Returns:
-            Next message in the entity's mailbox.
+            timeout: Optional timeout in seconds to wait for the next
+                message. If `None`, the default, block forever until the
+                next message or the mailbox is closed.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
             MailboxClosedError: if the mailbox was closed.
+            TimeoutError: if a `timeout` was specified and exceeded.
         """
         request = _ExchangeRequestMessage(
             kind=_ExchangeMessageType.REQUEST_MESSAGE,
-            src=uid,
+            src=self.mailbox_id,
         )
-        response = self._send_request(request)
+        response = self.exchange._send_request(request, timeout=timeout)
         assert response.success
         assert response.payload is not None
-        logger.debug('Received %s to %s', type(response).__name__, uid)
+        logger.debug(
+            'Received %s to %s',
+            type(response).__name__,
+            self.mailbox_id,
+        )
         return response.payload
 
 
 class _MailboxManager:
     def __init__(self) -> None:
         self._mailboxes: dict[Identifier, AsyncQueue[Message]] = {}
+
+    def check_mailbox(self, uid: Identifier) -> bool:
+        return uid in self._mailboxes
 
     def create_mailbox(self, uid: Identifier) -> None:
         if uid not in self._mailboxes or self._mailboxes[uid].closed():
@@ -415,7 +491,7 @@ class SimpleServer:
     def __str__(self) -> str:
         return f'{type(self).__name__}<{self.host}:{self.port}>'
 
-    async def _handle_request(
+    async def _handle_request(  # noqa: C901,PLR0912
         self,
         message: _ExchangeRequestMessage,
     ) -> _ExchangeResponseMessage:
@@ -423,6 +499,12 @@ class SimpleServer:
         if message.kind is _ExchangeMessageType.CREATE_MAILBOX:
             self.manager.create_mailbox(message.src)
             response = message.response()
+        elif message.kind is _ExchangeMessageType.CHECK_MAILBOX:
+            if self.manager.check_mailbox(message.src):
+                response = message.response()
+            else:
+                id_error = BadIdentifierError(message.src)
+                response = message.response(error=id_error)
         elif message.kind is _ExchangeMessageType.CLOSE_MAILBOX:
             await self.manager.close_mailbox(message.src)
             response = message.response()

@@ -66,6 +66,23 @@ class ThreadExchange(ExchangeMixin):
             queue.close()
             logger.debug('Closed mailbox for %s (%s)', uid, self)
 
+    def get_mailbox(self, uid: Identifier) -> ThreadMailbox:
+        """Get a client to a specific mailbox.
+
+        Args:
+            uid: Identifier of the mailbox.
+
+        Returns:
+            Mailbox client.
+
+        Raises:
+            BadIdentifierError: if a mailbox for `uid` does not exist.
+        """
+        queue = self._queues.get(uid, None)
+        if queue is None:
+            raise BadIdentifierError(uid)
+        return ThreadMailbox(uid, self, queue)
+
     def send(self, uid: Identifier, message: Message) -> None:
         """Send a message to a mailbox.
 
@@ -86,25 +103,62 @@ class ThreadExchange(ExchangeMixin):
         except QueueClosedError as e:
             raise MailboxClosedError(uid) from e
 
-    def recv(self, uid: Identifier) -> Message:
-        """Receive the next message address to an entity.
+
+class ThreadMailbox:
+    """Client protocol that listens to incoming messages to a mailbox."""
+
+    def __init__(
+        self,
+        uid: Identifier,
+        exchange: ThreadExchange,
+        queue: Queue[Message],
+    ) -> None:
+        self._uid = uid
+        self._exchange = exchange
+        self._queue = queue
+
+    @property
+    def exchange(self) -> ThreadExchange:
+        """Exchange client."""
+        return self._exchange
+
+    @property
+    def mailbox_id(self) -> Identifier:
+        """Mailbox address/identifier."""
+        return self._uid
+
+    def close(self) -> None:
+        """Close this mailbox client.
+
+        Warning:
+            This does not close the mailbox in the exchange. I.e., the exchange
+            will still accept new messages to this mailbox, but this client
+            will no longer be listening for them.
+        """
+        pass
+
+    def recv(self, timeout: float | None = None) -> Message:
+        """Receive the next message in the mailbox.
+
+        This blocks until the next message is received or the mailbox
+        is closed.
 
         Args:
-            uid: Identifier of the entity request it's next message.
-
-        Returns:
-            Next message in the entity's mailbox.
+            timeout: Optional timeout in seconds to wait for the next
+                message. If `None`, the default, block forever until the
+                next message or the mailbox is closed.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
             MailboxClosedError: if the mailbox was closed.
+            TimeoutError: if a `timeout` was specified and exceeded.
         """
-        queue = self._queues.get(uid, None)
-        if queue is None:
-            raise BadIdentifierError(uid)
         try:
-            message = queue.get()
-            logger.debug('Received %s to %s', type(message).__name__, uid)
+            message = self._queue.get(timeout=timeout)
+            logger.debug(
+                'Received %s to %s',
+                type(message).__name__,
+                self.mailbox_id,
+            )
             return message
         except QueueClosedError as e:
-            raise MailboxClosedError(uid) from e
+            raise MailboxClosedError(self.mailbox_id) from e
