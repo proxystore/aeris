@@ -114,27 +114,26 @@ class Exchange(Protocol):
         """
         ...
 
+    def get_mailbox(self, uid: Identifier) -> Mailbox:
+        """Get a client to a specific mailbox.
+
+        Args:
+            uid: Identifier of the mailbox.
+
+        Returns:
+            Mailbox client.
+
+        Raises:
+            BadIdentifierError: if a mailbox for `uid` does not exist.
+        """
+        ...
+
     def send(self, uid: Identifier, message: Message) -> None:
         """Send a message to a mailbox.
 
         Args:
             uid: Destination address of the message.
             message: Message to send.
-
-        Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
-            MailboxClosedError: if the mailbox was closed.
-        """
-        ...
-
-    def recv(self, uid: Identifier) -> Message:
-        """Receive the next message addressed to an entity.
-
-        Args:
-            uid: Identifier of the entity requesting it's next message.
-
-        Returns:
-            Next message in the entity's mailbox.
 
         Raises:
             BadIdentifierError: if a mailbox for `uid` does not exist.
@@ -227,3 +226,45 @@ class ExchangeMixin:
                 f'but got identifier with type {type(aid).__name__}.',
             )
         return UnboundRemoteHandle(self, aid)
+
+
+@runtime_checkable
+class Mailbox(Protocol):
+    """Client protocol that listens to incoming messages to a mailbox."""
+
+    @property
+    def exchange(self) -> Exchange:
+        """Exchange client."""
+        ...
+
+    @property
+    def mailbox_id(self) -> Identifier:
+        """Mailbox address/identifier."""
+        ...
+
+    def close(self) -> None:
+        """Close this mailbox client.
+
+        Warning:
+            This does not close the mailbox in the exchange. I.e., the exchange
+            will still accept new messages to this mailbox, but this client
+            will no longer be listening for them.
+        """
+        ...
+
+    def recv(self, timeout: float | None = None) -> Message:
+        """Receive the next message in the mailbox.
+
+        This blocks until the next message is received or the mailbox
+        is closed.
+
+        Args:
+            timeout: Optional timeout in seconds to wait for the next
+                message. If `None`, the default, block forever until the
+                next message or the mailbox is closed.
+
+        Raises:
+            MailboxClosedError: if the mailbox was closed.
+            TimeoutError: if a `timeout` was specified and exceeded.
+        """
+        ...

@@ -66,6 +66,7 @@ class MailboxMultiplexer:
         self.exchange = exchange
         self.request_handler = request_handler
         self.bound_handles: dict[uuid.UUID, BoundRemoteHandle[Any]] = {}
+        self._mailbox = self.exchange.get_mailbox(mailbox_id)
 
     def __enter__(self) -> Self:
         return self
@@ -132,6 +133,7 @@ class MailboxMultiplexer:
 
         Closes all handles bound to this mailbox and then closes the mailbox.
         """
+        self._mailbox.close()
         self.close_bound_handles()
         self.close_mailbox()
 
@@ -166,7 +168,7 @@ class MailboxMultiplexer:
 
         while True:
             try:
-                message = self.exchange.recv(self.mailbox_id)
+                message = self._mailbox.recv()
             except MailboxClosedError:
                 break
             else:

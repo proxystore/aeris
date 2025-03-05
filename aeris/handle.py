@@ -581,6 +581,8 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
         if client_id is None:
             client_id = exchange.create_client()
         super().__init__(exchange, agent_id, client_id)
+        assert self.mailbox_id is not None
+        self._mailbox = self.exchange.get_mailbox(self.mailbox_id)
         self._recv_thread = threading.Thread(
             target=self._recv_responses,
             name=f'{self}-message-handler',
@@ -589,11 +591,10 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
 
     def _recv_responses(self) -> None:
         logger.debug('Started result listener thread for %s', self)
-        assert self.mailbox_id is not None
 
         while True:
             try:
-                message = self.exchange.recv(self.mailbox_id)
+                message = self._mailbox.recv()
             except MailboxClosedError:
                 break
 
@@ -668,6 +669,7 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
                 'This likely means the listener thread crashed.',
             )
 
+        self._mailbox.close()
         self.exchange.close_mailbox(self.mailbox_id)
         self._recv_thread.join()
 

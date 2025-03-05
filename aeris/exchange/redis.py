@@ -120,6 +120,20 @@ class RedisExchange(ExchangeMixin):
         self._client.delete(self._queue_key(uid))
         logger.debug('Closed mailbox for %s (%s)', uid, self)
 
+    def get_mailbox(self, uid: Identifier) -> RedisMailbox:
+        """Get a client to a specific mailbox.
+
+        Args:
+            uid: Identifier of the mailbox.
+
+        Returns:
+            Mailbox client.
+
+        Raises:
+            BadIdentifierError: if a mailbox for `uid` does not exist.
+        """
+        return RedisMailbox(uid, self)
+
     def send(self, uid: Identifier, message: Message) -> None:
         """Send a message to a mailbox.
 
@@ -140,32 +154,83 @@ class RedisExchange(ExchangeMixin):
             self._client.rpush(self._queue_key(uid), message.model_dump_json())
             logger.debug('Sent %s to %s', type(message).__name__, uid)
 
-    def recv(self, uid: Identifier) -> Message:
-        """Receive the next message addressed to an entity.
+
+class RedisMailbox:
+    """Client protocol that listens to incoming messages to a mailbox.
+
+    Args:
+        uid: Identifier of the mailbox.
+        exchange: Exchange client.
+
+    Raises:
+        BadIdentifierError: if a mailbox with `uid` does not exist.
+    """
+
+    def __init__(self, uid: Identifier, exchange: RedisExchange) -> None:
+        self._uid = uid
+        self._exchange = exchange
+
+        status = self.exchange._client.get(self.exchange._active_key(uid))
+        if status is None:
+            raise BadIdentifierError(uid)
+
+    @property
+    def exchange(self) -> RedisExchange:
+        """Exchange client."""
+        return self._exchange
+
+    @property
+    def mailbox_id(self) -> Identifier:
+        """Mailbox address/identifier."""
+        return self._uid
+
+    def close(self) -> None:
+        """Close this mailbox client.
+
+        Warning:
+            This does not close the mailbox in the exchange. I.e., the exchange
+            will still accept new messages to this mailbox, but this client
+            will no longer be listening for them.
+        """
+        pass
+
+    def recv(self, timeout: float | None = None) -> Message:
+        """Receive the next message in the mailbox.
+
+        This blocks until the next message is received or the mailbox
+        is closed.
 
         Args:
-            uid: Identifier of the entity requesting it's next message.
-
-        Returns:
-            Next message in the entity's mailbox.
+            timeout: Optional timeout in seconds to wait for the next
+                message. If `None`, the default, block forever until the
+                next message or the mailbox is closed. Note that this will
+                be cast to an int which is required by the Redis API.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
             MailboxClosedError: if the mailbox was closed.
+            TimeoutError: if a `timeout` was specified and exceeded.
         """
-        timeout = self.timeout if self.timeout is not None else 1
         while True:
-            status = self._client.get(self._active_key(uid))
+            status = self.exchange._client.get(
+                self.exchange._active_key(self.mailbox_id),
+            )
             if status is None:
-                raise BadIdentifierError(uid)
+                raise AssertionError(
+                    f'Status for mailbox {self.mailbox_id} did not exist in '
+                    'Redis server. This means that something incorrectly '
+                    'deleted the key.',
+                )
             elif status == _MailboxState.INACTIVE.value:
-                raise MailboxClosedError(uid)
+                raise MailboxClosedError(self.mailbox_id)
 
-            raw = self._client.blpop([self._queue_key(uid)], timeout=timeout)
-            if raw is None and self.timeout is not None:
+            raw = self.exchange._client.blpop(
+                [self.exchange._queue_key(self.mailbox_id)],
+                timeout=int(timeout) if timeout is not None else None,
+            )
+            if raw is None and timeout is not None:
                 raise TimeoutError(
-                    f'Timeout waiting for next message for {uid} after '
-                    f'{self.timeout} seconds.',
+                    f'Timeout waiting for next message for {self.mailbox_id} '
+                    f'after {timeout} seconds.',
                 )
             elif raw is None:  # pragma: no cover
                 continue
@@ -175,5 +240,9 @@ class RedisExchange(ExchangeMixin):
             assert len(raw) == 2  # noqa: PLR2004
             message = BaseMessage.model_from_json(raw[1])
             assert isinstance(message, get_args(Message))
-            logger.debug('Received %s to %s', type(message).__name__, uid)
+            logger.debug(
+                'Received %s to %s',
+                type(message).__name__,
+                self.mailbox_id,
+            )
             return message

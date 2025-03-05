@@ -98,15 +98,33 @@ class Queue(Generic[T]):
         """Check if the queue has been closed."""
         return self._closed
 
-    def get(self) -> T:
-        """Remove and return the next item from the queue (blocking)."""
-        item = self._queue.get()
+    def get(self, timeout: float | None = None) -> T:
+        """Remove and return the next item from the queue (blocking).
+
+        Args:
+            timeout: Block at most `timeout` seconds.
+
+        Raises:
+            TimeoutError: if no item was available within `timeout` seconds.
+            QueueClosedError: if the queue was closed.
+        """
+        try:
+            item = self._queue.get(timeout=timeout)
+        except queue.Empty:
+            raise TimeoutError from None
         if item.value is CLOSE_SENTINAL:
             raise QueueClosedError
         return cast(T, item.value)
 
     def put(self, item: T) -> None:
-        """Put an item on the queue."""
+        """Put an item on the queue.
+
+        Args:
+            item: The item to put on the queue.
+
+        Raises:
+            QueueClosedError: if the queue was closed.
+        """
         if self.closed():
             raise QueueClosedError
         self._queue.put(_Item(DEFAULT_PRIORITY, item))
