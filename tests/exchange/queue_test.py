@@ -45,3 +45,5 @@ def test_queue() -> None:
         queue.put(message)
     with pytest.raises(QueueClosedError):
         queue.get()
+    with pytest.raises(QueueClosedError):
+        queue.get()
