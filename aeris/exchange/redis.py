@@ -5,12 +5,7 @@ import logging
 from typing import Any
 from typing import get_args
 
-try:
-    import redis
-except ImportError as e:  # pragma: no cover
-    raise ImportError(
-        'Unable to import redis. Did you install using aeris[redis]?',
-    ) from e
+import redis
 
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError

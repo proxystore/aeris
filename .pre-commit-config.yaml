@@ -28,4 +28,5 @@ repos:
       - id: mypy
         additional_dependencies:
           - pydantic>=2,<3
+          - pyzmq
           - redis
