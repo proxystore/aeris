@@ -83,7 +83,7 @@ def test_create_mailbox_bad_identifier(mock_redis) -> None:
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
-def test_send_to_mailbox(mock_redis) -> None:
+def test_send_to_mailbox_direct(mock_redis) -> None:
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
         aid = exchange.create_agent()
         cid = exchange.create_client()
@@ -95,35 +95,89 @@ def test_send_to_mailbox(mock_redis) -> None:
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
-def test_mailbox_recv_closed(mock_redis) -> None:
+def test_send_to_mailbox_indirect(mock_redis) -> None:
+    messages = 3
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
         aid = exchange.create_agent()
-        mailbox = exchange.get_mailbox(aid)
-        mailbox.close()
-        with pytest.raises(MailboxClosedError):
-            mailbox.recv(timeout=TEST_SLEEP)
+        cid = exchange.create_client()
+        message = PingRequest(src=cid, dest=aid)
+        for _ in range(messages):
+            exchange.send(aid, message)
+        with exchange.get_mailbox(aid) as mailbox:
+            for _ in range(messages):
+                assert mailbox.recv(timeout=TEST_CONNECTION_TIMEOUT) == message
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
-def test_mailbox_server_error_logging(mock_redis, caplog) -> None:
-    caplog.set_level(logging.WARNING)
+def test_mailbox_recv_closed(mock_redis) -> None:
+    with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
+        aid = exchange.create_agent()
+        with exchange.get_mailbox(aid) as mailbox:
+            exchange.close_mailbox(aid)
+            with pytest.raises(MailboxClosedError):
+                mailbox.recv(timeout=TEST_SLEEP)
+
+
+@mock.patch('redis.Redis', side_effect=MockRedis)
+def test_mailbox_redis_error_logging(mock_redis, caplog) -> None:
+    caplog.set_level(logging.ERROR)
+    with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
+        aid = exchange.create_agent()
+        with mock.patch(
+            'aeris.exchange.hybrid.HybridMailbox._pull_messages_from_redis',
+            side_effect=RuntimeError('Mock thread error.'),
+        ):
+            mailbox = exchange.get_mailbox(aid)
+            mailbox._redis_thread.join(TEST_THREAD_JOIN_TIMEOUT)
+            mailbox.close()
+
+            assert any(
+                f'Error in redis watcher thread for {aid}' in record.message
+                for record in caplog.records
+                if record.levelname == 'ERROR'
+            )
+
+
+@mock.patch('redis.Redis', side_effect=MockRedis)
+def test_mailbox_zmq_error_logging(mock_redis, caplog) -> None:
+    caplog.set_level(logging.ERROR)
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
         aid = exchange.create_agent()
         with mock.patch(
             'zmq.Poller.poll',
-            side_effect=RuntimeError('Mock server thread error.'),
+            side_effect=RuntimeError('Mock thread error.'),
         ):
             mailbox = exchange.get_mailbox(aid)
             mailbox._server_thread.join(TEST_THREAD_JOIN_TIMEOUT)
             mailbox.close()
 
             assert any(
-                f'Error in mailbox server for {aid}' in record.message
+                f'Error in mailbox server thread for {aid}' in record.message
                 for record in caplog.records
                 if record.levelname == 'ERROR'
             )
-            assert any(
-                'Mailbox server thread is not alive' in record.message
-                for record in caplog.records
-                if record.levelname == 'WARNING'
-            )
+
+
+@mock.patch('redis.Redis', side_effect=MockRedis)
+def test_send_to_mailbox_bad_cached_address(mock_redis) -> None:
+    with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
+        aid = exchange.create_agent()
+        cid = exchange.create_client()
+        message = PingRequest(src=cid, dest=aid)
+
+        with exchange.get_mailbox(aid) as mailbox:
+            exchange.send(aid, message)
+            assert mailbox.recv(timeout=TEST_CONNECTION_TIMEOUT) == message
+
+        # Address of mailbox is now in the exchanges cache but
+        # the mailbox is no longer listening on that address.
+        assert aid in exchange._address_cache
+        import time
+
+        print('sleeping')
+        time.sleep(1)
+        # This send will try the cached address, fail, catch the error,
+        # and retry via redis.
+        exchange.send(aid, message)
+        with exchange.get_mailbox(aid) as mailbox:
+            assert mailbox.recv(timeout=TEST_CONNECTION_TIMEOUT) == message

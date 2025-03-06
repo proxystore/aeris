@@ -9,6 +9,7 @@ import threading
 import uuid
 from types import TracebackType
 from typing import Any
+from typing import get_args
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
     from typing import Self
@@ -30,8 +31,8 @@ from aeris.message import Message
 logger = logging.getLogger(__name__)
 
 _MESSAGE_ACK = '<PEER_MESSAGE_RECV_ACK>'
-_SERVER_THREAD_START_TIMEOUT = 5
-_SERVER_THREAD_JOIN_TIMEOUT = 5
+_THREAD_START_TIMEOUT = 5
+_THREAD_JOIN_TIMEOUT = 5
 _SOCKET_POLL_TIMEOUT_MS = 50
 
 
@@ -54,6 +55,7 @@ class HybridExchange(ExchangeMixin):
             [`redis.Redis()`][redis.Redis].
     """
 
+    _address_cache: dict[Identifier, str]
     _redis_client: redis.Redis
     _socket_pool: _ZMQSocketPool
 
@@ -77,6 +79,7 @@ class HybridExchange(ExchangeMixin):
         self._init_connections()
 
     def _init_connections(self) -> None:
+        self._address_cache = {}
         self._redis_client = redis.Redis(
             host=self._redis_host,
             port=self._redis_port,
@@ -170,6 +173,15 @@ class HybridExchange(ExchangeMixin):
             raise BadIdentifierError(uid)
         return HybridMailbox(uid, self)
 
+    def _send_direct(self, address: str, message: Message) -> None:
+        # TODO: what errors does this raise?
+        self._socket_pool.send(address, message)
+        logger.debug(
+            'Sent %s to %s via p2p',
+            type(message).__name__,
+            message.dest,
+        )
+
     def send(self, uid: Identifier, message: Message) -> None:
         """Send a message to a mailbox.
 
@@ -188,20 +200,47 @@ class HybridExchange(ExchangeMixin):
             BadIdentifierError: if a mailbox for `uid` does not exist.
             MailboxClosedError: if the mailbox was closed.
         """
+        address = self._address_cache.get(uid, None)
+        if address is not None:
+            try:
+                # This is as optimistic as possible. If the address of the
+                # peer is cached, we assume the mailbox is still active and
+                # the peer is still listening.
+                self._send_direct(address, message)
+            except zmq.ZMQError:
+                # Our optimism let us down so clear the cache and try the
+                # standard flow.
+                self._address_cache.pop(uid)
+            else:
+                return
+
         status = self._redis_client.get(self._status_key(uid))
         if status is None:
             raise BadIdentifierError(uid)
         elif status == _MailboxState.INACTIVE.value:
             raise MailboxClosedError(uid)
 
-        address = self._redis_client.get(self._address_key(uid))
-        if address is None:
-            raise AssertionError
-        elif isinstance(address, str):
-            self._socket_pool.send(address, message)
-        else:
-            raise AssertionError(f'Address has type {type(address)}.')
-        logger.debug('Sent %s to %s', type(message).__name__, uid)
+        maybe_address = self._redis_client.get(self._address_key(uid))
+        try:
+            # This branching is a little odd. We want to fall back to
+            # Redis for message sending on two conditions: direct send fails
+            # or no address was found. We raise a TypeError if no address
+            # was found as a shortcut to get to the fall back.
+            if isinstance(maybe_address, str):
+                self._send_direct(maybe_address, message)
+                self._address_cache[uid] = maybe_address
+            else:
+                raise TypeError
+        except (TypeError, zmq.ZMQError):
+            self._redis_client.rpush(
+                self._queue_key(uid),
+                message.model_dump_json(),
+            )
+            logger.debug(
+                'Sent %s to %s via redis',
+                type(message).__name__,
+                uid,
+            )
 
 
 class HybridMailbox:
@@ -223,20 +262,25 @@ class HybridMailbox:
         self._exchange = exchange
         self._messages: Queue[Message] = Queue()
 
+        self._closed = threading.Event()
         self._socket_poll_timeout_ms = _SOCKET_POLL_TIMEOUT_MS
 
         self._server_host = socket.gethostbyname(socket.gethostname())
         self._server_port: int | None = None
         self._server_running = threading.Event()
-        self._server_thread = threading.Thread(target=self._server)
+        self._server_thread = threading.Thread(target=self._zmq_server)
         self._server_thread.start()
-        self._server_running.wait(timeout=_SERVER_THREAD_START_TIMEOUT)
+        self._server_running.wait(timeout=_THREAD_START_TIMEOUT)
 
+        self._redis_thread = threading.Thread(target=self._redis_watcher)
+        self._redis_running = threading.Event()
         assert self._server_port is not None
         self.exchange._redis_client.set(
             self.exchange._address_key(uid),
             f'tcp://{self._server_host}:{self._server_port}',
         )
+        self._redis_thread.start()
+        self._redis_running.wait(timeout=_THREAD_START_TIMEOUT)
 
     @property
     def exchange(self) -> HybridExchange:
@@ -259,15 +303,66 @@ class HybridMailbox:
     ) -> None:
         self.close()
 
-    def _server(self) -> None:
+    def _pull_messages_from_redis(self, timeout: int = 1) -> None:
+        # Note: we use blpop instead of lpop here for the timeout.
+        raw = self.exchange._redis_client.blpop(
+            [self.exchange._queue_key(self.mailbox_id)],
+            timeout=timeout,
+        )
+        if raw is None:
+            return
+
+        # Only passed one key to blpop to result is [key, item]
+        assert isinstance(raw, (tuple, list))
+        assert len(raw) == 2  # noqa: PLR2004
+        message = BaseMessage.model_from_json(raw[1])
+        assert isinstance(message, get_args(Message))
+        logger.debug(
+            'Received %s to %s via redis',
+            type(message).__name__,
+            self.mailbox_id,
+        )
+        self._messages.put(message)
+
+    def _redis_watcher(self) -> None:
+        self._redis_running.set()
+        logger.debug('Started redis watcher thread for %s', self.mailbox_id)
+        try:
+            while not self._closed.is_set():
+                status = self.exchange._redis_client.get(
+                    self.exchange._status_key(self.mailbox_id),
+                )
+                if status is None:  # pragma: no cover
+                    raise AssertionError(
+                        f'Status for mailbox {self.mailbox_id} did not exist '
+                        'in Redis server. This means that something '
+                        'incorrectly deleted the key.',
+                    )
+                elif status == _MailboxState.INACTIVE.value:
+                    self._messages.close()
+                    break
+
+                self._pull_messages_from_redis(timeout=1)
+        except Exception:
+            logger.exception(
+                'Error in redis watcher thread for %s',
+                self.mailbox_id,
+            )
+        finally:
+            logger.debug(
+                'Stopped redis watcher thread for %s',
+                self.mailbox_id,
+            )
+
+    def _zmq_server(self) -> None:
         context = zmq.Context()
+        context.setsockopt(zmq.LINGER, 0)
         socket = context.socket(zmq.REP)
-        socket.setsockopt(zmq.LINGER, 0)
         host = f'tcp://{self._server_host}'
         self._server_port = socket.bind_to_random_port(host)
         self._server_running.set()
         logger.debug(
-            'Started mailbox server for %s on %s:%s',
+            'Started mailbox server thread for %s on %s:%s',
             self.mailbox_id,
             host,
             self._server_port,
@@ -277,7 +372,7 @@ class HybridMailbox:
         poller.register(socket, zmq.POLLIN)
 
         try:
-            while self._server_running.is_set():
+            while not self._closed.is_set():
                 sockets = dict(
                     poller.poll(timeout=self._socket_poll_timeout_ms),
                 )
@@ -286,16 +381,27 @@ class HybridMailbox:
 
                 message_json = socket.recv_string()
                 message = BaseMessage.model_from_json(message_json)
+                logger.debug(
+                    'Received %s to %s via p2p',
+                    type(message).__name__,
+                    self.mailbox_id,
+                )
                 self._messages.put(message)
 
                 socket.send_string(_MESSAGE_ACK)
         except Exception:
-            logger.exception('Error in mailbox server for %s', self.mailbox_id)
+            logger.exception(
+                'Error in mailbox server thread for %s',
+                self.mailbox_id,
+            )
         finally:
             self._server_running.clear()
             socket.close()
             context.term()
-            logger.debug('Stopped mailbox server for %s', self.mailbox_id)
+            logger.debug(
+                'Stopped mailbox server thread for %s',
+                self.mailbox_id,
+            )
 
     def close(self) -> None:
         """Close this mailbox client.
@@ -305,22 +411,27 @@ class HybridMailbox:
             will still accept new messages to this mailbox, but this client
             will no longer be listening for them.
         """
+        self._closed.set()
         self.exchange._redis_client.delete(
             self.exchange._address_key(self.mailbox_id),
         )
-        if self._server_thread.is_alive():
-            self._server_running.clear()
-            self._server_thread.join(_SERVER_THREAD_JOIN_TIMEOUT)
-            if self._server_thread.is_alive():  # pragma: no cover
-                raise TimeoutError(
-                    'Mailbox server thread failed to exit within '
-                    f'{_SERVER_THREAD_JOIN_TIMEOUT} seconds.',
-                )
-        else:
-            logger.warning(
-                'Mailbox server thread is not alive which likely means that '
-                'it crashed. Check logs for possible errors',
+
+        self._server_thread.join(_THREAD_JOIN_TIMEOUT)
+        if self._server_thread.is_alive():  # pragma: no cover
+            raise TimeoutError(
+                'Mailbox server thread failed to exit within '
+                f'{_THREAD_JOIN_TIMEOUT} seconds.',
             )
+        self._server_running.clear()
+
+        self._redis_thread.join(_THREAD_JOIN_TIMEOUT)
+        if self._redis_thread.is_alive():  # pragma: no cover
+            raise TimeoutError(
+                'Redis watcher thread failed to exit within '
+                f'{_THREAD_JOIN_TIMEOUT} seconds.',
+            )
+        self._redis_running.clear()
+
         self._messages.close()
 
     def recv(self, timeout: float | None = None) -> Message:
@@ -339,6 +450,7 @@ class HybridMailbox:
             MailboxClosedError: if the mailbox was closed.
             TimeoutError: if a `timeout` was specified and exceeded.
         """
+        # TODO: check if _closed.is_set() and raise different error.
         try:
             return self._messages.get(timeout=timeout)
         except QueueClosedError:
@@ -351,23 +463,39 @@ class _ZMQSocketPool:
         self._sockets: dict[str, zmq.Socket[bytes]] = {}
 
     def close(self) -> None:
-        for s in self._sockets.values():
-            s.close()
+        for address in tuple(self._sockets.keys()):
+            self.close_socket(address)
         self._context.destroy()
+
+    def close_socket(self, address: str) -> None:
+        socket = self._sockets.get(address, None)
+        if socket is not None:  # pragma: no branch
+            socket.close()
 
     def get_socket(self, address: str) -> zmq.Socket[bytes]:
         try:
+            raise KeyError
             return self._sockets[address]
         except KeyError:
             socket = self._context.socket(zmq.REQ)
+            socket.setsockopt(zmq.CONFLATE, 1)
             socket.connect(address)
             self._sockets[address] = socket
+            print(f'created socket to {address}')
             return socket
 
     def send(self, address: str, message: Message) -> None:
         socket = self.get_socket(address)
-        socket.send_string(message.model_dump_json())
-        response = socket.recv_string()
+        try:
+            print(f'sending {address}')
+            socket.send_string(message.model_dump_json())
+            print('sent')
+            socket.send_string('')
+            response = socket.recv_string()
+            print('recv')
+        except zmq.ZMQError:
+            self.close_socket(address)
+            raise
         assert response == _MESSAGE_ACK
 
 
