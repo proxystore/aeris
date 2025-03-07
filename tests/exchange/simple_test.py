@@ -283,7 +283,7 @@ async def test_server_handle_parse_message_error() -> None:
 
     reader = mock.Mock(spec=asyncio.StreamReader)
     reader.at_eof.return_value = False
-    reader.readline.return_value = b'random-data'
+    reader.readuntil.return_value = b'random-data'
     writer = mock.Mock(spec=asyncio.StreamWriter)
 
     await server._handle_client(reader, writer)
@@ -299,7 +299,7 @@ async def test_server_handle_drop_bad_type() -> None:
     )
     reader = mock.Mock(spec=asyncio.StreamReader)
     reader.at_eof.return_value = False
-    reader.readline.side_effect = [
+    reader.readuntil.side_effect = [
         message.model_serialize(),
         # Pass random data to make _handle_client exit
         b'random-data',

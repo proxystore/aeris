@@ -24,12 +24,10 @@ import asyncio
 import base64
 import contextlib
 import enum
-import io
 import logging
 import multiprocessing
 import pickle
 import signal
-import socket
 import sys
 import threading
 import uuid
@@ -61,6 +59,8 @@ from aeris.exchange.queue import QueueClosedError
 from aeris.identifier import Identifier
 from aeris.logging import init_logging
 from aeris.message import Message
+from aeris.socket import SimpleSocket
+from aeris.socket import SocketClosedError
 from aeris.socket import wait_connection
 
 logger = logging.getLogger(__name__)
@@ -179,11 +179,11 @@ class SimpleExchange(ExchangeMixin):
         self.port = port
         self.timeout = timeout
 
-        self._socket = socket.create_connection(
-            (self.hostname, self.port),
+        self._socket = SimpleSocket(
+            self.hostname,
+            self.port,
             timeout=self.timeout,
         )
-        self._socket.setblocking(False)
         self._handler_thread = threading.Thread(
             target=self._listen_server_messages,
             name=f'{self}-message-handler',
@@ -225,47 +225,29 @@ class SimpleExchange(ExchangeMixin):
 
     def _listen_server_messages(self) -> None:
         logging.debug('Listening for messages from %s', self)
-        buffer = io.BytesIO()
         while True:
             try:
-                raw = self._socket.recv(1024)
-            except BlockingIOError:
-                continue
+                raw = self._socket.recv()
+            except SocketClosedError:
+                break
             except OSError:
+                logger.exception(
+                    'Error when listening for messages from %s',
+                    self,
+                )
                 break
 
-            if len(raw) == 0:  # pragma: no cover
+            try:
+                message = _BaseExchangeMessage.model_deserialize(raw)
+            except Exception:  # pragma: no cover
+                logger.exception(
+                    'Failed to deserialize message from %s',
+                    self,
+                )
                 break
-
-            buffer.write(raw)
-            buffer.seek(0)
-            start_index = 0
-            for line in buffer:
-                start_index += len(line)
-
-                raw = line.strip()
-                if len(raw) == 0:  # pragma: no cover
-                    continue
-
-                try:
-                    message = _BaseExchangeMessage.model_deserialize(raw)
-                except Exception:  # pragma: no cover
-                    logger.exception(
-                        'Failed to deserialize message from %s',
-                        self,
-                    )
-                    return
+            else:
                 self._handle_message(message)
 
-            if start_index > 0:
-                buffer.seek(start_index)
-                remaining = buffer.read()
-                buffer.truncate(0)
-                buffer.seek(0)
-                buffer.write(remaining)
-            else:  # pragma: no cover
-                buffer.seek(0, 2)
-        buffer.close()
         logging.debug('Finished listening for messages from %s', self)
 
     def _send_request(
@@ -275,15 +257,21 @@ class SimpleExchange(ExchangeMixin):
     ) -> _ExchangeResponseMessage:
         future: Future[_ExchangeResponseMessage] = Future()
         self._pending[request.tag] = future
-        self._socket.send(request.model_serialize() + b'\n')
+        self._socket.send(request.model_serialize())
         response = future.result(timeout=timeout)
         del self._pending[request.tag]
         return response
 
     def close(self) -> None:
         """Close this exchange client."""
+        timeout = 5
         self._socket.close()
-        self._handler_thread.join(timeout=1)
+        self._handler_thread.join(timeout=timeout)
+        if self._handler_thread.is_alive():
+            raise TimeoutError(
+                'Exchange message listener thread did not exit '
+                f'within {timeout} seconds.',
+            )
         logger.debug('Closed exchange (%s)', self)
 
     def create_mailbox(self, uid: Identifier) -> None:
@@ -540,7 +528,7 @@ class SimpleServer:
     ) -> None:
         response = await self._handle_request(request)
         encoded = response.model_serialize()
-        writer.write(encoded + b'\n')
+        writer.write(encoded + b'\r\n')
         await writer.drain()
 
     async def _handle_client(
@@ -550,8 +538,9 @@ class SimpleServer:
     ) -> None:
         logger.debug('Started new client handler')
         while not reader.at_eof():
-            raw = await reader.readline()
-            if raw == b'':
+            try:
+                raw = await reader.readuntil(b'\r\n')
+            except asyncio.IncompleteReadError:
                 reader.feed_eof()
                 continue
 

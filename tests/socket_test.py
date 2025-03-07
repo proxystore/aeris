@@ -4,7 +4,15 @@ from unittest import mock
 
 import pytest
 
+from aeris.socket import SimpleSocket
 from aeris.socket import wait_connection
+
+
+@mock.patch('socket.create_connection')
+def test_create_simple_socket(mock_create_connection) -> None:
+    with SimpleSocket('localhost', 0) as socket:
+        assert 'localhost' in repr(socket)
+        assert 'localhost' in str(socket)
 
 
 def test_wait_connection() -> None:
