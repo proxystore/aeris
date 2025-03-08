@@ -23,9 +23,10 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
 ]
 dependencies = [
+    "aiohttp",
     "pydantic>=2,<3",
-    "pyzmq",
     "redis",
+    "requests",
     "typing-extensions>=4.3.0 ; python_version<'3.11'",
 ]
 
