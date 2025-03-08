@@ -29,7 +29,7 @@ def test_protocol() -> None:
 def test_launch_agents_threads(exchange: Exchange) -> None:
     behavior = SleepBehavior(TEST_LOOP_SLEEP)
     executor = ThreadPoolExecutor(max_workers=2)
-    with ExecutorLauncher(executor) as launcher:
+    with ExecutorLauncher(executor, close_exchange=False) as launcher:
         handle1 = launcher.launch(behavior, exchange).bind_as_client()
         handle2 = launcher.launch(behavior, exchange).bind_as_client()
 
@@ -102,7 +102,7 @@ class FailOnStartupBehavior(Behavior):
 def test_wait_ignore_agent_errors(exchange: Exchange) -> None:
     behavior = FailOnStartupBehavior()
     executor = ThreadPoolExecutor(max_workers=1)
-    launcher = ExecutorLauncher(executor)
+    launcher = ExecutorLauncher(executor, close_exchange=False)
 
     handle = launcher.launch(behavior, exchange).bind_as_client()
     launcher.wait(handle.agent_id)

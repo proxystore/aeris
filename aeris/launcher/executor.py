@@ -32,10 +32,21 @@ class ExecutorLauncher:
     Args:
         executor: Executor used for launching agents. Note that this class
             takes ownership of the `executor`.
+        close_exchange: Passed along to the [`Agent`][aeris.agent.Agent]
+            constructor. This should typically be `True`, the default,
+            when the executor runs agents in separate processes, but should
+            be `False` for the `ThreadPoolExecutor` to avoid closing
+            shared exchange objects.
     """  # noqa: E501
 
-    def __init__(self, executor: Executor) -> None:
+    def __init__(
+        self,
+        executor: Executor,
+        *,
+        close_exchange: bool = True,
+    ) -> None:
         self._executor = executor
+        self._close_exchange = close_exchange
         self._future_to_id: dict[Future[None], AgentIdentifier] = {}
         self._id_to_future: dict[AgentIdentifier, Future[None]] = {}
 
@@ -98,7 +109,7 @@ class ExecutorLauncher:
             behavior,
             agent_id=agent_id,
             exchange=exchange,
-            close_exchange=True,
+            close_exchange=self._close_exchange,
         )
         future = self._executor.submit(agent)
         future.add_done_callback(self._callback)

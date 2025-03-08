@@ -373,10 +373,10 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
         future.result(timeout=timeout)
         elapsed = time.perf_counter() - start
         logger.debug(
-            'Received ping from %s to %s in %.3f ms',
+            'Received ping from %s to %s in %.1f ms',
             self.mailbox_id,
             self.agent_id,
-            elapsed / 1000,
+            elapsed * 1000,
         )
         return elapsed
 
@@ -592,20 +592,23 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
     def _recv_responses(self) -> None:
         logger.debug('Started result listener thread for %s', self)
 
-        while True:
-            try:
-                message = self._mailbox.recv()
-            except MailboxClosedError:
-                break
+        try:
+            while True:
+                try:
+                    message = self._mailbox.recv()
+                except MailboxClosedError:
+                    break
 
-            if isinstance(message, get_args(ResponseMessage)):
-                self._process_response(message)
-            else:
-                logger.error(
-                    'Received invalid message response type %s from %s',
-                    type(message).__name__,
-                    self.agent_id,
-                )
+                if isinstance(message, get_args(ResponseMessage)):
+                    self._process_response(message)
+                else:
+                    logger.error(
+                        'Received invalid message response type %s from %s',
+                        type(message).__name__,
+                        self.agent_id,
+                    )
+        except Exception:  # pragma: no cover
+            logger.exception('Error in result listener thread for %s', self)
 
         logger.debug('Exiting result listener thread for %s', self)
 
@@ -669,8 +672,14 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
                 'This likely means the listener thread crashed.',
             )
 
-        self._mailbox.close()
         self.exchange.close_mailbox(self.mailbox_id)
-        self._recv_thread.join()
+        timeout = 5
+        self._recv_thread.join(timeout=timeout)
+        if self._recv_thread.is_alive():  # pragma: no cover
+            raise TimeoutError(
+                f'Result message listener for {self.mailbox_id} did '
+                f'not exit within {timeout} seconds.',
+            )
+        self._mailbox.close()
 
         logger.debug('Closed handle (%s)', self)
