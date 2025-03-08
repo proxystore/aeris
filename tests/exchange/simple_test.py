@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import pickle
+import threading
 from unittest import mock
 
 import pytest
@@ -27,6 +28,7 @@ from aeris.message import PingRequest
 from aeris.message import PingResponse
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_SLEEP
+from testing.constant import TEST_THREAD_JOIN_TIMEOUT
 from testing.sys import open_port
 
 
@@ -358,6 +360,30 @@ def test_exchange_send_messages(
         mailbox = exchange.get_mailbox(aid2)
         assert mailbox.recv() == message
         mailbox.close()
+
+
+def test_exchange_mailbox_recv_exits_when_closed(
+    simple_exchange_server: tuple[str, int],
+) -> None:
+    host, port = simple_exchange_server
+    with SimpleExchange(host, port) as exchange:
+        aid = exchange.create_agent()
+
+        mailbox = exchange.get_mailbox(aid)
+        started = threading.Event()
+
+        def _recv() -> None:
+            started.set()
+            with pytest.raises(MailboxClosedError):
+                mailbox.recv()
+
+        thread = threading.Thread(target=_recv)
+        thread.start()
+        started.wait(TEST_THREAD_JOIN_TIMEOUT)
+
+        exchange.close_mailbox(aid)
+        thread.join(TEST_THREAD_JOIN_TIMEOUT)
+        assert not thread.is_alive()
 
 
 def test_exchange_bad_identifier(

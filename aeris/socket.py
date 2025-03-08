@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import contextlib
 import socket
+import socketserver
 import sys
+import threading
 import time
 from types import TracebackType
+from typing import Any
+from typing import Callable
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
     from typing import Self
@@ -12,6 +17,7 @@ else:  # pragma: <3.11 cover
 
 
 _BAD_FILE_DESCRIPTOR_ERRNO = 9
+TCP_MESSAGE_DELIM = b'\r\n'
 
 
 class SocketClosedError(Exception):
@@ -46,17 +52,17 @@ class SimpleSocket:
             the exception will be set to the underlying `OSError`.
     """
 
-    delimiter = b'\r\n'
-
     def __init__(
         self,
         host: str,
         port: int,
-        timeout: float | None = 5,
+        *,
+        timeout: float | None = None,
     ) -> None:
         self.host = host
         self.port = port
         self.timeout = timeout
+        self.closed = False
         try:
             self.socket = socket.create_connection(
                 (self.host, self.port),
@@ -84,9 +90,14 @@ class SimpleSocket:
     def __str__(self) -> str:
         return f'{type(self).__name__}<{self.host}:{self.port}>'
 
-    def close(self) -> None:
+    def close(self, shutdown: bool = True) -> None:
         """Close the socket."""
+        if self.closed:
+            return
+        if shutdown:  # pragma: no branch
+            self.socket.shutdown(socket.SHUT_RDWR)
         self.socket.close()
+        self.closed = True
 
     def send(self, message: bytes) -> None:
         """Send bytes to the socket.
@@ -98,7 +109,7 @@ class SimpleSocket:
             SocketClosedError: if the socket was closed.
             OSError: if an error occurred.
         """
-        payload = message + self.delimiter
+        payload = message + TCP_MESSAGE_DELIM
         try:
             self.socket.sendall(payload)
         except OSError as e:
@@ -121,23 +132,6 @@ class SimpleSocket:
         """
         self.send(message.encode('utf-8'))
 
-    def _recv_next(self) -> bytes:
-        while True:
-            try:
-                payload = self.socket.recv(1024)
-            except BlockingIOError:
-                continue
-            except OSError as e:
-                if e.errno == _BAD_FILE_DESCRIPTOR_ERRNO:
-                    raise SocketClosedError() from e
-                else:
-                    raise
-
-            if payload == b'':
-                raise SocketClosedError()
-
-            return payload
-
     def recv(self) -> bytes:
         """Receive the next message from the socket.
 
@@ -149,14 +143,15 @@ class SimpleSocket:
             OSError: if an error occurred.
         """
         while True:
-            payload = self._recv_next()
-            current, delim, new = payload.partition(self.delimiter)
+            payload = _recv_from_socket(self.socket)
+            current, delim, new = payload.partition(TCP_MESSAGE_DELIM)
             assert len(current) > 0
             self._buffer.extend(current)
             if delim != b'':
                 message = bytes(self._buffer)
                 self._buffer = bytearray(new)
                 break
+
         return message
 
     def recv_string(self) -> str:
@@ -170,6 +165,132 @@ class SimpleSocket:
             OSError: if an error occurred.
         """
         return self.recv().decode('utf-8')
+
+
+class _SimpleSocketServerHandler(socketserver.BaseRequestHandler):
+    def handle(self) -> None:
+        buffer = bytearray()
+        while True:
+            try:
+                payload = _recv_from_socket(self.request)
+            except SocketClosedError:
+                self.request.close()
+                return
+
+            current, delim, new = payload.partition(TCP_MESSAGE_DELIM)
+            assert len(current) > 0
+            buffer.extend(current)
+
+            if delim != b'':  # pragma: no branch
+                message = buffer.decode('utf-8')
+                buffer = bytearray(new)
+
+                assert hasattr(self.server, 'handler')
+                response = self.server.handler(message)
+
+                payload = response.encode('utf-8') + TCP_MESSAGE_DELIM
+                self.request.sendall(payload)
+
+
+class SimpleSocketServer(socketserver.TCPServer):
+    """Simple TCP socket server.
+
+    Args:
+        handler: Callback that handles a message and returns the response
+            string.
+        host: Host to bind to.
+        poll_interval: Polling interval in seconds to check if the
+            server should shutdown.
+        port: Port to bind to. If 0, a random port is bound to.
+    """
+
+    def __init__(
+        self,
+        handler: Callable[[str], str],
+        *,
+        host: str = '0.0.0.0',
+        poll_interval: float = 0.05,
+        port: int = 0,
+    ) -> None:
+        self.handler = handler
+        self.poll_interval = poll_interval
+        self._client_sockets: set[socket.socket] = set()
+        self._serving = threading.Event()
+        self._lock = threading.RLock()
+
+        super().__init__((host, port), _SimpleSocketServerHandler)
+
+    @property
+    def host(self) -> str:
+        """Host the server is bound to."""
+        host, _ = self.server_address
+        assert isinstance(host, str)
+        return host
+
+    @property
+    def port(self) -> int:
+        """Port the server is bound to."""
+        return self.server_address[1]
+
+    def close(self) -> None:
+        """Close the server."""
+        self.socket.shutdown(socket.SHUT_RDWR)
+        self.server_close()
+
+    def close_request(
+        self,
+        request: socket.socket | tuple[bytes, socket.socket],
+    ) -> None:
+        """Close a request socket."""
+        conn = request[1] if isinstance(request, tuple) else request
+        with self._lock:
+            with contextlib.suppress(KeyError):
+                self._client_sockets.remove(conn)
+            with contextlib.suppress(OSError):
+                # Can fail if the client already shutdown the socket
+                conn.shutdown(socket.SHUT_RDWR)
+            conn.close()
+
+    def get_request(self) -> tuple[socket.socket, Any]:
+        """Get a request socket."""
+        conn, address = self.socket.accept()
+        self._client_sockets.add(conn)
+        return conn, address
+
+    def stop_serving(self) -> None:
+        """Notify the server to stop serving."""
+        with self._lock:
+            for conn in tuple(self._client_sockets):
+                self.close_request(conn)
+        if self._serving.is_set():
+            self.shutdown()
+
+    def serve_forever_default(self) -> None:
+        """Server until `stop_serving` is called."""
+        self._serving.set()
+        try:
+            self.serve_forever(self.poll_interval)
+        finally:
+            self._serving.clear()
+
+
+def _recv_from_socket(socket: socket.socket, nbytes: int = 1024) -> bytes:
+    while True:
+        try:
+            # TODO: use select here?
+            payload = socket.recv(nbytes)
+        except BlockingIOError:
+            continue
+        except OSError as e:
+            if e.errno == _BAD_FILE_DESCRIPTOR_ERRNO:
+                raise SocketClosedError() from e
+            else:
+                raise
+
+        if payload == b'':
+            raise SocketClosedError()
+
+        return payload
 
 
 def wait_connection(

@@ -30,6 +30,7 @@ import pickle
 import signal
 import sys
 import threading
+import time
 import uuid
 from collections.abc import Generator
 from collections.abc import Sequence
@@ -52,6 +53,7 @@ from pydantic import field_validator
 from pydantic import TypeAdapter
 
 from aeris.exception import BadIdentifierError
+from aeris.exception import ExchangeClosedError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import AsyncQueue
@@ -61,6 +63,7 @@ from aeris.logging import init_logging
 from aeris.message import Message
 from aeris.socket import SimpleSocket
 from aeris.socket import SocketClosedError
+from aeris.socket import TCP_MESSAGE_DELIM
 from aeris.socket import wait_connection
 
 logger = logging.getLogger(__name__)
@@ -266,6 +269,9 @@ class SimpleExchange(ExchangeMixin):
         """Close this exchange client."""
         timeout = 5
         self._socket.close()
+        for future in self._pending.values():
+            if not future.done():
+                future.set_exception(ExchangeClosedError())
         self._handler_thread.join(timeout=timeout)
         if self._handler_thread.is_alive():
             raise TimeoutError(
@@ -413,7 +419,10 @@ class SimpleMailbox:
             kind=_ExchangeMessageType.REQUEST_MESSAGE,
             src=self.mailbox_id,
         )
-        response = self.exchange._send_request(request, timeout=timeout)
+        try:
+            response = self.exchange._send_request(request, timeout=timeout)
+        except ExchangeClosedError as e:
+            raise MailboxClosedError(self.mailbox_id) from e
         assert response.success
         assert response.payload is not None
         logger.debug(
@@ -483,7 +492,6 @@ class SimpleServer:
         self,
         message: _ExchangeRequestMessage,
     ) -> _ExchangeResponseMessage:
-        logger.debug('Handling server request (%s)', message)
         if message.kind is _ExchangeMessageType.CREATE_MAILBOX:
             self.manager.create_mailbox(message.src)
             response = message.response()
@@ -526,10 +534,17 @@ class SimpleServer:
         request: _ExchangeRequestMessage,
         writer: asyncio.StreamWriter,
     ) -> None:
+        start = time.perf_counter()
+        logger.debug('Handling server request (%s)', request)
         response = await self._handle_request(request)
         encoded = response.model_serialize()
-        writer.write(encoded + b'\r\n')
+        writer.write(encoded + TCP_MESSAGE_DELIM)
         await writer.drain()
+        logger.debug(
+            'Completed server request in %.1f ms (%s)',
+            1000 * (time.perf_counter() - start),
+            response,
+        )
 
     async def _handle_client(
         self,
@@ -539,7 +554,7 @@ class SimpleServer:
         logger.debug('Started new client handler')
         while not reader.at_eof():
             try:
-                raw = await reader.readuntil(b'\r\n')
+                raw = await reader.readuntil(TCP_MESSAGE_DELIM)
             except asyncio.IncompleteReadError:
                 reader.feed_eof()
                 continue
@@ -592,6 +607,7 @@ class SimpleServer:
 
         if sys.version_info >= (3, 13):  # pragma: >=3.13 cover
             server.close_clients()
+        logger.info('Closed exchange!')
 
 
 async def serve_forever(

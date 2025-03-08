@@ -11,6 +11,13 @@ class BadIdentifierError(Exception):
         super().__init__(f'Unknown identifier {uid}.')
 
 
+class ExchangeClosedError(Exception):
+    """Exchange client has been closed."""
+
+    def __init__(self) -> None:
+        super().__init__('Exchange client was closed.')
+
+
 class HandleClosedError(Exception):
     """Agent handle has been closed."""
 
