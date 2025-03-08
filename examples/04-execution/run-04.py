@@ -6,7 +6,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 from aeris.behavior import action
 from aeris.behavior import Behavior
-from aeris.exchange.simple import spawn_simple_exchange
+from aeris.exchange.http import spawn_http_exchange
 from aeris.handle import Handle
 from aeris.launcher.executor import ExecutorLauncher
 from aeris.logging import init_logging
@@ -47,7 +47,7 @@ class Reverser(Behavior):
 def main() -> int:
     init_logging(logging.INFO)
 
-    with spawn_simple_exchange('localhost', EXCHANGE_PORT) as exchange:
+    with spawn_http_exchange('localhost', EXCHANGE_PORT) as exchange:
         with Manager(
             exchange=exchange,
             # Agents are launched using a Launcher. The ExecutorLauncher can

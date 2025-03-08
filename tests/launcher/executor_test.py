@@ -10,7 +10,7 @@ import pytest
 from aeris.behavior import Behavior
 from aeris.exception import BadIdentifierError
 from aeris.exchange import Exchange
-from aeris.exchange.simple import SimpleExchange
+from aeris.exchange.http import HttpExchange
 from aeris.launcher import Launcher
 from aeris.launcher.executor import ExecutorLauncher
 from testing.behavior import SleepBehavior
@@ -50,14 +50,14 @@ def test_launch_agents_threads(exchange: Exchange) -> None:
 
 
 def test_launch_agents_processes(
-    simple_exchange_server: tuple[str, int],
+    http_exchange_server: tuple[str, int],
 ) -> None:
     behavior = SleepBehavior(TEST_LOOP_SLEEP)
     context = multiprocessing.get_context('spawn')
     executor = ProcessPoolExecutor(max_workers=2, mp_context=context)
-    host, port = simple_exchange_server
+    host, port = http_exchange_server
 
-    with SimpleExchange(host, port) as exchange:
+    with HttpExchange(host, port) as exchange:
         with ExecutorLauncher(executor) as launcher:
             handle1 = launcher.launch(behavior, exchange).bind_as_client()
             handle2 = launcher.launch(behavior, exchange).bind_as_client()
