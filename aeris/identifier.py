@@ -14,6 +14,7 @@ else:  # pragma: <3.11 cover
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
+from pydantic import TypeAdapter
 
 
 class BaseIdentifier(BaseModel):
@@ -44,6 +45,11 @@ class BaseIdentifier(BaseModel):
             name: Optional human-readable name for the entity.
         """
         return cls(uid=uuid.uuid4(), name=name)
+
+    @classmethod
+    def model_from_json(cls, data: str) -> Identifier:
+        """Reconstruct an identifier from a JSON dump."""
+        return TypeAdapter(Identifier).validate_json(data)
 
     def __eq__(self, other: object, /) -> bool:
         return isinstance(other, type(self)) and self.uid == other.uid

@@ -27,5 +27,7 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies:
+          - aiohttp
           - pydantic>=2,<3
           - redis
+          - requests

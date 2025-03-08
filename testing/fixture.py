@@ -6,10 +6,10 @@ from collections.abc import Generator
 
 import pytest
 
-from aeris.exchange.simple import SimpleServer
+from aeris.exchange.http import create_app
+from aeris.exchange.http import serve_app
 from aeris.exchange.thread import ThreadExchange
 from aeris.launcher.thread import ThreadLauncher
-from aeris.socket import wait_connection
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.sys import open_port
 
@@ -27,22 +27,27 @@ def launcher() -> Generator[ThreadLauncher]:
 
 
 @pytest.fixture
-def simple_exchange_server() -> Generator[tuple[str, int]]:
+def http_exchange_server() -> Generator[tuple[str, int]]:
     host, port = 'localhost', open_port()
-    server = SimpleServer(host, port)
+    app = create_app()
     loop = asyncio.new_event_loop()
+    started = threading.Event()
     stop = loop.create_future()
+
+    async def _run() -> None:
+        async with serve_app(app, host, port):
+            started.set()
+            await stop
 
     def _target() -> None:
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(server.serve_forever(stop))
+        loop.run_until_complete(_run())
         loop.close()
 
-    handle = threading.Thread(target=_target, name=f'{server}-fixture')
+    handle = threading.Thread(target=_target, name='http-exchange-fixture')
     handle.start()
 
-    # Wait for server to be listening
-    wait_connection(host, port, timeout=TEST_CONNECTION_TIMEOUT)
+    started.wait(TEST_CONNECTION_TIMEOUT)
 
     yield host, port
 

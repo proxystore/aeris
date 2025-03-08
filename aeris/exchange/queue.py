@@ -11,7 +11,7 @@ T = TypeVar('T')
 
 DEFAULT_PRIORITY = 0
 CLOSE_PRIORITY = DEFAULT_PRIORITY + 1
-CLOSE_SENTINAL = object()
+CLOSE_SENTINEL = object()
 
 
 class QueueClosedError(Exception):
@@ -49,7 +49,7 @@ class AsyncQueue(Generic[T]):
         if not self.closed():
             self._closed = True
             priority = CLOSE_PRIORITY if immediate else DEFAULT_PRIORITY
-            await self._queue.put(_Item(priority, CLOSE_SENTINAL))
+            await self._queue.put(_Item(priority, CLOSE_SENTINEL))
 
     def closed(self) -> bool:
         """Check if the queue has been closed."""
@@ -58,7 +58,7 @@ class AsyncQueue(Generic[T]):
     async def get(self) -> T:
         """Remove and return the next item from the queue (blocking)."""
         item = await self._queue.get()
-        if item.value is CLOSE_SENTINAL:
+        if item.value is CLOSE_SENTINEL:
             raise QueueClosedError
         return cast(T, item.value)
 
@@ -92,7 +92,7 @@ class Queue(Generic[T]):
         if not self.closed():
             self._closed = True
             priority = CLOSE_PRIORITY if immediate else DEFAULT_PRIORITY
-            self._queue.put(_Item(priority, CLOSE_SENTINAL))
+            self._queue.put(_Item(priority, CLOSE_SENTINEL))
 
     def closed(self) -> bool:
         """Check if the queue has been closed."""
@@ -112,7 +112,10 @@ class Queue(Generic[T]):
             item = self._queue.get(timeout=timeout)
         except queue.Empty:
             raise TimeoutError from None
-        if item.value is CLOSE_SENTINAL:
+        if item.value is CLOSE_SENTINEL:
+            # Push the sentinel back to the queue in case another thread
+            # has called get.
+            self._queue.put(_Item(CLOSE_PRIORITY, CLOSE_SENTINEL))
             raise QueueClosedError
         return cast(T, item.value)
 
