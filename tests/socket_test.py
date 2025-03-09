@@ -132,6 +132,7 @@ def simple_socket_server() -> Generator[SimpleSocketServer]:
 
     server.stop_serving()
     server.close()
+    server.stop_serving()  # Idempotency check
 
 
 def test_simple_socket_server_ping(
