@@ -13,8 +13,10 @@ from aeris.exchange import ExchangeMixin
 from aeris.identifier import Identifier
 from aeris.message import BaseMessage
 from aeris.message import Message
+from aeris.serialize import NoPickleMixin
 
 logger = logging.getLogger(__name__)
+_CLOSE_SENTINEL = '<CLOSED>'
 
 
 class _MailboxState(enum.Enum):
@@ -112,7 +114,10 @@ class RedisExchange(ExchangeMixin):
             uid: Entity identifier of the mailbox to close.
         """
         self._client.set(self._active_key(uid), _MailboxState.INACTIVE.value)
-        self._client.delete(self._queue_key(uid))
+        # Sending a close sentinel to the queue is a quick way to force
+        # the entity waiting on messages to the mailbox to stop blocking.
+        # This assumes that only one entity is reading from the mailbox.
+        self._client.rpush(self._queue_key(uid), _CLOSE_SENTINEL)
         logger.debug('Closed mailbox for %s (%s)', uid, self)
 
     def get_mailbox(self, uid: Identifier) -> RedisMailbox:
@@ -150,7 +155,7 @@ class RedisExchange(ExchangeMixin):
             logger.debug('Sent %s to %s', type(message).__name__, uid)
 
 
-class RedisMailbox:
+class RedisMailbox(NoPickleMixin):
     """Client protocol that listens to incoming messages to a mailbox.
 
     Args:
@@ -205,6 +210,7 @@ class RedisMailbox:
             MailboxClosedError: if the mailbox was closed.
             TimeoutError: if a `timeout` was specified and exceeded.
         """
+        _timeout = int(timeout) if timeout is not None else 1
         while True:
             status = self.exchange._client.get(
                 self.exchange._active_key(self.mailbox_id),
@@ -220,7 +226,7 @@ class RedisMailbox:
 
             raw = self.exchange._client.blpop(
                 [self.exchange._queue_key(self.mailbox_id)],
-                timeout=int(timeout) if timeout is not None else None,
+                timeout=_timeout,
             )
             if raw is None and timeout is not None:
                 raise TimeoutError(
@@ -233,6 +239,8 @@ class RedisMailbox:
             # Only passed one key to blpop to result is [key, item]
             assert isinstance(raw, (tuple, list))
             assert len(raw) == 2  # noqa: PLR2004
+            if raw[1] == _CLOSE_SENTINEL:  # pragma: no cover
+                raise MailboxClosedError(self.mailbox_id)
             message = BaseMessage.model_from_json(raw[1])
             assert isinstance(message, get_args(Message))
             logger.debug(
