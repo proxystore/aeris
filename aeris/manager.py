@@ -23,13 +23,14 @@ from aeris.identifier import ClientIdentifier
 from aeris.launcher import Launcher
 from aeris.message import RequestMessage
 from aeris.multiplex import MailboxMultiplexer
+from aeris.serialize import NoPickleMixin
 
 logger = logging.getLogger(__name__)
 
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
-class Manager:
+class Manager(NoPickleMixin):
     """Launch and manage running agents.
 
     The manager is provided as convenience to reduce common boilerplate code

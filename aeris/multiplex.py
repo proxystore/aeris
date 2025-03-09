@@ -23,13 +23,14 @@ from aeris.identifier import Identifier
 from aeris.message import Message
 from aeris.message import RequestMessage
 from aeris.message import ResponseMessage
+from aeris.serialize import NoPickleMixin
 
 logger = logging.getLogger(__name__)
 
 BehaviorT_co = TypeVar('BehaviorT_co', bound=Behavior, covariant=True)
 
 
-class MailboxMultiplexer:
+class MailboxMultiplexer(NoPickleMixin):
     """Multiplex a single mailbox across many consumers.
 
     A mailbox represents a recipient entity. In many cases, there may be
@@ -133,9 +134,9 @@ class MailboxMultiplexer:
 
         Closes all handles bound to this mailbox and then closes the mailbox.
         """
-        self._mailbox.close()
-        self.close_bound_handles()
         self.close_mailbox()
+        self.close_bound_handles()
+        self._mailbox.close()
 
     def close_bound_handles(self) -> None:
         """Close all handles bound to this mailbox."""
