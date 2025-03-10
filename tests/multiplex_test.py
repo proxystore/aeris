@@ -78,9 +78,8 @@ def test_request_message_handler(exchange: ThreadExchange) -> None:
         exchange,
         request_handler=handler,
     ) as multiplexer:
-        with mock.patch.object(
-            multiplexer._mailbox,
-            'recv',
+        with mock.patch(
+            'aeris.exchange.thread.ThreadMailbox.recv',
             side_effect=(request, MailboxClosedError(uid)),
         ):
             multiplexer.listen()
@@ -101,9 +100,8 @@ def test_response_message_handler(exchange: ThreadExchange) -> None:
         bound = multiplexer.bind(unbound)
         response = PingResponse(src=aid, dest=uid, label=bound.handle_id)
         with mock.patch.object(bound, '_process_response') as mocked:
-            with mock.patch.object(
-                multiplexer._mailbox,
-                'recv',
+            with mock.patch(
+                'aeris.exchange.thread.ThreadMailbox.recv',
                 side_effect=(response, MailboxClosedError(uid)),
             ):
                 multiplexer.listen()
@@ -121,9 +119,8 @@ def test_response_message_handler_bad_src(exchange: ThreadExchange) -> None:
         exchange,
         request_handler=lambda _: None,
     ) as multiplexer:
-        with mock.patch.object(
-            multiplexer._mailbox,
-            'recv',
+        with mock.patch(
+            'aeris.exchange.thread.ThreadMailbox.recv',
             side_effect=(response, MailboxClosedError(uid)),
         ):
             bound = multiplexer.bind(unbound)
