@@ -23,7 +23,9 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
 ]
 dependencies = [
+    "pika",
     "pydantic>=2,<3",
+    "redis",
     "typing-extensions>=4.3.0 ; python_version<'3.11'",
 ]
 
@@ -33,8 +35,6 @@ Documentation = "https://aeris.proxystore.dev"
 Source = "https://github.com/proxystore/aeris"
 
 [project.optional-dependencies]
-all = ["aeris[redis]"]
-redis = ["redis"]
 dev = [
     "covdefaults>=2.2",
     "coverage",
