@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 import pathlib
 
+import pytest
+
 from aeris.logging import init_logging
 
 # Note: these tests are just for coverage to make sure the code is functional.
@@ -10,16 +12,22 @@ from aeris.logging import init_logging
 # logging already.
 
 
-def test_logging_no_file() -> None:
-    init_logging()
+@pytest.mark.parametrize(('color', 'extra'), ((True, True), (False, False)))
+def test_logging_no_file(color: bool, extra: bool) -> None:
+    init_logging(color=color, extra=extra)
 
     logger = logging.getLogger()
     logger.info('Test logging')
 
 
-def test_logging_with_file(tmp_path: pathlib.Path) -> None:
+@pytest.mark.parametrize(('color', 'extra'), ((True, True), (False, False)))
+def test_logging_with_file(
+    color: bool,
+    extra: bool,
+    tmp_path: pathlib.Path,
+) -> None:
     filepath = tmp_path / 'log.txt'
-    init_logging(logfile=filepath)
+    init_logging(logfile=filepath, color=color, extra=extra)
 
     logger = logging.getLogger()
     logger.info('Test logging')
