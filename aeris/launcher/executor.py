@@ -32,6 +32,8 @@ def _run_agent_on_worker(agent: Agent[Any]) -> None:
     # to Executor.submit() as the function to run. However, some executors
     # serialize code differently from arguments so avoid that we add
     # a level of indirection so the agent is an argument.
+    from aeris.logging import init_logging
+    init_logging(color=True, extra=True)
     agent.run()
 
 

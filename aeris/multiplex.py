@@ -67,7 +67,6 @@ class MailboxMultiplexer(NoPickleMixin):
         self.exchange = exchange
         self.request_handler = request_handler
         self.bound_handles: dict[uuid.UUID, BoundRemoteHandle[Any]] = {}
-        self._mailbox = self.exchange.get_mailbox(mailbox_id)
 
     def __enter__(self) -> Self:
         return self
@@ -134,9 +133,9 @@ class MailboxMultiplexer(NoPickleMixin):
 
         Closes all handles bound to this mailbox and then closes the mailbox.
         """
+        # This will cause listen() to return
         self.close_mailbox()
         self.close_bound_handles()
-        self._mailbox.close()
 
     def close_bound_handles(self) -> None:
         """Close all handles bound to this mailbox."""
@@ -166,13 +165,16 @@ class MailboxMultiplexer(NoPickleMixin):
             will be logged and discarded.
         """
         logger.debug('Listening for messages in %s', self)
+        mailbox = self.exchange.get_mailbox(self.mailbox_id)
 
-        while True:
-            try:
-                message = self._mailbox.recv()
-            except MailboxClosedError:
-                break
-            else:
-                self._message_handler(message)
-
-        logger.debug('Finished listening for messages in %s', self)
+        try:
+            while True:
+                try:
+                    message = mailbox.recv()
+                except MailboxClosedError:
+                    break
+                else:
+                    self._message_handler(message)
+        finally:
+            mailbox.close()
+            logger.debug('Finished listening for messages in %s', self)
