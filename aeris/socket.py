@@ -181,7 +181,7 @@ class _SimpleSocketServerHandler(socketserver.BaseRequestHandler):
             assert len(current) > 0
             buffer.extend(current)
 
-            if delim != b'':  # pragma: no branch
+            if delim != b'':
                 message = buffer.decode('utf-8')
                 buffer = bytearray(new)
 

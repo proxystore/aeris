@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+import string
 import threading
 from collections.abc import Generator
 from unittest import mock
@@ -130,6 +132,7 @@ def simple_socket_server() -> Generator[SimpleSocketServer]:
 
     server.stop_serving()
     server.close()
+    server.stop_serving()  # Idempotency check
 
 
 def test_simple_socket_server_ping(
@@ -148,14 +151,25 @@ def test_simple_socket_server_ping(
 def test_simple_socket_multipart(
     simple_socket_server: SimpleSocketServer,
 ) -> None:
+    # Generate >1024 bytes of data since _recv_from_socket reads in 1kB
+    # chunks. This test forces recv() to buffer incomplete chunks.
+    parts = [
+        ''.join(random.choice(string.ascii_uppercase) for _ in range(500))
+        for _ in range(3)
+    ]
+    # socket.recv_string() will not return the delimiter so add after
+    # computing the expected string
+    expected = ''.join(parts)
+    parts[-1] += TCP_MESSAGE_DELIM.decode('utf-8')
+
     with SimpleSocket(
         simple_socket_server.host,
         simple_socket_server.port,
         timeout=TEST_CONNECTION_TIMEOUT,
     ) as socket:
-        socket.socket.sendall(b'hello, ')
-        socket.socket.sendall(b'world!' + TCP_MESSAGE_DELIM)
-        assert socket.recv_string() == 'hello, world!'
+        for part in parts:
+            socket.socket.sendall(part.encode('utf-8'))
+        assert socket.recv_string() == expected
 
 
 def test_wait_connection() -> None:
