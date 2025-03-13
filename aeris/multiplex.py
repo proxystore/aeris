@@ -169,12 +169,10 @@ class MailboxMultiplexer(NoPickleMixin):
 
         try:
             while True:
-                try:
-                    message = mailbox.recv()
-                except MailboxClosedError:
-                    break
-                else:
-                    self._message_handler(message)
+                message = mailbox.recv()
+                self._message_handler(message)
+        except MailboxClosedError:
+            pass
         finally:
             mailbox.close()
             logger.debug('Finished listening for messages in %s', self)
