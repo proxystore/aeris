@@ -332,18 +332,25 @@ class Agent(Generic[BehaviorT]):
             self._state = _AgentState.TERMINTATING
             self._shutdown.set()
 
-            # Wait for currently running actions to complete.
+            # Cause the multiplexer message listener thread to exit by closing
+            # the mailbox the multiplexer is listening to. This is done
+            # first so we stop receiving new requests.
+            self._multiplexer.close_mailbox()
+            for future, name in self._loop_futures.items():
+                if name == '_multiplexer.listen':
+                    future.result()
+
+            # Wait for currently running actions to complete. No more
+            # should come in now that multiplexer's listener thread is done.
             if self._action_pool is not None:
                 self._action_pool.shutdown(wait=True, cancel_futures=True)
-
-            # Cause the multiplexer message listener thread to exit by closing
-            # the mailbox the multiplexer is listening to.
-            self._multiplexer.close_mailbox()
 
             # Shutdown the loop pool after waiting on the loops to exit.
             if self._loop_pool is not None:
                 self._loop_pool.shutdown(wait=True)
 
+            # Close the exchange last since the actions that finished
+            # up may still need to use it to send replies.
             if self.close_exchange:
                 self.exchange.close()
 
