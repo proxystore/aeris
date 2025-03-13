@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import logging
+import multiprocessing
 from concurrent.futures import Future
 from concurrent.futures import ProcessPoolExecutor
 
 from aeris.behavior import action
 from aeris.behavior import Behavior
 from aeris.exchange.http import spawn_http_exchange
+from aeris.exchange.hybrid import HybridExchange
 from aeris.handle import Handle
 from aeris.launcher.executor import ExecutorLauncher
 from aeris.logging import init_logging
@@ -45,15 +47,21 @@ class Reverser(Behavior):
 
 
 def main() -> int:
-    init_logging(logging.INFO)
+    # init_logging(logging.INFO)
+    init_logging(logging.DEBUG, extra=True)
 
     with spawn_http_exchange('localhost', EXCHANGE_PORT) as exchange:
+        mp_context = multiprocessing.get_context('spawn')
+        executor = ProcessPoolExecutor(max_workers=3, mp_context=mp_context)
+        # from concurrent.futures import ThreadPoolExecutor
+        # executor = ThreadPoolExecutor(3)
         with Manager(
-            exchange=exchange,
+            # exchange=exchange,
+            exchange=HybridExchange('localhost', 6379),
             # Agents are launched using a Launcher. The ExecutorLauncher can
             # use any concurrent.futures.Executor (here, a ProcessPoolExecutor)
             # to execute agents.
-            launcher=ExecutorLauncher(ProcessPoolExecutor(max_workers=3)),
+            launcher=ExecutorLauncher(executor),
         ) as manager:
             # Initialize and launch each of the three agents. The returned
             # type is a handle to that agent used to invoke actions.

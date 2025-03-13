@@ -153,14 +153,20 @@ def test_simple_socket_multipart(
 ) -> None:
     # Generate >1024 bytes of data since _recv_from_socket reads in 1kB
     # chunks. This test forces recv() to buffer incomplete chunks.
-    parts = [
+    first_parts = [
         ''.join(random.choice(string.ascii_uppercase) for _ in range(500))
         for _ in range(3)
     ]
+    second_part = 'second message!'
     # socket.recv_string() will not return the delimiter so add after
     # computing the expected string
-    expected = ''.join(parts)
-    parts[-1] += TCP_MESSAGE_DELIM.decode('utf-8')
+    first_expected = ''.join(first_parts)
+    parts = [
+        first_parts[0],
+        first_parts[1],
+        first_parts[2] + TCP_MESSAGE_DELIM.decode('utf-8'),
+        second_part + TCP_MESSAGE_DELIM.decode('utf-8'),
+    ]
 
     with SimpleSocket(
         simple_socket_server.host,
@@ -169,7 +175,8 @@ def test_simple_socket_multipart(
     ) as socket:
         for part in parts:
             socket.socket.sendall(part.encode('utf-8'))
-        assert socket.recv_string() == expected
+        assert socket.recv_string() == first_expected
+        assert socket.recv_string() == second_part
 
 
 def test_wait_connection() -> None:

@@ -19,6 +19,8 @@ else:  # pragma: <3.11 cover
 _BAD_FILE_DESCRIPTOR_ERRNO = 9
 TCP_MESSAGE_DELIM = b'\r\n'
 
+import logging
+logger = logging.getLogger(__name__)
 
 class SocketClosedError(Exception):
     """Socket is already closed."""
@@ -168,28 +170,45 @@ class SimpleSocket:
 
 
 class _SimpleSocketServerHandler(socketserver.BaseRequestHandler):
+    def _handle(self, buffer: bytearray | bytes) -> None:
+        message = buffer.decode('utf-8')
+        assert hasattr(self.server, 'handler')
+        response = self.server.handler(message)
+        payload = response.encode('utf-8') + TCP_MESSAGE_DELIM
+        self.request.sendall(payload)
+
     def handle(self) -> None:
-        buffer = bytearray()
+        assert hasattr(self.server, '_buffers')
+        buffer: bytes | bytearray = bytearray(
+            self.server._buffers.pop(self.request, b''),
+        )
+        close = False
+
         while True:
             try:
                 payload = _recv_from_socket(self.request)
             except SocketClosedError:
-                self.request.close()
-                return
+                close = True
+                break
+            else:            
+                buffer.extend(payload)
+                if TCP_MESSAGE_DELIM in payload:
+                    break
 
-            current, delim, new = payload.partition(TCP_MESSAGE_DELIM)
-            assert len(current) > 0
-            buffer.extend(current)
-
-            if delim != b'':
-                message = buffer.decode('utf-8')
-                buffer = bytearray(new)
-
-                assert hasattr(self.server, 'handler')
-                response = self.server.handler(message)
-
-                payload = response.encode('utf-8') + TCP_MESSAGE_DELIM
-                self.request.sendall(payload)
+        while True:
+            message, delim, new = buffer.partition(TCP_MESSAGE_DELIM)
+            print(message, delim, new)
+            if delim != TCP_MESSAGE_DELIM:
+                print('buffer and exit')
+                self.server._buffers[self.request] = message
+                break
+            else:
+                print('send message', message)
+                self._handle(message)
+                buffer = new
+        
+        if close:
+            self.request.close()
 
 
 class SimpleSocketServer(socketserver.TCPServer):
@@ -217,6 +236,7 @@ class SimpleSocketServer(socketserver.TCPServer):
         self._client_sockets: set[socket.socket] = set()
         self._serving = threading.Event()
         self._lock = threading.RLock()
+        self._buffers: dict[socket.socket, bytes] = {}
 
         super().__init__((host, port), _SimpleSocketServerHandler)
 
@@ -242,14 +262,7 @@ class SimpleSocketServer(socketserver.TCPServer):
         request: socket.socket | tuple[bytes, socket.socket],
     ) -> None:
         """Close a request socket."""
-        conn = request[1] if isinstance(request, tuple) else request
-        with self._lock:
-            with contextlib.suppress(KeyError):
-                self._client_sockets.remove(conn)
-            with contextlib.suppress(OSError):
-                # Can fail if the client already shutdown the socket
-                conn.shutdown(socket.SHUT_RDWR)
-            conn.close()
+        return
 
     def get_request(self) -> tuple[socket.socket, Any]:
         """Get a request socket."""
@@ -259,9 +272,11 @@ class SimpleSocketServer(socketserver.TCPServer):
 
     def stop_serving(self) -> None:
         """Notify the server to stop serving."""
-        with self._lock:
-            for conn in tuple(self._client_sockets):
-                self.close_request(conn)
+        for conn in self._client_sockets:
+            with contextlib.suppress(OSError):
+                # Can fail if the client already shutdown the socket
+                conn.shutdown(socket.SHUT_RDWR)
+            conn.close()    
         if self._serving.is_set():
             self.shutdown()
 
