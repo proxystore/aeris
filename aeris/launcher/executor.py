@@ -7,6 +7,7 @@ from concurrent.futures import CancelledError
 from concurrent.futures import Executor
 from concurrent.futures import Future
 from types import TracebackType
+from typing import Any
 from typing import TypeVar
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
@@ -24,6 +25,14 @@ from aeris.identifier import AgentIdentifier
 logger = logging.getLogger(__name__)
 
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
+
+
+def _run_agent_on_worker(agent: Agent[Any]) -> None:
+    # Agent implements __call__ so we could submit the agent directly
+    # to Executor.submit() as the function to run. However, some executors
+    # serialize code differently from arguments so avoid that we add
+    # a level of indirection so the agent is an argument.
+    agent.run()
 
 
 class ExecutorLauncher:
@@ -111,7 +120,7 @@ class ExecutorLauncher:
             exchange=exchange,
             close_exchange=self._close_exchange,
         )
-        future = self._executor.submit(agent)
+        future = self._executor.submit(_run_agent_on_worker, agent)
         future.add_done_callback(self._callback)
         self._future_to_id[future] = agent_id
         self._id_to_future[agent_id] = future
