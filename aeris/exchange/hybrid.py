@@ -311,15 +311,10 @@ class HybridMailbox(NoPickleMixin):
         self._server = SimpleSocketServer(
             handler=self._server_handler,
             host=socket.gethostbyname(socket.gethostname()),
-            port=0,
+            port=None,
+            timeout=_THREAD_JOIN_TIMEOUT,
         )
-        self._server_thread = threading.Thread(
-            target=self._server_listener,
-            name=f'hybrid-mailbox-server-listener-{uid}',
-        )
-        self._server_started = threading.Event()
-        self._server_thread.start()
-        self._server_started.wait(_THREAD_START_TIMEOUT)
+        self._server.start_server_thread()
 
         self.exchange._redis_client.set(
             self.exchange._address_key(uid),
@@ -407,8 +402,8 @@ class HybridMailbox(NoPickleMixin):
                 self.mailbox_id,
             )
         finally:
+            self._server.stop_server_thread()
             self._messages.close()
-            self._stop_server_thread()
             logger.debug(
                 'Stopped redis watcher thread for %s',
                 self.mailbox_id,
@@ -424,34 +419,6 @@ class HybridMailbox(NoPickleMixin):
         self._messages.put(message)
         return _SERVER_ACK
 
-    def _server_listener(self) -> None:
-        self._server_started.set()
-        logger.debug(
-            'Started mailbox server thread for %s on %s:%s',
-            self.mailbox_id,
-            self._server.host,
-            self._server.port,
-        )
-        try:
-            self._server.serve_forever_default()
-        except Exception:
-            logger.exception(
-                'Error in mailbox server thread for %s',
-                self.mailbox_id,
-            )
-        finally:
-            self._messages.close()
-            # Tell the redis listener thread to exit
-            self._closed.set()
-            logger.debug(
-                'Stopped mailbox server thread for %s',
-                self.mailbox_id,
-            )
-
-    def _stop_server_thread(self) -> None:
-        if self._server_thread.is_alive():
-            self._server.stop_serving()
-
     def close(self) -> None:
         """Close this mailbox client.
 
@@ -465,14 +432,7 @@ class HybridMailbox(NoPickleMixin):
             self.exchange._address_key(self.mailbox_id),
         )
 
-        self._stop_server_thread()
-        self._server_thread.join(_THREAD_JOIN_TIMEOUT)
-        if self._server_thread.is_alive():  # pragma: no cover
-            raise TimeoutError(
-                'Mailbox server thread failed to exit within '
-                f'{_THREAD_JOIN_TIMEOUT} seconds.',
-            )
-        self._server.close()
+        self._server.stop_server_thread()
 
         self._redis_thread.join(_THREAD_JOIN_TIMEOUT)
         if self._redis_thread.is_alive():  # pragma: no cover

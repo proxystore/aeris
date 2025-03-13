@@ -139,26 +139,6 @@ def test_mailbox_redis_error_logging(mock_redis, caplog) -> None:
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
-def test_mailbox_zmq_error_logging(mock_redis, caplog) -> None:
-    caplog.set_level(logging.ERROR)
-    with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        aid = exchange.create_agent()
-        with mock.patch(
-            'aeris.socket.SimpleSocketServer.serve_forever_default',
-            side_effect=RuntimeError('Mock thread error.'),
-        ):
-            mailbox = exchange.get_mailbox(aid)
-            mailbox._server_thread.join(TEST_THREAD_JOIN_TIMEOUT)
-            mailbox.close()
-
-            assert any(
-                f'Error in mailbox server thread for {aid}' in record.message
-                for record in caplog.records
-                if record.levelname == 'ERROR'
-            )
-
-
-@mock.patch('redis.Redis', side_effect=MockRedis)
 def test_send_to_mailbox_bad_cached_address(mock_redis) -> None:
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
         aid = exchange.create_agent()

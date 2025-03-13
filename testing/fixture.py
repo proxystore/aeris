@@ -10,8 +10,8 @@ from aeris.exchange.http import create_app
 from aeris.exchange.http import serve_app
 from aeris.exchange.thread import ThreadExchange
 from aeris.launcher.thread import ThreadLauncher
+from aeris.socket import open_port
 from testing.constant import TEST_CONNECTION_TIMEOUT
-from testing.sys import open_port
 
 
 @pytest.fixture

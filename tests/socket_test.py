@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import random
 import string
-import threading
 from collections.abc import Generator
 from unittest import mock
 
@@ -17,7 +16,6 @@ from aeris.socket import SocketOpenError
 from aeris.socket import TCP_MESSAGE_DELIM
 from aeris.socket import wait_connection
 from testing.constant import TEST_CONNECTION_TIMEOUT
-from testing.constant import TEST_THREAD_JOIN_TIMEOUT
 
 
 @mock.patch('socket.create_connection')
@@ -63,7 +61,27 @@ def test_simple_socket_send(mock_create_connection) -> None:
 
 @mock.patch('socket.create_connection')
 @mock.patch('aeris.socket._recv_from_socket')
-def test_simple_socket_recv(mock_recv, mock_create_connection) -> None:
+def test_simple_socket_recv_packed(mock_recv, mock_create_connection) -> None:
+    # Mock received parts to include two messages split across three parts
+    # followed by a socket close event.
+    messages = ['first message', 'seconds message', 'third message']
+    buffer = b''.join(
+        [message.encode('utf-8') + TCP_MESSAGE_DELIM for message in messages],
+    )
+    mock_recv.side_effect = [buffer, SocketClosedError()]
+    with SimpleSocket('localhost', 0) as socket:
+        for expected in messages:
+            assert socket.recv_string() == expected
+        with pytest.raises(SocketClosedError):
+            assert socket.recv_string()
+
+
+@mock.patch('socket.create_connection')
+@mock.patch('aeris.socket._recv_from_socket')
+def test_simple_socket_recv_multipart(
+    mock_recv,
+    mock_create_connection,
+) -> None:
     # Mock received parts to include two messages split across three parts
     # followed by a socket close event.
     mock_recv.side_effect = [
@@ -115,52 +133,67 @@ def simple_socket_server() -> Generator[SimpleSocketServer]:
     server = SimpleSocketServer(
         handler=lambda s: s,
         host='localhost',
-        poll_interval=0.01,
-        port=0,
+        port=None,
+        timeout=TEST_CONNECTION_TIMEOUT,
     )
-    started = threading.Event()
 
-    def _serve() -> None:
-        started.set()
-        server.serve_forever_default()
-
-    thread = threading.Thread(target=_serve)
-    thread.start()
-    started.wait(TEST_THREAD_JOIN_TIMEOUT)
-
+    server.start_server_thread()
     yield server
-
-    server.stop_serving()
-    server.close()
-    server.stop_serving()  # Idempotency check
+    server.stop_server_thread()
 
 
-def test_simple_socket_server_ping(
+def test_simple_socket_server_ping_pong(
     simple_socket_server: SimpleSocketServer,
 ) -> None:
+    message = 'hello, world!'
     with SimpleSocket(
         simple_socket_server.host,
         simple_socket_server.port,
         timeout=TEST_CONNECTION_TIMEOUT,
     ) as socket:
-        message = 'hello, world!'
-        socket.send_string(message)
-        assert socket.recv_string() == message
+        for _ in range(3):
+            socket.send_string(message)
+            assert socket.recv_string() == message
 
 
-def test_simple_socket_multipart(
+def test_simple_socket_server_packed(
+    simple_socket_server: SimpleSocketServer,
+) -> None:
+    # Pack many messages into one buffer to be send
+    messages = [b'first message', b'seconds message', b'third message']
+    buffer = b''.join(
+        [message + TCP_MESSAGE_DELIM for message in messages],
+    )
+
+    with SimpleSocket(
+        simple_socket_server.host,
+        simple_socket_server.port,
+        timeout=TEST_CONNECTION_TIMEOUT,
+    ) as socket:
+        socket.socket.sendall(buffer)
+        for expected in messages:
+            assert socket.recv() == expected
+
+
+def test_simple_socket_server_multipart(
     simple_socket_server: SimpleSocketServer,
 ) -> None:
     # Generate >1024 bytes of data since _recv_from_socket reads in 1kB
     # chunks. This test forces recv() to buffer incomplete chunks.
-    parts = [
+    first_parts = [
         ''.join(random.choice(string.ascii_uppercase) for _ in range(500))
         for _ in range(3)
     ]
+    second_part = 'second message!'
     # socket.recv_string() will not return the delimiter so add after
     # computing the expected string
-    expected = ''.join(parts)
-    parts[-1] += TCP_MESSAGE_DELIM.decode('utf-8')
+    first_expected = ''.join(first_parts)
+    parts = [
+        first_parts[0],
+        first_parts[1],
+        first_parts[2] + TCP_MESSAGE_DELIM.decode('utf-8'),
+        second_part + TCP_MESSAGE_DELIM.decode('utf-8'),
+    ]
 
     with SimpleSocket(
         simple_socket_server.host,
@@ -169,7 +202,8 @@ def test_simple_socket_multipart(
     ) as socket:
         for part in parts:
             socket.socket.sendall(part.encode('utf-8'))
-        assert socket.recv_string() == expected
+        assert socket.recv_string() == first_expected
+        assert socket.recv_string() == second_part
 
 
 def test_wait_connection() -> None:
