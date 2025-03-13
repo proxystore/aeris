@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
+import logging
 import socket
-import socketserver
 import sys
 import threading
 import time
 from types import TracebackType
-from typing import Any
 from typing import Callable
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
@@ -15,6 +15,7 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
+logger = logging.getLogger(__name__)
 
 _BAD_FILE_DESCRIPTOR_ERRNO = 9
 TCP_MESSAGE_DELIM = b'\r\n'
@@ -71,6 +72,8 @@ class SimpleSocket:
             self.socket.setblocking(False)
         except OSError as e:
             raise SocketOpenError() from e
+        # Stores leftover bytes after delimiter from last call to recv
+        # to be used by the next call to recv
         self._buffer = bytearray()
 
     def __enter__(self) -> Self:
@@ -95,7 +98,9 @@ class SimpleSocket:
         if self.closed:
             return
         if shutdown:  # pragma: no branch
-            self.socket.shutdown(socket.SHUT_RDWR)
+            with contextlib.suppress(OSError):
+                # Some platforms may raise ENOTCONN here
+                self.socket.shutdown(socket.SHUT_RDWR)
         self.socket.close()
         self.closed = True
 
@@ -142,17 +147,22 @@ class SimpleSocket:
             SocketClosedError: if the socket was closed.
             OSError: if an error occurred.
         """
-        while True:
-            payload = _recv_from_socket(self.socket)
-            current, delim, new = payload.partition(TCP_MESSAGE_DELIM)
-            assert len(current) > 0
-            self._buffer.extend(current)
-            if delim != b'':
-                message = bytes(self._buffer)
-                self._buffer = bytearray(new)
-                break
+        buffer = self._buffer
 
-        return message
+        # If our prior buffer already contains a complete message,
+        # we don't need to call recv()
+        if TCP_MESSAGE_DELIM not in buffer:
+            while True:
+                payload = _recv_from_socket(self.socket)
+                buffer.extend(payload)
+                if TCP_MESSAGE_DELIM in payload:
+                    break
+
+        message, delim, new = buffer.partition(TCP_MESSAGE_DELIM)
+        assert delim == TCP_MESSAGE_DELIM
+        self._buffer = new
+
+        return bytes(message)
 
     def recv_string(self) -> str:
         """Receive the next message from the socket.
@@ -167,41 +177,16 @@ class SimpleSocket:
         return self.recv().decode('utf-8')
 
 
-class _SimpleSocketServerHandler(socketserver.BaseRequestHandler):
-    def handle(self) -> None:
-        buffer = bytearray()
-        while True:
-            try:
-                payload = _recv_from_socket(self.request)
-            except SocketClosedError:
-                self.request.close()
-                return
-
-            current, delim, new = payload.partition(TCP_MESSAGE_DELIM)
-            assert len(current) > 0
-            buffer.extend(current)
-
-            if delim != b'':  # pragma: no branch
-                message = buffer.decode('utf-8')
-                buffer = bytearray(new)
-
-                assert hasattr(self.server, 'handler')
-                response = self.server.handler(message)
-
-                payload = response.encode('utf-8') + TCP_MESSAGE_DELIM
-                self.request.sendall(payload)
-
-
-class SimpleSocketServer(socketserver.TCPServer):
-    """Simple TCP socket server.
+class SimpleSocketServer:
+    """Simple asyncio TCP socket server.
 
     Args:
         handler: Callback that handles a message and returns the response
-            string.
+            string. The handler is called synchronously within the client
+            handler so it should not perform any heavy/blocking operations.
         host: Host to bind to.
-        poll_interval: Polling interval in seconds to check if the
-            server should shutdown.
-        port: Port to bind to. If 0, a random port is bound to.
+        port: Port to bind to. If `None`, a random port is bound to.
+        timeout: Seconds to wait for the server to startup and shutdown.
     """
 
     def __init__(
@@ -209,69 +194,121 @@ class SimpleSocketServer(socketserver.TCPServer):
         handler: Callable[[str], str],
         *,
         host: str = '0.0.0.0',
-        poll_interval: float = 0.05,
-        port: int = 0,
+        port: int | None = None,
+        timeout: float | None = 5,
     ) -> None:
+        self.host = host
+        self.port = port if port is not None else open_port()
         self.handler = handler
-        self.poll_interval = poll_interval
-        self._client_sockets: set[socket.socket] = set()
-        self._serving = threading.Event()
-        self._lock = threading.RLock()
+        self.timeout = timeout
+        self._started = threading.Event()
+        self._signal_stop: asyncio.Future[None] | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
+        self._lock = threading.Lock()
+        self._client_tasks: set[asyncio.Task[None]] = set()
 
-        super().__init__((host, port), _SimpleSocketServerHandler)
-
-    @property
-    def host(self) -> str:
-        """Host the server is bound to."""
-        host, _ = self.server_address
-        assert isinstance(host, str)
-        return host
-
-    @property
-    def port(self) -> int:
-        """Port the server is bound to."""
-        return self.server_address[1]
-
-    def close(self) -> None:
-        """Close the server."""
-        self.socket.shutdown(socket.SHUT_RDWR)
-        self.server_close()
-
-    def close_request(
+    async def _handle_client(
         self,
-        request: socket.socket | tuple[bytes, socket.socket],
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
     ) -> None:
-        """Close a request socket."""
-        conn = request[1] if isinstance(request, tuple) else request
-        with self._lock:
-            with contextlib.suppress(KeyError):
-                self._client_sockets.remove(conn)
-            with contextlib.suppress(OSError):
-                # Can fail if the client already shutdown the socket
-                conn.shutdown(socket.SHUT_RDWR)
-            conn.close()
-
-    def get_request(self) -> tuple[socket.socket, Any]:
-        """Get a request socket."""
-        conn, address = self.socket.accept()
-        self._client_sockets.add(conn)
-        return conn, address
-
-    def stop_serving(self) -> None:
-        """Notify the server to stop serving."""
-        with self._lock:
-            for conn in tuple(self._client_sockets):
-                self.close_request(conn)
-        if self._serving.is_set():
-            self.shutdown()
-
-    def serve_forever_default(self) -> None:
-        """Server until `stop_serving` is called."""
-        self._serving.set()
         try:
-            self.serve_forever(self.poll_interval)
+            while not reader.at_eof():
+                try:
+                    raw = await reader.readuntil(TCP_MESSAGE_DELIM)
+                except asyncio.IncompleteReadError:
+                    reader.feed_eof()
+                    continue
+
+                if raw == b'':  # pragma: no cover
+                    break
+
+                message = raw.strip(TCP_MESSAGE_DELIM).decode('utf-8')
+                response = self.handler(message)
+                payload = response.encode('utf-8') + TCP_MESSAGE_DELIM
+                writer.write(payload)
+                await writer.drain()
+        except Exception:  # pragma: no cover
+            logger.exception('Error in client handler task.')
+            raise
         finally:
-            self._serving.clear()
+            writer.close()
+            await writer.wait_closed()
+
+    async def _create_client_task(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        task = asyncio.create_task(self._handle_client(reader, writer))
+        self._client_tasks.add(task)
+        task.add_done_callback(self._client_tasks.discard)
+
+    async def serve_forever(self, stop: asyncio.Future[None]) -> None:
+        """Accept and handles connections forever.
+
+        Args:
+            stop: An asyncio future that this method blocks on. Can be used
+                to signal externally that the coroutine should exit.
+        """
+        self._signal_stop = stop
+        server = await asyncio.start_server(
+            self._create_client_task,
+            host=self.host,
+            port=self.port,
+        )
+        logger.debug('TCP server listening at %s:%s', self.host, self.port)
+        self._started.set()
+
+        async with server:
+            await server.start_serving()
+            await self._signal_stop
+
+            for task in tuple(self._client_tasks):
+                task.cancel('Server has been closed.')
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+
+        if sys.version_info >= (3, 13):  # pragma: >=3.13 cover
+            server.close_clients()
+        self._started.clear()
+        logger.debug('TCP server finished at %s:%s', self.host, self.port)
+
+    def start_server_thread(self) -> None:
+        """Start the server in a new thread."""
+        with self._lock:
+            loop = asyncio.new_event_loop()
+            stop = loop.create_future()
+
+            def _target() -> None:
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self.serve_forever(stop))
+                loop.close()
+
+            self._loop = loop
+            self._thread = threading.Thread(
+                target=_target,
+                name='socket-server',
+            )
+            self._thread.start()
+            self._started.wait(self.timeout)
+
+    def stop_server_thread(self) -> None:
+        """Stop the server thread."""
+        with self._lock:
+            if self._loop is None or self._thread is None:
+                return
+            assert self._signal_stop is not None
+            self._loop.call_soon_threadsafe(self._signal_stop.set_result, None)
+            self._thread.join(timeout=self.timeout)
+            if self._thread.is_alive():  # pragma: no cover
+                raise TimeoutError(
+                    'Server thread did not gracefully exit '
+                    f'within {self.timeout}s.',
+                )
+            self._loop = None
+            self._thread = None
 
 
 def _recv_from_socket(socket: socket.socket, nbytes: int = 1024) -> bytes:
@@ -291,6 +328,26 @@ def _recv_from_socket(socket: socket.socket, nbytes: int = 1024) -> bytes:
             raise SocketClosedError()
 
         return payload
+
+
+_used_ports: set[int] = set()
+
+
+def open_port() -> int:
+    """Return open port.
+
+    Source: https://stackoverflow.com/questions/2838244
+    """
+    while True:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(('', 0))
+        s.listen(1)
+        port = s.getsockname()[1]
+        s.close()
+        if port not in _used_ports:  # pragma: no branch
+            _used_ports.add(port)
+            return port
 
 
 def wait_connection(

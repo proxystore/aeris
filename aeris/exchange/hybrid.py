@@ -26,12 +26,14 @@ from aeris.exchange.queue import QueueClosedError
 from aeris.identifier import Identifier
 from aeris.message import BaseMessage
 from aeris.message import Message
+from aeris.serialize import NoPickleMixin
 from aeris.socket import SimpleSocket
 from aeris.socket import SimpleSocketServer
 from aeris.socket import SocketClosedError
 
 logger = logging.getLogger(__name__)
 
+_CLOSE_SENTINEL = '<CLOSED>'
 _THREAD_START_TIMEOUT = 5
 _THREAD_JOIN_TIMEOUT = 5
 _SERVER_ACK = '<ACK>'
@@ -157,7 +159,10 @@ class HybridExchange(ExchangeMixin):
             self._status_key(uid),
             _MailboxState.INACTIVE.value,
         )
-        self._redis_client.delete(self._queue_key(uid))
+        # Sending a close sentinel to the queue is a quick way to force
+        # the entity waiting on messages to the mailbox to stop blocking.
+        # This assumes that only one entity is reading from the mailbox.
+        self._redis_client.rpush(self._queue_key(uid), _CLOSE_SENTINEL)
         logger.debug('Closed mailbox for %s (%s)', uid, self)
 
     def get_mailbox(self, uid: Identifier) -> HybridMailbox:
@@ -281,7 +286,7 @@ class _SocketPool:
             raise
 
 
-class HybridMailbox:
+class HybridMailbox(NoPickleMixin):
     """Client protocol that listens to incoming messages to a mailbox.
 
     This class acts as the endpoint for messages sent to a particular
@@ -306,19 +311,20 @@ class HybridMailbox:
         self._server = SimpleSocketServer(
             handler=self._server_handler,
             host=socket.gethostbyname(socket.gethostname()),
-            port=0,
+            port=None,
+            timeout=_THREAD_JOIN_TIMEOUT,
         )
-        self._server_thread = threading.Thread(target=self._server_listener)
-        self._server_started = threading.Event()
-        self._server_thread.start()
-        self._server_started.wait(_THREAD_START_TIMEOUT)
+        self._server.start_server_thread()
 
         self.exchange._redis_client.set(
             self.exchange._address_key(uid),
             f'{self._server.host}:{self._server.port}',
         )
 
-        self._redis_thread = threading.Thread(target=self._redis_watcher)
+        self._redis_thread = threading.Thread(
+            target=self._redis_watcher,
+            name=f'hybrid-mailbox-redis-watcher-{uid}',
+        )
         self._redis_started = threading.Event()
         self._redis_thread.start()
         self._redis_started.wait(timeout=_THREAD_START_TIMEOUT)
@@ -356,6 +362,8 @@ class HybridMailbox:
         # Only passed one key to blpop to result is [key, item]
         assert isinstance(raw, (tuple, list))
         assert len(raw) == 2  # noqa: PLR2004
+        if raw[1] == _CLOSE_SENTINEL:  # pragma: no cover
+            raise MailboxClosedError(self.mailbox_id)
         message = BaseMessage.model_from_json(raw[1])
         assert isinstance(message, get_args(Message))
         logger.debug(
@@ -379,17 +387,23 @@ class HybridMailbox:
                         'in Redis server. This means that something '
                         'incorrectly deleted the key.',
                     )
-                elif status == _MailboxState.INACTIVE.value:
+                elif (
+                    status == _MailboxState.INACTIVE.value
+                ):  # pragma: no cover
                     self._messages.close()
                     break
 
                 self._pull_messages_from_redis(timeout=1)
+        except MailboxClosedError:  # pragma: no cover
+            pass
         except Exception:
             logger.exception(
                 'Error in redis watcher thread for %s',
                 self.mailbox_id,
             )
         finally:
+            self._server.stop_server_thread()
+            self._messages.close()
             logger.debug(
                 'Stopped redis watcher thread for %s',
                 self.mailbox_id,
@@ -405,27 +419,6 @@ class HybridMailbox:
         self._messages.put(message)
         return _SERVER_ACK
 
-    def _server_listener(self) -> None:
-        self._server_started.set()
-        logger.debug(
-            'Started mailbox server thread for %s on %s:%s',
-            self.mailbox_id,
-            self._server.host,
-            self._server.port,
-        )
-        try:
-            self._server.serve_forever_default()
-        except Exception:
-            logger.exception(
-                'Error in mailbox server thread for %s',
-                self.mailbox_id,
-            )
-        finally:
-            logger.debug(
-                'Stopped mailbox server thread for %s',
-                self.mailbox_id,
-            )
-
     def close(self) -> None:
         """Close this mailbox client.
 
@@ -439,14 +432,7 @@ class HybridMailbox:
             self.exchange._address_key(self.mailbox_id),
         )
 
-        self._server.stop_serving()
-        self._server_thread.join(_THREAD_JOIN_TIMEOUT)
-        if self._server_thread.is_alive():  # pragma: no cover
-            raise TimeoutError(
-                'Mailbox server thread failed to exit within '
-                f'{_THREAD_JOIN_TIMEOUT} seconds.',
-            )
-        self._server.close()
+        self._server.stop_server_thread()
 
         self._redis_thread.join(_THREAD_JOIN_TIMEOUT)
         if self._redis_thread.is_alive():  # pragma: no cover

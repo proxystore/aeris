@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import multiprocessing
 from concurrent.futures import Future
 from concurrent.futures import ProcessPoolExecutor
 
@@ -48,12 +49,14 @@ def main() -> int:
     init_logging(logging.INFO)
 
     with spawn_http_exchange('localhost', EXCHANGE_PORT) as exchange:
+        mp_context = multiprocessing.get_context('spawn')
+        executor = ProcessPoolExecutor(max_workers=3, mp_context=mp_context)
         with Manager(
             exchange=exchange,
             # Agents are launched using a Launcher. The ExecutorLauncher can
             # use any concurrent.futures.Executor (here, a ProcessPoolExecutor)
             # to execute agents.
-            launcher=ExecutorLauncher(ProcessPoolExecutor(max_workers=3)),
+            launcher=ExecutorLauncher(executor),
         ) as manager:
             # Initialize and launch each of the three agents. The returned
             # type is a handle to that agent used to invoke actions.

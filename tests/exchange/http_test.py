@@ -24,9 +24,9 @@ from aeris.exchange.http import spawn_http_exchange
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.message import PingRequest
+from aeris.socket import open_port
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_SLEEP
-from testing.sys import open_port
 
 
 def test_simple_exchange_repr() -> None:

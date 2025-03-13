@@ -23,13 +23,14 @@ from aeris.identifier import Identifier
 from aeris.message import Message
 from aeris.message import RequestMessage
 from aeris.message import ResponseMessage
+from aeris.serialize import NoPickleMixin
 
 logger = logging.getLogger(__name__)
 
 BehaviorT_co = TypeVar('BehaviorT_co', bound=Behavior, covariant=True)
 
 
-class MailboxMultiplexer:
+class MailboxMultiplexer(NoPickleMixin):
     """Multiplex a single mailbox across many consumers.
 
     A mailbox represents a recipient entity. In many cases, there may be
@@ -66,7 +67,6 @@ class MailboxMultiplexer:
         self.exchange = exchange
         self.request_handler = request_handler
         self.bound_handles: dict[uuid.UUID, BoundRemoteHandle[Any]] = {}
-        self._mailbox = self.exchange.get_mailbox(mailbox_id)
 
     def __enter__(self) -> Self:
         return self
@@ -133,9 +133,9 @@ class MailboxMultiplexer:
 
         Closes all handles bound to this mailbox and then closes the mailbox.
         """
-        self._mailbox.close()
-        self.close_bound_handles()
+        # This will cause listen() to return
         self.close_mailbox()
+        self.close_bound_handles()
 
     def close_bound_handles(self) -> None:
         """Close all handles bound to this mailbox."""
@@ -165,13 +165,14 @@ class MailboxMultiplexer:
             will be logged and discarded.
         """
         logger.debug('Listening for messages in %s', self)
+        mailbox = self.exchange.get_mailbox(self.mailbox_id)
 
-        while True:
-            try:
-                message = self._mailbox.recv()
-            except MailboxClosedError:
-                break
-            else:
+        try:
+            while True:
+                message = mailbox.recv()
                 self._message_handler(message)
-
-        logger.debug('Finished listening for messages in %s', self)
+        except MailboxClosedError:
+            pass
+        finally:
+            mailbox.close()
+            logger.debug('Finished listening for messages in %s', self)
