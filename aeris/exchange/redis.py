@@ -16,7 +16,7 @@ from aeris.message import Message
 from aeris.serialize import NoPickleMixin
 
 logger = logging.getLogger(__name__)
-_CLOSE_SENTINEL = '<CLOSED>'
+_CLOSE_SENTINEL = b'<CLOSED>'
 
 
 class _MailboxState(enum.Enum):
@@ -51,7 +51,7 @@ class RedisExchange(ExchangeMixin):
         self._client = redis.Redis(
             host=hostname,
             port=port,
-            decode_responses=True,
+            decode_responses=False,
             **kwargs,
         )
 
@@ -68,7 +68,7 @@ class RedisExchange(ExchangeMixin):
         self._client = redis.Redis(
             host=self.hostname,
             port=self.port,
-            decode_responses=True,
+            decode_responses=False,
             **self._kwargs,
         )
 
@@ -151,7 +151,7 @@ class RedisExchange(ExchangeMixin):
         elif status == _MailboxState.INACTIVE.value:
             raise MailboxClosedError(uid)
         else:
-            self._client.rpush(self._queue_key(uid), message.model_dump_json())
+            self._client.rpush(self._queue_key(uid), message.model_serialize())
             logger.debug('Sent %s to %s', type(message).__name__, uid)
 
 
@@ -241,7 +241,7 @@ class RedisMailbox(NoPickleMixin):
             assert len(raw) == 2  # noqa: PLR2004
             if raw[1] == _CLOSE_SENTINEL:  # pragma: no cover
                 raise MailboxClosedError(self.mailbox_id)
-            message = BaseMessage.model_from_json(raw[1])
+            message = BaseMessage.model_deserialize(raw[1])
             assert isinstance(message, get_args(Message))
             logger.debug(
                 'Received %s to %s',

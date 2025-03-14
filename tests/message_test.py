@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pickle
 from typing import get_args
 
 import pytest
@@ -55,6 +56,18 @@ def test_message_representations(message: Message) -> None:
     jsoned = message.model_dump_json()
     recreated = BaseMessage.model_from_json(jsoned)
     assert message == recreated
+    pickled = message.model_serialize()
+    recreated = BaseMessage.model_deserialize(pickled)
+    assert message == recreated
+
+
+def test_deserialize_bad_type() -> None:
+    pickled = pickle.dumps('string')
+    with pytest.raises(
+        TypeError,
+        match='Deserialized message is not of type Message.',
+    ):
+        BaseMessage.model_deserialize(pickled)
 
 
 @pytest.mark.parametrize(

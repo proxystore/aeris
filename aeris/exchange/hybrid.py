@@ -33,10 +33,10 @@ from aeris.socket import SocketClosedError
 
 logger = logging.getLogger(__name__)
 
-_CLOSE_SENTINEL = '<CLOSED>'
+_CLOSE_SENTINEL = b'<CLOSED>'
 _THREAD_START_TIMEOUT = 5
 _THREAD_JOIN_TIMEOUT = 5
-_SERVER_ACK = '<ACK>'
+_SERVER_ACK = b'<ACK>'
 _SOCKET_POLL_TIMEOUT_MS = 50
 
 
@@ -89,7 +89,7 @@ class HybridExchange(ExchangeMixin):
         self._redis_client = redis.Redis(
             host=self._redis_host,
             port=self._redis_port,
-            decode_responses=True,
+            decode_responses=False,
             **self._redis_kwargs,
         )
         self._socket_pool = _SocketPool()
@@ -183,8 +183,7 @@ class HybridExchange(ExchangeMixin):
         return HybridMailbox(uid, self)
 
     def _send_direct(self, address: str, message: Message) -> None:
-        payload = message.model_dump_json()
-        self._socket_pool.send(address, payload)
+        self._socket_pool.send(address, message.model_serialize())
         logger.debug(
             'Sent %s to %s via p2p',
             type(message).__name__,
@@ -235,15 +234,16 @@ class HybridExchange(ExchangeMixin):
             # Redis for message sending on two conditions: direct send fails
             # or no address was found. We raise a TypeError if no address
             # was found as a shortcut to get to the fall back.
-            if isinstance(maybe_address, str):
-                self._send_direct(maybe_address, message)
-                self._address_cache[uid] = maybe_address
+            if isinstance(maybe_address, bytes):
+                decoded_address = maybe_address.decode('utf-8')
+                self._send_direct(decoded_address, message)
+                self._address_cache[uid] = decoded_address
             else:
                 raise TypeError('Did not active peer address in Redis.')
         except (TypeError, SocketClosedError, OSError):
             self._redis_client.rpush(
                 self._queue_key(uid),
-                message.model_dump_json(),
+                message.model_serialize(),
             )
             logger.debug(
                 'Sent %s to %s via redis',
@@ -275,11 +275,11 @@ class _SocketPool:
             self._sockets[address] = conn
             return conn
 
-    def send(self, address: str, message: str) -> None:
+    def send(self, address: str, message: bytes) -> None:
         conn = self.get_socket(address)
         try:
-            conn.send_string(message)
-            ack = conn.recv_string()
+            conn.send(message)
+            ack = conn.recv()
             assert ack == _SERVER_ACK
         except (SocketClosedError, OSError):
             self.close_socket(address)
@@ -364,7 +364,7 @@ class HybridMailbox(NoPickleMixin):
         assert len(raw) == 2  # noqa: PLR2004
         if raw[1] == _CLOSE_SENTINEL:  # pragma: no cover
             raise MailboxClosedError(self.mailbox_id)
-        message = BaseMessage.model_from_json(raw[1])
+        message = BaseMessage.model_deserialize(raw[1])
         assert isinstance(message, get_args(Message))
         logger.debug(
             'Received %s to %s via redis',
@@ -409,8 +409,8 @@ class HybridMailbox(NoPickleMixin):
                 self.mailbox_id,
             )
 
-    def _server_handler(self, payload: str) -> str:
-        message = BaseMessage.model_from_json(payload)
+    def _server_handler(self, payload: bytes) -> bytes:
+        message = BaseMessage.model_deserialize(payload)
         logger.debug(
             'Received %s to %s via p2p',
             type(message).__name__,
