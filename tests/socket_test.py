@@ -13,6 +13,7 @@ from aeris.socket import SimpleSocket
 from aeris.socket import SimpleSocketServer
 from aeris.socket import SocketClosedError
 from aeris.socket import SocketOpenError
+from aeris.socket import TCP_CHUNK_SIZE
 from aeris.socket import TCP_MESSAGE_DELIM
 from aeris.socket import wait_connection
 from testing.constant import TEST_CONNECTION_TIMEOUT
@@ -49,14 +50,27 @@ def test_simple_socket_send(mock_create_connection) -> None:
 
         mock_socket.sendall.side_effect = OSError('Mocked.')
         with pytest.raises(OSError, match='Mocked.'):
-            socket.send_string('')
+            socket.send_string('hello, again!')
 
         mock_socket.sendall.side_effect = OSError(
             _BAD_FILE_DESCRIPTOR_ERRNO,
             'Bad file descriptor.',
         )
         with pytest.raises(SocketClosedError):
-            socket.send_string('')
+            socket.send_string('hello, again!')
+
+
+@mock.patch('socket.create_connection')
+def test_simple_socket_send_multipart(mock_create_connection) -> None:
+    mock_socket = mock.MagicMock()
+    mock_create_connection.return_value = mock_socket
+    size = int(2.5 * TCP_CHUNK_SIZE)
+    message = ''.join(
+        [random.choice(string.ascii_uppercase) for _ in range(size)],
+    )
+    with SimpleSocket('localhost', 0) as socket:
+        socket.send_string(message)
+        assert mock_socket.sendall.call_count == 3  # noqa: PLR2004
 
 
 @mock.patch('socket.create_connection')
@@ -204,6 +218,18 @@ def test_simple_socket_server_multipart(
             socket.socket.sendall(part.encode('utf-8'))
         assert socket.recv_string() == first_expected
         assert socket.recv_string() == second_part
+
+
+def test_simple_socket_server_client_disconnect_early(
+    simple_socket_server: SimpleSocketServer,
+) -> None:
+    with SimpleSocket(
+        simple_socket_server.host,
+        simple_socket_server.port,
+        timeout=TEST_CONNECTION_TIMEOUT,
+    ):
+        # Client disconnects without sending anything
+        pass
 
 
 def test_wait_connection() -> None:

@@ -239,7 +239,7 @@ class HybridExchange(ExchangeMixin):
                 self._send_direct(maybe_address, message)
                 self._address_cache[uid] = maybe_address
             else:
-                raise TypeError
+                raise TypeError('Did not active peer address in Redis.')
         except (TypeError, SocketClosedError, OSError):
             self._redis_client.rpush(
                 self._queue_key(uid),
