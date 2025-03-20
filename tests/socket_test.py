@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import socket
 import string
 from collections.abc import Generator
 from unittest import mock
@@ -9,6 +10,8 @@ import pytest
 
 from aeris.socket import _BAD_FILE_DESCRIPTOR_ERRNO
 from aeris.socket import _recv_from_socket
+from aeris.socket import address_by_hostname
+from aeris.socket import address_by_interface
 from aeris.socket import SimpleSocket
 from aeris.socket import SimpleSocketServer
 from aeris.socket import SocketClosedError
@@ -230,6 +233,20 @@ def test_simple_socket_server_client_disconnect_early(
     ):
         # Client disconnects without sending anything
         pass
+
+
+def test_get_address_by() -> None:
+    assert isinstance(address_by_hostname(), str)
+
+    for _, ifname in socket.if_nameindex():
+        try:
+            assert isinstance(address_by_interface(ifname), str)
+        except Exception:  # pragma: no cover
+            continue
+        else:
+            break
+    else:
+        raise RuntimeError('Failed to find a valid address by interface.')
 
 
 def test_wait_connection() -> None:

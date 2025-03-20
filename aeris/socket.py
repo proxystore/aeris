@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import fcntl
 import logging
+import platform
 import socket
+import struct
 import sys
 import threading
 import time
@@ -18,8 +21,8 @@ else:  # pragma: <3.11 cover
 logger = logging.getLogger(__name__)
 
 _BAD_FILE_DESCRIPTOR_ERRNO = 9
-TCP_CHUNK_SIZE = 1024
-TCP_MESSAGE_DELIM = b'\r\n'
+TCP_CHUNK_SIZE = 10240
+TCP_MESSAGE_DELIM = b'<-END->'
 
 
 class SocketClosedError(Exception):
@@ -236,6 +239,7 @@ class SimpleSocketServer:
                 payload = message[sent_size:]
                 payload += TCP_MESSAGE_DELIM
             writer.write(payload)
+            await writer.drain()
             sent_size += TCP_CHUNK_SIZE
 
         await writer.drain()
@@ -369,6 +373,29 @@ def _recv_from_socket(
             raise SocketClosedError()
 
         return payload
+
+
+def address_by_hostname() -> str:
+    """Get the IP address from the hostname of the local host."""
+    return socket.gethostbyname(platform.node())
+
+
+def address_by_interface(ifname: str) -> str:
+    """Get the IP address of the given interface.
+
+    Source: https://stackoverflow.com/questions/24196932/how-can-i-get-the-ip-address-of-eth0-in-python#24196955
+
+    Args:
+        ifname: Name of the interface whose address is to be returned.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    return socket.inet_ntoa(
+        fcntl.ioctl(
+            s.fileno(),
+            0x8915,  # SIOCGIFADDR
+            struct.pack('256s', bytes(ifname[:15], 'utf-8')),
+        )[20:24],
+    )
 
 
 _used_ports: set[int] = set()

@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import enum
 import logging
-import socket
 import sys
 import threading
 import uuid
@@ -27,6 +26,8 @@ from aeris.identifier import Identifier
 from aeris.message import BaseMessage
 from aeris.message import Message
 from aeris.serialize import NoPickleMixin
+from aeris.socket import address_by_hostname
+from aeris.socket import address_by_interface
 from aeris.socket import SimpleSocket
 from aeris.socket import SimpleSocketServer
 from aeris.socket import SocketClosedError
@@ -55,10 +56,12 @@ class HybridExchange(ExchangeMixin):
     Args:
         redis_host: Redis server hostname.
         redis_port: Redis server port.
-        redis_kwargs: Extra keyword arguments to pass to
-            [`redis.Redis()`][redis.Redis].
+        interface: Network interface use for peer-to-peer communication. If
+            `None`, the hostname of the local host is used.
         namespace: Redis key namespace. If `None` a random key prefix is
             generated.
+        redis_kwargs: Extra keyword arguments to pass to
+            [`redis.Redis()`][redis.Redis].
     """
 
     _address_cache: dict[Identifier, str]
@@ -70,6 +73,7 @@ class HybridExchange(ExchangeMixin):
         redis_host: str,
         redis_port: int,
         *,
+        interface: str | None = None,
         namespace: str | None = 'default',
         redis_kwargs: dict[str, Any] | None = None,
     ) -> None:
@@ -78,6 +82,7 @@ class HybridExchange(ExchangeMixin):
             if namespace is not None
             else uuid_to_base32(uuid.uuid4())
         )
+        self._interface = interface
         self._redis_host = redis_host
         self._redis_port = redis_port
         self._redis_kwargs = redis_kwargs if redis_kwargs is not None else {}
@@ -99,6 +104,7 @@ class HybridExchange(ExchangeMixin):
             '_redis_host': self._redis_host,
             '_redis_port': self._redis_port,
             '_redis_kwargs': self._redis_kwargs,
+            '_interface': self._interface,
             '_namespace': self._namespace,
         }
 
@@ -180,7 +186,7 @@ class HybridExchange(ExchangeMixin):
         status = self._redis_client.get(self._status_key(uid))
         if status is None:
             raise BadIdentifierError(uid)
-        return HybridMailbox(uid, self)
+        return HybridMailbox(uid, self, self._interface)
 
     def _send_direct(self, address: str, message: Message) -> None:
         self._socket_pool.send(address, message.model_serialize())
@@ -298,19 +304,32 @@ class HybridMailbox(NoPickleMixin):
     Args:
         uid: Identifier of the mailbox.
         exchange: Exchange client.
+        interface: Network interface use for peer-to-peer communication. If
+            `None`, the hostname of the local host is used.
     """
 
-    def __init__(self, uid: Identifier, exchange: HybridExchange) -> None:
+    def __init__(
+        self,
+        uid: Identifier,
+        exchange: HybridExchange,
+        interface: str | None = None,
+    ) -> None:
         self._uid = uid
         self._exchange = exchange
+        self._interface = interface
         self._messages: Queue[Message] = Queue()
 
         self._closed = threading.Event()
         self._socket_poll_timeout_ms = _SOCKET_POLL_TIMEOUT_MS
 
+        host = (
+            address_by_interface(interface)
+            if interface is not None
+            else address_by_hostname()
+        )
         self._server = SimpleSocketServer(
             handler=self._server_handler,
-            host=socket.gethostbyname(socket.gethostname()),
+            host=host,
             port=None,
             timeout=_THREAD_JOIN_TIMEOUT,
         )
