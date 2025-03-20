@@ -70,7 +70,7 @@ class HybridExchange(ExchangeMixin):
         redis_host: str,
         redis_port: int,
         *,
-        namespace: str | None = None,
+        namespace: str | None = 'default',
         redis_kwargs: dict[str, Any] | None = None,
     ) -> None:
         self._namespace = (
