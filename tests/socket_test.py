@@ -9,15 +9,15 @@ from unittest import mock
 import pytest
 
 from aeris.socket import _BAD_FILE_DESCRIPTOR_ERRNO
+from aeris.socket import _make_header
 from aeris.socket import _recv_from_socket
 from aeris.socket import address_by_hostname
 from aeris.socket import address_by_interface
+from aeris.socket import MESSAGE_CHUNK_SIZE
 from aeris.socket import SimpleSocket
 from aeris.socket import SimpleSocketServer
 from aeris.socket import SocketClosedError
 from aeris.socket import SocketOpenError
-from aeris.socket import TCP_CHUNK_SIZE
-from aeris.socket import TCP_MESSAGE_DELIM
 from aeris.socket import wait_connection
 from testing.constant import TEST_CONNECTION_TIMEOUT
 
@@ -48,8 +48,12 @@ def test_simple_socket_send(mock_create_connection) -> None:
     mock_socket = mock.MagicMock()
     mock_create_connection.return_value = mock_socket
     with SimpleSocket('localhost', 0) as socket:
+        # Should be a no-op
+        socket.send(b'')
+
         socket.send_string('hello, world!')
-        mock_socket.sendall.assert_called_once()
+        # Called once for header and once for payload
+        assert mock_socket.sendall.call_count == 2  # noqa: PLR2004
 
         mock_socket.sendall.side_effect = OSError('Mocked.')
         with pytest.raises(OSError, match='Mocked.'):
@@ -67,30 +71,13 @@ def test_simple_socket_send(mock_create_connection) -> None:
 def test_simple_socket_send_multipart(mock_create_connection) -> None:
     mock_socket = mock.MagicMock()
     mock_create_connection.return_value = mock_socket
-    size = int(2.5 * TCP_CHUNK_SIZE)
+    size = int(2.5 * MESSAGE_CHUNK_SIZE)
     message = ''.join(
         [random.choice(string.ascii_uppercase) for _ in range(size)],
     )
     with SimpleSocket('localhost', 0) as socket:
         socket.send_string(message)
-        assert mock_socket.sendall.call_count == 3  # noqa: PLR2004
-
-
-@mock.patch('socket.create_connection')
-@mock.patch('aeris.socket._recv_from_socket')
-def test_simple_socket_recv_packed(mock_recv, mock_create_connection) -> None:
-    # Mock received parts to include two messages split across three parts
-    # followed by a socket close event.
-    messages = ['first message', 'seconds message', 'third message']
-    buffer = b''.join(
-        [message.encode('utf-8') + TCP_MESSAGE_DELIM for message in messages],
-    )
-    mock_recv.side_effect = [buffer, SocketClosedError()]
-    with SimpleSocket('localhost', 0) as socket:
-        for expected in messages:
-            assert socket.recv_string() == expected
-        with pytest.raises(SocketClosedError):
-            assert socket.recv_string()
+        assert mock_socket.sendall.call_count == 4  # noqa: PLR2004
 
 
 @mock.patch('socket.create_connection')
@@ -99,12 +86,15 @@ def test_simple_socket_recv_multipart(
     mock_recv,
     mock_create_connection,
 ) -> None:
+    messages = [b'hello, world!', b'part2']
     # Mock received parts to include two messages split across three parts
     # followed by a socket close event.
     mock_recv.side_effect = [
+        _make_header(messages[0]),
         b'hello, ',
-        b'world!' + TCP_MESSAGE_DELIM,
-        b'part2' + TCP_MESSAGE_DELIM,
+        b'world!',
+        _make_header(messages[1]),
+        messages[1],
         SocketClosedError(),
     ]
     with SimpleSocket('localhost', 0) as socket:
@@ -178,9 +168,7 @@ def test_simple_socket_server_packed(
 ) -> None:
     # Pack many messages into one buffer to be send
     messages = [b'first message', b'seconds message', b'third message']
-    buffer = b''.join(
-        [message + TCP_MESSAGE_DELIM for message in messages],
-    )
+    buffer = b''.join(_make_header(m) + m for m in messages)
 
     with SimpleSocket(
         simple_socket_server.host,
@@ -197,19 +185,18 @@ def test_simple_socket_server_multipart(
 ) -> None:
     # Generate >1024 bytes of data since _recv_from_socket reads in 1kB
     # chunks. This test forces recv() to buffer incomplete chunks.
-    first_parts = [
-        ''.join(random.choice(string.ascii_uppercase) for _ in range(500))
-        for _ in range(3)
-    ]
-    second_part = 'second message!'
+    first_parts = [random.randbytes(500) for _ in range(3)]
+    second_part = b'second message!'
     # socket.recv_string() will not return the delimiter so add after
     # computing the expected string
-    first_expected = ''.join(first_parts)
+    first_expected = b''.join(first_parts)
     parts = [
+        _make_header(first_expected),
         first_parts[0],
         first_parts[1],
-        first_parts[2] + TCP_MESSAGE_DELIM.decode('utf-8'),
-        second_part + TCP_MESSAGE_DELIM.decode('utf-8'),
+        first_parts[2],
+        _make_header(second_part),
+        second_part,
     ]
 
     with SimpleSocket(
@@ -218,9 +205,9 @@ def test_simple_socket_server_multipart(
         timeout=TEST_CONNECTION_TIMEOUT,
     ) as socket:
         for part in parts:
-            socket.socket.sendall(part.encode('utf-8'))
-        assert socket.recv_string() == first_expected
-        assert socket.recv_string() == second_part
+            socket.socket.sendall(part)
+        assert socket.recv() == first_expected
+        assert socket.recv() == second_part
 
 
 def test_simple_socket_server_client_disconnect_early(
@@ -245,7 +232,7 @@ def test_get_address_by() -> None:
             continue
         else:
             break
-    else:
+    else:  # pragma: no cover
         raise RuntimeError('Failed to find a valid address by interface.')
 
 

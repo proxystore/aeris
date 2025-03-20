@@ -21,8 +21,9 @@ else:  # pragma: <3.11 cover
 logger = logging.getLogger(__name__)
 
 _BAD_FILE_DESCRIPTOR_ERRNO = 9
-TCP_CHUNK_SIZE = 10240
-TCP_MESSAGE_DELIM = b'<-END->'
+MESSAGE_CHUNK_SIZE = 10240
+MESSAGE_HEADER_FORMAT = '!I'  # Network byte order, unsigned 4-byte int
+MESSAGE_HEADER_SIZE = struct.calcsize(MESSAGE_HEADER_FORMAT)
 
 
 class SocketClosedError(Exception):
@@ -75,9 +76,6 @@ class SimpleSocket:
             )
         except OSError as e:
             raise SocketOpenError() from e
-        # Stores leftover bytes after delimiter from last call to recv
-        # to be used by the next call to recv
-        self._buffer = bytearray()
 
     def __enter__(self) -> Self:
         return self
@@ -107,6 +105,15 @@ class SimpleSocket:
         self.socket.close()
         self.closed = True
 
+    def _send_with_error_wrapping(self, message: bytes) -> None:
+        try:
+            self.socket.sendall(message)
+        except OSError as e:
+            if e.errno == _BAD_FILE_DESCRIPTOR_ERRNO:
+                raise SocketClosedError() from e
+            else:
+                raise
+
     def send(self, message: bytes) -> None:
         """Send bytes to the socket.
 
@@ -121,23 +128,17 @@ class SimpleSocket:
             OSError: if an error occurred.
         """
         message_size = len(message)
-        sent_size = 0
+        if message_size == 0:
+            return
+        header = _make_header(message)
+        self._send_with_error_wrapping(header)
 
+        sent_size = 0
         while sent_size < message_size:
-            if sent_size + TCP_CHUNK_SIZE < message_size:
-                payload = message[sent_size : sent_size + TCP_CHUNK_SIZE]
-            else:
-                payload = message[sent_size:]
-                payload += TCP_MESSAGE_DELIM
-            try:
-                self.socket.sendall(payload)
-            except OSError as e:
-                if e.errno == _BAD_FILE_DESCRIPTOR_ERRNO:
-                    raise SocketClosedError() from e
-                else:
-                    raise
-            else:
-                sent_size += TCP_CHUNK_SIZE
+            nbytes = min(message_size - sent_size, MESSAGE_CHUNK_SIZE)
+            chunk = message[sent_size : sent_size + nbytes]
+            self._send_with_error_wrapping(chunk)
+            sent_size += len(chunk)
 
     def send_string(self, message: str) -> None:
         """Send a string to the socket.
@@ -153,7 +154,7 @@ class SimpleSocket:
         """
         self.send(message.encode('utf-8'))
 
-    def recv(self) -> bytes:
+    def recv(self) -> bytes | bytearray:
         """Receive the next message from the socket.
 
         Returns:
@@ -163,22 +164,19 @@ class SimpleSocket:
             SocketClosedError: if the socket was closed.
             OSError: if an error occurred.
         """
-        buffer = self._buffer
+        header = _recv_from_socket(self.socket, MESSAGE_HEADER_SIZE)
+        message_size = _get_size_from_header(header)
 
-        # If our prior buffer already contains a complete message,
-        # we don't need to call recv()
-        if TCP_MESSAGE_DELIM not in buffer:
-            while True:
-                payload = _recv_from_socket(self.socket)
-                buffer.extend(payload)
-                if TCP_MESSAGE_DELIM in payload:
-                    break
+        buffer = bytearray(message_size)
+        received = 0
+        while received < message_size:
+            nbytes = min(message_size - received, MESSAGE_CHUNK_SIZE)
+            chunk = _recv_from_socket(self.socket, nbytes)
+            # buffer.extend(chunk)
+            buffer[received : received + len(chunk)] = chunk
+            received += len(chunk)
 
-        message, delim, new = buffer.partition(TCP_MESSAGE_DELIM)
-        assert delim == TCP_MESSAGE_DELIM
-        self._buffer = new
-
-        return bytes(message)
+        return buffer
 
     def recv_string(self) -> str:
         """Receive the next message from the socket.
@@ -207,7 +205,7 @@ class SimpleSocketServer:
 
     def __init__(
         self,
-        handler: Callable[[bytes], bytes],
+        handler: Callable[[bytes], bytes | None],
         *,
         host: str = '0.0.0.0',
         port: int | None = None,
@@ -224,23 +222,42 @@ class SimpleSocketServer:
         self._lock = threading.Lock()
         self._client_tasks: set[asyncio.Task[None]] = set()
 
+    async def _read_message(
+        self,
+        reader: asyncio.StreamReader,
+    ) -> bytes | bytearray:
+        header = await reader.read(MESSAGE_HEADER_SIZE)
+        if len(header) == 0:
+            return b''
+        message_size = _get_size_from_header(header)
+
+        buffer = bytearray(message_size)
+        received = 0
+        while received < message_size:
+            nbytes = min(message_size - received, MESSAGE_CHUNK_SIZE)
+            chunk = await reader.read(nbytes)
+            # buffer.extend(chunk)
+            buffer[received : received + len(chunk)] = chunk
+            received += len(chunk)
+
+        return buffer
+
     async def _write_message(
         self,
         writer: asyncio.StreamWriter,
-        message: bytes,
+        message: bytes | bytearray,
     ) -> None:
         message_size = len(message)
-        sent_size = 0
+        header = _make_header(message)
+        writer.write(header)
 
+        sent_size = 0
         while sent_size < message_size:
-            if sent_size + TCP_CHUNK_SIZE < message_size:
-                payload = message[sent_size : sent_size + TCP_CHUNK_SIZE]
-            else:
-                payload = message[sent_size:]
-                payload += TCP_MESSAGE_DELIM
-            writer.write(payload)
+            nbytes = min(message_size - sent_size, MESSAGE_CHUNK_SIZE)
+            chunk = message[sent_size : sent_size + nbytes]
+            writer.write(chunk)
             await writer.drain()
-            sent_size += TCP_CHUNK_SIZE
+            sent_size += len(chunk)
 
         await writer.drain()
 
@@ -250,28 +267,18 @@ class SimpleSocketServer:
         writer: asyncio.StreamWriter,
     ) -> None:
         try:
-            buffer = bytearray()
             while not reader.at_eof():
                 try:
-                    raw = await reader.read(TCP_CHUNK_SIZE)
+                    message = await self._read_message(reader)
                 except asyncio.IncompleteReadError:  # pragma: no cover
                     reader.feed_eof()
                     continue
                 else:
-                    buffer.extend(raw)
-                    if TCP_MESSAGE_DELIM not in raw:
-                        continue
-
-                if len(buffer) == 0:  # pragma: no cover
-                    break
-
-                while True:
-                    message, delim, new = buffer.partition(TCP_MESSAGE_DELIM)
-                    response = self.handler(message)
-                    await self._write_message(writer, response)
-                    buffer = new
-                    if TCP_MESSAGE_DELIM not in new:
+                    if len(message) == 0:  # pragma: no cover
                         break
+                    response = self.handler(message)
+                    if response is not None:  # pragma: no break
+                        await self._write_message(writer, response)
         except Exception:  # pragma: no cover
             logger.exception('Error in client handler task.')
             raise
@@ -354,9 +361,17 @@ class SimpleSocketServer:
             self._thread = None
 
 
+def _get_size_from_header(header: bytes) -> int:
+    return struct.unpack(MESSAGE_HEADER_FORMAT, header)[0]
+
+
+def _make_header(message: bytes | bytearray) -> bytes:
+    return struct.pack(MESSAGE_HEADER_FORMAT, len(message))
+
+
 def _recv_from_socket(
     socket: socket.socket,
-    nbytes: int = TCP_CHUNK_SIZE,
+    nbytes: int = MESSAGE_CHUNK_SIZE,
 ) -> bytes:
     while True:
         try:

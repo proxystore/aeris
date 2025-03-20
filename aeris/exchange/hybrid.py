@@ -240,8 +240,12 @@ class HybridExchange(ExchangeMixin):
             # Redis for message sending on two conditions: direct send fails
             # or no address was found. We raise a TypeError if no address
             # was found as a shortcut to get to the fall back.
-            if isinstance(maybe_address, bytes):
-                decoded_address = maybe_address.decode('utf-8')
+            if isinstance(maybe_address, (bytes, str)):
+                decoded_address = (
+                    maybe_address.decode('utf-8')
+                    if isinstance(maybe_address, bytes)
+                    else maybe_address
+                )
                 self._send_direct(decoded_address, message)
                 self._address_cache[uid] = decoded_address
             else:
@@ -285,8 +289,6 @@ class _SocketPool:
         conn = self.get_socket(address)
         try:
             conn.send(message)
-            ack = conn.recv()
-            assert ack == _SERVER_ACK
         except (SocketClosedError, OSError):
             self.close_socket(address)
             raise
@@ -428,7 +430,7 @@ class HybridMailbox(NoPickleMixin):
                 self.mailbox_id,
             )
 
-    def _server_handler(self, payload: bytes) -> bytes:
+    def _server_handler(self, payload: bytes) -> bytes | None:
         message = BaseMessage.model_deserialize(payload)
         logger.debug(
             'Received %s to %s via p2p',
@@ -436,7 +438,7 @@ class HybridMailbox(NoPickleMixin):
             self.mailbox_id,
         )
         self._messages.put(message)
-        return _SERVER_ACK
+        return None
 
     def close(self) -> None:
         """Close this mailbox client.
