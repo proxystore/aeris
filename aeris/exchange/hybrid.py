@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import enum
 import logging
-import socket
 import sys
 import threading
 import uuid
@@ -27,16 +26,18 @@ from aeris.identifier import Identifier
 from aeris.message import BaseMessage
 from aeris.message import Message
 from aeris.serialize import NoPickleMixin
+from aeris.socket import address_by_hostname
+from aeris.socket import address_by_interface
 from aeris.socket import SimpleSocket
 from aeris.socket import SimpleSocketServer
 from aeris.socket import SocketClosedError
 
 logger = logging.getLogger(__name__)
 
-_CLOSE_SENTINEL = '<CLOSED>'
+_CLOSE_SENTINEL = b'<CLOSED>'
 _THREAD_START_TIMEOUT = 5
 _THREAD_JOIN_TIMEOUT = 5
-_SERVER_ACK = '<ACK>'
+_SERVER_ACK = b'<ACK>'
 _SOCKET_POLL_TIMEOUT_MS = 50
 
 
@@ -55,10 +56,12 @@ class HybridExchange(ExchangeMixin):
     Args:
         redis_host: Redis server hostname.
         redis_port: Redis server port.
-        redis_kwargs: Extra keyword arguments to pass to
-            [`redis.Redis()`][redis.Redis].
+        interface: Network interface use for peer-to-peer communication. If
+            `None`, the hostname of the local host is used.
         namespace: Redis key namespace. If `None` a random key prefix is
             generated.
+        redis_kwargs: Extra keyword arguments to pass to
+            [`redis.Redis()`][redis.Redis].
     """
 
     _address_cache: dict[Identifier, str]
@@ -70,7 +73,8 @@ class HybridExchange(ExchangeMixin):
         redis_host: str,
         redis_port: int,
         *,
-        namespace: str | None = None,
+        interface: str | None = None,
+        namespace: str | None = 'default',
         redis_kwargs: dict[str, Any] | None = None,
     ) -> None:
         self._namespace = (
@@ -78,6 +82,7 @@ class HybridExchange(ExchangeMixin):
             if namespace is not None
             else uuid_to_base32(uuid.uuid4())
         )
+        self._interface = interface
         self._redis_host = redis_host
         self._redis_port = redis_port
         self._redis_kwargs = redis_kwargs if redis_kwargs is not None else {}
@@ -89,7 +94,7 @@ class HybridExchange(ExchangeMixin):
         self._redis_client = redis.Redis(
             host=self._redis_host,
             port=self._redis_port,
-            decode_responses=True,
+            decode_responses=False,
             **self._redis_kwargs,
         )
         self._socket_pool = _SocketPool()
@@ -99,6 +104,7 @@ class HybridExchange(ExchangeMixin):
             '_redis_host': self._redis_host,
             '_redis_port': self._redis_port,
             '_redis_kwargs': self._redis_kwargs,
+            '_interface': self._interface,
             '_namespace': self._namespace,
         }
 
@@ -180,11 +186,10 @@ class HybridExchange(ExchangeMixin):
         status = self._redis_client.get(self._status_key(uid))
         if status is None:
             raise BadIdentifierError(uid)
-        return HybridMailbox(uid, self)
+        return HybridMailbox(uid, self, self._interface)
 
     def _send_direct(self, address: str, message: Message) -> None:
-        payload = message.model_dump_json()
-        self._socket_pool.send(address, payload)
+        self._socket_pool.send(address, message.model_serialize())
         logger.debug(
             'Sent %s to %s via p2p',
             type(message).__name__,
@@ -235,15 +240,20 @@ class HybridExchange(ExchangeMixin):
             # Redis for message sending on two conditions: direct send fails
             # or no address was found. We raise a TypeError if no address
             # was found as a shortcut to get to the fall back.
-            if isinstance(maybe_address, str):
-                self._send_direct(maybe_address, message)
-                self._address_cache[uid] = maybe_address
+            if isinstance(maybe_address, (bytes, str)):
+                decoded_address = (
+                    maybe_address.decode('utf-8')
+                    if isinstance(maybe_address, bytes)
+                    else maybe_address
+                )
+                self._send_direct(decoded_address, message)
+                self._address_cache[uid] = decoded_address
             else:
-                raise TypeError
+                raise TypeError('Did not active peer address in Redis.')
         except (TypeError, SocketClosedError, OSError):
             self._redis_client.rpush(
                 self._queue_key(uid),
-                message.model_dump_json(),
+                message.model_serialize(),
             )
             logger.debug(
                 'Sent %s to %s via redis',
@@ -275,12 +285,10 @@ class _SocketPool:
             self._sockets[address] = conn
             return conn
 
-    def send(self, address: str, message: str) -> None:
+    def send(self, address: str, message: bytes) -> None:
         conn = self.get_socket(address)
         try:
-            conn.send_string(message)
-            ack = conn.recv_string()
-            assert ack == _SERVER_ACK
+            conn.send(message)
         except (SocketClosedError, OSError):
             self.close_socket(address)
             raise
@@ -298,19 +306,32 @@ class HybridMailbox(NoPickleMixin):
     Args:
         uid: Identifier of the mailbox.
         exchange: Exchange client.
+        interface: Network interface use for peer-to-peer communication. If
+            `None`, the hostname of the local host is used.
     """
 
-    def __init__(self, uid: Identifier, exchange: HybridExchange) -> None:
+    def __init__(
+        self,
+        uid: Identifier,
+        exchange: HybridExchange,
+        interface: str | None = None,
+    ) -> None:
         self._uid = uid
         self._exchange = exchange
+        self._interface = interface
         self._messages: Queue[Message] = Queue()
 
         self._closed = threading.Event()
         self._socket_poll_timeout_ms = _SOCKET_POLL_TIMEOUT_MS
 
+        host = (
+            address_by_interface(interface)
+            if interface is not None
+            else address_by_hostname()
+        )
         self._server = SimpleSocketServer(
             handler=self._server_handler,
-            host=socket.gethostbyname(socket.gethostname()),
+            host=host,
             port=None,
             timeout=_THREAD_JOIN_TIMEOUT,
         )
@@ -364,7 +385,7 @@ class HybridMailbox(NoPickleMixin):
         assert len(raw) == 2  # noqa: PLR2004
         if raw[1] == _CLOSE_SENTINEL:  # pragma: no cover
             raise MailboxClosedError(self.mailbox_id)
-        message = BaseMessage.model_from_json(raw[1])
+        message = BaseMessage.model_deserialize(raw[1])
         assert isinstance(message, get_args(Message))
         logger.debug(
             'Received %s to %s via redis',
@@ -409,15 +430,15 @@ class HybridMailbox(NoPickleMixin):
                 self.mailbox_id,
             )
 
-    def _server_handler(self, payload: str) -> str:
-        message = BaseMessage.model_from_json(payload)
+    def _server_handler(self, payload: bytes) -> bytes | None:
+        message = BaseMessage.model_deserialize(payload)
         logger.debug(
             'Received %s to %s via p2p',
             type(message).__name__,
             self.mailbox_id,
         )
         self._messages.put(message)
-        return _SERVER_ACK
+        return None
 
     def close(self) -> None:
         """Close this mailbox client.
@@ -459,7 +480,6 @@ class HybridMailbox(NoPickleMixin):
             MailboxClosedError: if the mailbox was closed.
             TimeoutError: if a `timeout` was specified and exceeded.
         """
-        # TODO: check if _closed.is_set() and raise different error.
         try:
             return self._messages.get(timeout=timeout)
         except QueueClosedError:

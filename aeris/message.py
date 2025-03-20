@@ -4,6 +4,7 @@ import base64
 import pickle
 import uuid
 from typing import Any
+from typing import get_args
 from typing import Literal
 from typing import Optional
 from typing import Union
@@ -68,6 +69,30 @@ class BaseMessage(BaseModel):
             ```
         """
         return TypeAdapter(Message).validate_json(data)
+
+    @classmethod
+    def model_deserialize(cls, data: bytes) -> Message:
+        """Deserialize a message.
+
+        Warning:
+            This uses pickle and is therefore suceptible to all the
+            typical pickle warnings about code injection.
+        """
+        message = pickle.loads(data)
+        if not isinstance(message, get_args(Message)):
+            raise TypeError(
+                'Deserialized message is not of type Message.',
+            )
+        return message
+
+    def model_serialize(self) -> bytes:
+        """Serialize a message to bytes.
+
+        Warning:
+            This uses pickle and is therefore suceptible to all the
+            typical pickle warnings about code injection.
+        """
+        return pickle.dumps(self)
 
 
 class ActionRequest(BaseMessage):
