@@ -204,7 +204,7 @@ class SimpleSocketServer:
 
     def __init__(
         self,
-        handler: Callable[[str], str],
+        handler: Callable[[bytes], bytes],
         *,
         host: str = '0.0.0.0',
         port: int | None = None,
@@ -224,17 +224,16 @@ class SimpleSocketServer:
     async def _write_message(
         self,
         writer: asyncio.StreamWriter,
-        message: str,
+        message: bytes,
     ) -> None:
-        encoded = message.encode('utf-8')
+        message_size = len(message)
         sent_size = 0
-        message_size = len(encoded)
 
         while sent_size < message_size:
             if sent_size + TCP_CHUNK_SIZE < message_size:
-                payload = encoded[sent_size : sent_size + TCP_CHUNK_SIZE]
+                payload = message[sent_size : sent_size + TCP_CHUNK_SIZE]
             else:
-                payload = encoded[sent_size:]
+                payload = message[sent_size:]
                 payload += TCP_MESSAGE_DELIM
             writer.write(payload)
             sent_size += TCP_CHUNK_SIZE
@@ -264,7 +263,7 @@ class SimpleSocketServer:
 
                 while True:
                     message, delim, new = buffer.partition(TCP_MESSAGE_DELIM)
-                    response = self.handler(message.decode('utf-8'))
+                    response = self.handler(message)
                     await self._write_message(writer, response)
                     buffer = new
                     if TCP_MESSAGE_DELIM not in new:
