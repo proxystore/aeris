@@ -459,7 +459,6 @@ class HybridMailbox(NoPickleMixin):
             MailboxClosedError: if the mailbox was closed.
             TimeoutError: if a `timeout` was specified and exceeded.
         """
-        # TODO: check if _closed.is_set() and raise different error.
         try:
             return self._messages.get(timeout=timeout)
         except QueueClosedError:
