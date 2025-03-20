@@ -18,6 +18,7 @@ else:  # pragma: <3.11 cover
 logger = logging.getLogger(__name__)
 
 _BAD_FILE_DESCRIPTOR_ERRNO = 9
+TCP_CHUNK_SIZE = 1024
 TCP_MESSAGE_DELIM = b'\r\n'
 
 
@@ -107,6 +108,9 @@ class SimpleSocket:
     def send(self, message: bytes) -> None:
         """Send bytes to the socket.
 
+        Note:
+            This is a noop if the message is empty.
+
         Args:
             message: Message to send.
 
@@ -114,14 +118,24 @@ class SimpleSocket:
             SocketClosedError: if the socket was closed.
             OSError: if an error occurred.
         """
-        payload = message + TCP_MESSAGE_DELIM
-        try:
-            self.socket.sendall(payload)
-        except OSError as e:
-            if e.errno == _BAD_FILE_DESCRIPTOR_ERRNO:
-                raise SocketClosedError() from e
+        message_size = len(message)
+        sent_size = 0
+
+        while sent_size < message_size:
+            if sent_size + TCP_CHUNK_SIZE < message_size:
+                payload = message[sent_size : sent_size + TCP_CHUNK_SIZE]
             else:
-                raise
+                payload = message[sent_size:]
+                payload += TCP_MESSAGE_DELIM
+            try:
+                self.socket.sendall(payload)
+            except OSError as e:
+                if e.errno == _BAD_FILE_DESCRIPTOR_ERRNO:
+                    raise SocketClosedError() from e
+                else:
+                    raise
+            else:
+                sent_size += TCP_CHUNK_SIZE
 
     def send_string(self, message: str) -> None:
         """Send a string to the socket.
@@ -208,27 +222,54 @@ class SimpleSocketServer:
         self._lock = threading.Lock()
         self._client_tasks: set[asyncio.Task[None]] = set()
 
+    async def _write_message(
+        self,
+        writer: asyncio.StreamWriter,
+        message: str,
+    ) -> None:
+        encoded = message.encode('utf-8')
+        sent_size = 0
+        message_size = len(encoded)
+
+        while sent_size < message_size:
+            if sent_size + TCP_CHUNK_SIZE < message_size:
+                payload = encoded[sent_size : sent_size + TCP_CHUNK_SIZE]
+            else:
+                payload = encoded[sent_size:]
+                payload += TCP_MESSAGE_DELIM
+            writer.write(payload)
+            sent_size += TCP_CHUNK_SIZE
+
+        await writer.drain()
+
     async def _handle_client(
         self,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
         try:
+            buffer = bytearray()
             while not reader.at_eof():
                 try:
-                    raw = await reader.readuntil(TCP_MESSAGE_DELIM)
-                except asyncio.IncompleteReadError:
+                    raw = await reader.read(TCP_CHUNK_SIZE)
+                except asyncio.IncompleteReadError:  # pragma: no cover
                     reader.feed_eof()
                     continue
+                else:
+                    buffer.extend(raw)
+                    if TCP_MESSAGE_DELIM not in raw:
+                        continue
 
-                if raw == b'':  # pragma: no cover
+                if len(buffer) == 0:  # pragma: no cover
                     break
 
-                message = raw.strip(TCP_MESSAGE_DELIM).decode('utf-8')
-                response = self.handler(message)
-                payload = response.encode('utf-8') + TCP_MESSAGE_DELIM
-                writer.write(payload)
-                await writer.drain()
+                while True:
+                    message, delim, new = buffer.partition(TCP_MESSAGE_DELIM)
+                    response = self.handler(message.decode('utf-8'))
+                    await self._write_message(writer, response)
+                    buffer = new
+                    if TCP_MESSAGE_DELIM not in new:
+                        break
         except Exception:  # pragma: no cover
             logger.exception('Error in client handler task.')
             raise
@@ -311,7 +352,10 @@ class SimpleSocketServer:
             self._thread = None
 
 
-def _recv_from_socket(socket: socket.socket, nbytes: int = 1024) -> bytes:
+def _recv_from_socket(
+    socket: socket.socket,
+    nbytes: int = TCP_CHUNK_SIZE,
+) -> bytes:
     while True:
         try:
             # TODO: use select here?
