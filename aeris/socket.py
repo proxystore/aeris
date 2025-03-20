@@ -37,7 +37,7 @@ class SocketOpenError(Exception):
 class SimpleSocket:
     """Simple socket wrapper.
 
-    Configures a client connection using a nonblocking TCP socket over IPv4.
+    Configures a client connection using a blocking TCP socket over IPv4.
     The send and recv methods handle byte encoding, message delimiters, and
     partial message buffering.
 
@@ -70,7 +70,6 @@ class SimpleSocket:
                 (self.host, self.port),
                 timeout=self.timeout,
             )
-            self.socket.setblocking(False)
         except OSError as e:
             raise SocketOpenError() from e
         # Stores leftover bytes after delimiter from last call to recv
@@ -358,7 +357,6 @@ def _recv_from_socket(
 ) -> bytes:
     while True:
         try:
-            # TODO: use select here?
             payload = socket.recv(nbytes)
         except BlockingIOError:
             continue
