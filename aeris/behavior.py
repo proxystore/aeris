@@ -10,7 +10,6 @@ from typing import Callable
 from typing import Generic
 from typing import Literal
 from typing import Protocol
-from typing import TYPE_CHECKING
 from typing import TypeVar
 
 if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
@@ -25,12 +24,14 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-if TYPE_CHECKING:
-    from aeris.handle import Handle
+from aeris.handle import Handle
+from aeris.handle import HandleDict
+from aeris.handle import HandleList
 
 P = ParamSpec('P')
 R = TypeVar('R')
 R_co = TypeVar('R_co', covariant=True)
+BehaviorT = TypeVar('BehaviorT', bound='Behavior')
 
 logger = logging.getLogger(__name__)
 
@@ -97,21 +98,54 @@ class Behavior:
                 loops[name] = attr
         return loops
 
-    def behavior_handles(self) -> dict[str, Handle[Any]]:
+    def behavior_handles(
+        self,
+    ) -> dict[
+        str,
+        Handle[Any] | HandleDict[Any, Any] | HandleList[Any],
+    ]:
         """Get instance attributes that are agent handles.
 
         Returns:
-            Dictionary mapping attribute names to agent handles.
+            Dictionary mapping attribute names to agent handles or \
+            data structures of handles.
         """
         from aeris.handle import Handle
 
         # This import is deferred to prevent a cyclic import with aeris.handle.
-        handles: dict[str, Handle[Any]] = {}
+        handles: dict[
+            str,
+            Handle[Any] | HandleDict[Any, Any] | HandleList[Any],
+        ] = {}
         for name in dir(self):
             attr = getattr(self, name)
-            if isinstance(attr, Handle):
+            if isinstance(attr, (Handle, HandleDict, HandleList)):
                 handles[name] = attr
         return handles
+
+    def behavior_handles_bind(
+        self,
+        bind: Callable[[Handle[BehaviorT]], Handle[BehaviorT]],
+    ) -> None:
+        """Bind all instance attributes that are agent handles.
+
+        Args:
+            bind: A callback that takes a handle and returns the same handle
+                or a bound version of the handle.
+        """
+        for attr, handles in self.behavior_handles().items():
+            if isinstance(handles, Handle):
+                setattr(self, attr, bind(handles))
+            elif isinstance(handles, HandleDict):
+                setattr(
+                    self,
+                    attr,
+                    HandleDict({k: bind(h) for k, h in handles.items()}),
+                )
+            elif isinstance(handles, HandleList):
+                setattr(self, attr, HandleList(bind(h) for h in handles))
+            else:
+                raise AssertionError('Unreachable.')
 
     def on_setup(self) -> None:
         """Setup up resources needed for the agents execution.
@@ -157,9 +191,6 @@ class ControlLoop(Protocol):
             Control loops should not return anything.
         """
         ...
-
-
-BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
 def action(method: Callable[P, R]) -> Callable[P, R]:

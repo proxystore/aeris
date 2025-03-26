@@ -6,6 +6,8 @@ import sys
 import threading
 import time
 import uuid
+from collections.abc import Iterable
+from collections.abc import Mapping
 from concurrent.futures import Future
 from concurrent.futures import wait
 from types import TracebackType
@@ -27,7 +29,6 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-from aeris.behavior import Behavior
 from aeris.exception import HandleClosedError
 from aeris.exception import HandleNotBoundError
 from aeris.exception import MailboxClosedError
@@ -44,12 +45,18 @@ from aeris.message import ShutdownRequest
 from aeris.message import ShutdownResponse
 
 if TYPE_CHECKING:
+    from aeris.behavior import Behavior
     from aeris.exchange import Exchange
+else:
+    # Behavior is only used in the bounding of the BehaviorT TypeVar.
+    Behavior = None
 
 logger = logging.getLogger(__name__)
 
+K = TypeVar('K')
 P = ParamSpec('P')
 R = TypeVar('R')
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 BehaviorT_co = TypeVar('BehaviorT_co', bound=Behavior, covariant=True)
 
 
@@ -78,6 +85,42 @@ class Handle(Protocol[BehaviorT_co]):
             Future to the result of the action.
         """
         ...
+
+
+class HandleDict(dict[K, Handle[BehaviorT]]):
+    """Dictionary mapping keys to handles.
+
+    Tip:
+        The `HandleDict` is required when storing a mapping of handles as
+        attributes of a `Behavior` so that those handles get bound to the
+        correct agent when running.
+    """
+
+    def __init__(
+        self,
+        values: Mapping[K, Handle[BehaviorT]]
+        | Iterable[tuple[K, Handle[BehaviorT]]] = (),
+        /,
+        **kwargs: dict[str, Handle[BehaviorT]],
+    ) -> None:
+        super().__init__(values, **kwargs)
+
+
+class HandleList(list[Handle[BehaviorT_co]]):
+    """List of handles.
+
+    Tip:
+        The `HandleList` is required when storing a list of handles as
+        attributes of a `Behavior` so that those handles get bound to the
+        correct agent when running.
+    """
+
+    def __init__(
+        self,
+        iterable: Iterable[Handle[BehaviorT_co]] = (),
+        /,
+    ) -> None:
+        super().__init__(iterable)
 
 
 class ProxyHandle(Generic[BehaviorT_co]):

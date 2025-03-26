@@ -17,8 +17,9 @@ from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
 from aeris.handle import BoundRemoteHandle
 from aeris.handle import ClientRemoteHandle
+from aeris.handle import Handle
 from aeris.handle import ProxyHandle
-from aeris.handle import UnboundRemoteHandle
+from aeris.handle import RemoteHandle
 from aeris.identifier import AgentIdentifier
 from aeris.message import ActionRequest
 from aeris.message import PingRequest
@@ -29,6 +30,7 @@ from aeris.multiplex import MailboxMultiplexer
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar('T')
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
@@ -133,36 +135,30 @@ class Agent(Generic[BehaviorT]):
             (self.behavior, self.agent_id, self.exchange, self.close_exchange),
         )
 
-    def _bind_handle(
-        self,
-        attr: str,
-        handle: BoundRemoteHandle[Any] | UnboundRemoteHandle[Any],
-    ) -> None:
+    def _bind_handle(self, handle: Handle[BehaviorT]) -> Handle[BehaviorT]:
+        if isinstance(
+            handle,
+            (ClientRemoteHandle, ProxyHandle),
+        ):  # pragma: no cover
+            # Ignore proxy handles and already bound client handles.
+            return handle
+        if (
+            isinstance(handle, BoundRemoteHandle)
+            and handle.mailbox_id == self.agent_id
+        ):
+            return handle
+
+        assert isinstance(handle, RemoteHandle)
         bound = self._multiplexer.bind(handle)
-        # Replace the handle attribute on the behavior with a handle bound
-        # to this agent.
-        setattr(self.behavior, attr, bound)
         logger.debug(
             'Bound handle to %s to running agent with %s',
             handle.agent_id,
             self.agent_id,
         )
+        return bound
 
     def _bind_handles(self) -> None:
-        for attr, handle in self.behavior.behavior_handles().items():
-            if isinstance(
-                handle,
-                (ClientRemoteHandle, ProxyHandle),
-            ):  # pragma: no cover
-                # Ignore proxy handles and already bound client handles.
-                pass
-            elif isinstance(handle, UnboundRemoteHandle):
-                self._bind_handle(attr, handle)
-            elif isinstance(handle, BoundRemoteHandle):
-                if handle.mailbox_id != self.agent_id:
-                    self._bind_handle(attr, handle)
-            else:
-                raise AssertionError('Unreachable.')
+        self.behavior.behavior_handles_bind(self._bind_handle)
 
     def _send_response(self, response: ResponseMessage) -> None:
         try:
