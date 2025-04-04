@@ -42,7 +42,7 @@ class BaseMessage(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         extra='forbid',
-        frozen=True,
+        frozen=False,
         use_enum_values=True,
         validate_default=True,
     )
