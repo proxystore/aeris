@@ -5,6 +5,7 @@ import inspect
 import logging
 import sys
 import threading
+from datetime import timedelta
 from typing import Any
 from typing import Callable
 from typing import Generic
@@ -24,6 +25,7 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
+from aeris.event import or_event
 from aeris.handle import Handle
 from aeris.handle import HandleDict
 from aeris.handle import HandleList
@@ -81,7 +83,7 @@ class Behavior:
         actions: dict[str, Action[Any, Any]] = {}
         for name in dir(self):
             attr = getattr(self, name)
-            if _is_actor_method_type(attr, 'action'):
+            if _is_agent_method_type(attr, 'action'):
                 actions[name] = attr
         return actions
 
@@ -94,7 +96,7 @@ class Behavior:
         loops: dict[str, ControlLoop] = {}
         for name in dir(self):
             attr = getattr(self, name)
-            if _is_actor_method_type(attr, 'loop'):
+            if _is_agent_method_type(attr, 'loop'):
                 loops[name] = attr
         return loops
 
@@ -211,7 +213,7 @@ def action(method: Callable[P, R]) -> Callable[P, R]:
                 ...
         ```
     """
-    method._actor_method_type = 'action'  # type: ignore[attr-defined]
+    method._agent_method_type = 'action'  # type: ignore[attr-defined]
     return method
 
 
@@ -241,7 +243,7 @@ def loop(
         TypeError: if the method signature does not conform to the
             [`ControlLoop`][aeris.behavior.ControlLoop] protocol.
     """
-    method._actor_method_type = 'loop'  # type: ignore[attr-defined]
+    method._agent_method_type = 'loop'  # type: ignore[attr-defined]
 
     if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
         found_sig = inspect.signature(method, eval_str=True)
@@ -269,9 +271,141 @@ def loop(
     return _wrapped
 
 
-def _is_actor_method_type(obj: Any, kind: str) -> bool:
+def event(
+    name: str,
+) -> Callable[
+    [Callable[[BehaviorT], None]],
+    Callable[[BehaviorT, threading.Event], None],
+]:
+    """Decorator that annotates a method of a behavior as an event loop.
+
+    An event loop is a special type of control loop that runs when a
+    [`threading.Event`][threading.Event] is set. The event is cleared
+    after the loop runs.
+
+    Example:
+        ```python
+        import threading
+        from aeris.behavior import Behavior, timer
+
+        class Example(Behavior):
+            def __init__(self) -> None:
+                self.alert = threading.Event()
+
+            @event('alert')
+            def handle(self) -> None:
+                # Runs every time alter is set
+                ...
+        ```
+
+    Args:
+        name: Attribute name of the [`threading.Event`][theading.Event]
+            to wait on.
+
+    Raises:
+        AttributeError: Raised at runtime if no attribute named `name`
+            exists on the behavior.
+        TypeError: Raised at runtime if the attribute named `name` is not
+            a [`threading.Event`][threading.Event].
+    """
+
+    def decorator(
+        method: Callable[[BehaviorT], None],
+    ) -> Callable[[BehaviorT, threading.Event], None]:
+        method._agent_method_type = 'loop'  # type: ignore[attr-defined]
+
+        @functools.wraps(method)
+        def _wrapped(self: BehaviorT, shutdown: threading.Event) -> None:
+            event = getattr(self, name)
+            if not isinstance(event, threading.Event):
+                raise TypeError(
+                    f'Attribute {name} of {type(self).__class__} has type '
+                    f'{type(event).__class__}. Expected threading.Event.',
+                )
+
+            logger.debug(
+                'Started %r event loop for %s (event: %r)',
+                method.__name__,
+                self,
+                name,
+            )
+            combined = or_event(shutdown, event)
+            while True:
+                combined.wait()
+                if shutdown.is_set():
+                    break
+                elif event.is_set():
+                    try:
+                        method(self)
+                    finally:
+                        event.clear()
+                else:
+                    raise AssertionError('Unreachable.')
+            logger.debug('Exited %r event loop for %s', method.__name__, self)
+
+        return _wrapped
+
+    return decorator
+
+
+def timer(
+    interval: float | timedelta,
+) -> Callable[
+    [Callable[[BehaviorT], None]],
+    Callable[[BehaviorT, threading.Event], None],
+]:
+    """Decorator that annotates a method of a behavior as a timer loop.
+
+    A timer loop is a special type of control loop that runs at a set
+    interval. The method will always be called once before the first
+    sleep.
+
+    Example:
+        ```python
+        from aeris.behavior import Behavior, timer
+
+        class Example(Behavior):
+            @timer(interval=1)
+            def listen(self) -> None:
+                # Runs every 1 second
+                ...
+        ```
+
+    Args:
+        interval: Seconds or a [`timedelta`][datetime.timedelta] to wait
+            between invoking the method.
+    """
+    interval = (
+        interval.total_seconds()
+        if isinstance(interval, timedelta)
+        else interval
+    )
+
+    def decorator(
+        method: Callable[[BehaviorT], None],
+    ) -> Callable[[BehaviorT, threading.Event], None]:
+        method._agent_method_type = 'loop'  # type: ignore[attr-defined]
+
+        @functools.wraps(method)
+        def _wrapped(self: BehaviorT, shutdown: threading.Event) -> None:
+            logger.debug(
+                'Started %r timer loop for %s (interval: %fs)',
+                method.__name__,
+                self,
+                interval,
+            )
+            while not shutdown.wait(interval):
+                method(self)
+            logger.debug('Exited %r timer loop for %s', method.__name__, self)
+
+        return _wrapped
+
+    return decorator
+
+
+def _is_agent_method_type(obj: Any, kind: str) -> bool:
     return (
         callable(obj)
-        and hasattr(obj, '_actor_method_type')
-        and obj._actor_method_type == kind
+        and hasattr(obj, '_agent_method_type')
+        and obj._agent_method_type == kind
     )
