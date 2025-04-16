@@ -14,8 +14,17 @@ class BadIdentifierError(Exception):
 class HandleClosedError(Exception):
     """Agent handle has been closed."""
 
-    def __init__(self, aid: AgentIdentifier, hid: Identifier) -> None:
-        super().__init__(f'Handle to {aid} bound to {hid} has been closed.')
+    def __init__(
+        self,
+        agent_id: AgentIdentifier,
+        mailbox_id: Identifier | None,
+    ) -> None:
+        message = (
+            f'Handle to {agent_id} bound to {mailbox_id} has been closed.'
+            if mailbox_id is not None
+            else f'Handle to {agent_id} has been closed.'
+        )
+        super().__init__(message)
 
 
 class HandleNotBoundError(Exception):
