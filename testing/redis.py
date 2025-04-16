@@ -39,6 +39,9 @@ class MockRedis:
             return self.lists[key]
         return None
 
+    def ping(self, **kwargs) -> None:
+        pass
+
     def rpush(self, key: str, *values: str) -> None:
         if key not in self.lists:
             self.lists[key] = []
