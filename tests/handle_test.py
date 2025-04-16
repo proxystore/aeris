@@ -8,6 +8,7 @@ import pytest
 
 from aeris.exception import HandleClosedError
 from aeris.exception import HandleNotBoundError
+from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
 from aeris.exchange.thread import ThreadExchange
 from aeris.handle import BoundRemoteHandle
@@ -33,20 +34,58 @@ def test_proxy_handle_protocol() -> None:
     assert isinstance(handle, Handle)
     assert str(behavior) in str(handle)
     assert repr(behavior) in repr(handle)
+    assert handle.ping() >= 0
+    handle.shutdown()
 
 
 def test_proxy_handle_actions() -> None:
     handle = ProxyHandle(CounterBehavior())
+
+    # Via Handle.action()
     assert handle.action('add', 1).result() is None
     assert handle.action('count').result() == 1
 
+    # Via attribute lookup
+    assert handle.add(1).result() is None
+    assert handle.count().result() == 2  # noqa: PLR2004
 
-def test_proxy_handle_errors() -> None:
+
+def test_proxy_handle_action_errors() -> None:
     handle = ProxyHandle(ErrorBehavior())
     with pytest.raises(RuntimeError, match='This action always fails.'):
         handle.action('fails').result()
     with pytest.raises(AttributeError, match='null'):
         handle.action('null').result()
+    with pytest.raises(AttributeError, match='null'):
+        handle.null()
+
+    handle.behavior.foo = 1  # type: ignore[attr-defined]
+    with pytest.raises(AttributeError, match='not a method'):
+        handle.foo()
+
+
+def test_proxy_handle_closed_errors() -> None:
+    handle = ProxyHandle(EmptyBehavior())
+    handle.close()
+
+    with pytest.raises(HandleClosedError):
+        handle.action('test')
+    with pytest.raises(HandleClosedError):
+        handle.ping()
+    with pytest.raises(HandleClosedError):
+        handle.shutdown()
+
+
+def test_proxy_handle_agent_shutdown_errors() -> None:
+    handle = ProxyHandle(EmptyBehavior())
+    handle.shutdown()
+
+    with pytest.raises(MailboxClosedError):
+        handle.action('test')
+    with pytest.raises(MailboxClosedError):
+        handle.ping()
+    with pytest.raises(MailboxClosedError):
+        handle.shutdown()
 
 
 def test_unbound_remote_handle_serialize(exchange: Exchange) -> None:
@@ -220,11 +259,13 @@ def test_client_remote_handle_actions(
     with launcher.launch(behavior, exchange).bind_as_client() as handle:
         assert handle.ping() > 0
 
-        add_future: Future[None] = handle.action('add', 1)
-        add_future.result()
-
+        handle.action('add', 1).result()
         count_future: Future[int] = handle.action('count')
         assert count_future.result() == 1
+
+        handle.add(1).result()
+        count_future = handle.count()
+        assert count_future.result() == 2  # noqa: PLR2004
 
         handle.shutdown()
 

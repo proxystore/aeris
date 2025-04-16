@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import functools
 import logging
 import sys
 import threading
@@ -67,6 +68,9 @@ class Handle(Protocol[BehaviorT_co]):
     A handle enables a client or agent to invoke actions on another agent.
     """
 
+    agent_id: AgentIdentifier
+    mailbox_id: Identifier | None
+
     def action(
         self,
         action: str,
@@ -83,6 +87,62 @@ class Handle(Protocol[BehaviorT_co]):
 
         Returns:
             Future to the result of the action.
+
+        Raises:
+            HandleClosedError: If the handle was closed.
+            MailboxClosedError: If the agent's mailbox was closed. This
+                typically indicates the agent shutdown for another reason
+                (it self terminated or via another handle).
+        """
+        ...
+
+    def close(
+        self,
+        wait_futures: bool = True,
+        *,
+        timeout: float | None = None,
+    ) -> None:
+        """Close this handle.
+
+        Args:
+            wait_futures: Wait to return until all pending futures are done
+                executing. If `False`, pending futures are cancelled.
+            timeout: Optional timeout used when `wait=True`.
+        """
+        ...
+
+    def ping(self, *, timeout: float | None = None) -> float:
+        """Ping the agent.
+
+        Ping the agent and wait to get a response. Agents process messages
+        in order so the round-trip time will include processing time of
+        earlier messages in the queue.
+
+        Args:
+            timeout: Optional timeout in seconds to wait for the response.
+
+        Returns:
+            Round-trip time in seconds.
+
+        Raises:
+            HandleClosedError: If the handle was closed.
+            MailboxClosedError: If the agent's mailbox was closed. This
+                typically indicates the agent shutdown for another reason
+                (it self terminated or via another handle).
+            TimeoutError: If the timeout is exceeded.
+        """
+        ...
+
+    def shutdown(self) -> None:
+        """Instruct the agent to shutdown.
+
+        This is non-blocking and will only send the message.
+
+        Raises:
+            HandleClosedError: If the handle was closed.
+            MailboxClosedError: If the agent's mailbox was closed. This
+                typically indicates the agent shutdown for another reason
+                (it self terminated or via another handle).
         """
         ...
 
@@ -134,12 +194,29 @@ class ProxyHandle(Generic[BehaviorT_co]):
 
     def __init__(self, behavior: BehaviorT_co) -> None:
         self.behavior = behavior
+        self.agent_id = AgentIdentifier.new()
+        self.mailbox_id: Identifier | None = None
+        self._agent_closed = False
+        self._handle_closed = False
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(behavior={self.behavior!r})'
 
     def __str__(self) -> str:
         return f'{type(self).__name__}<{self.behavior}>'
+
+    def __getattr__(self, name: str) -> Any:
+        method = getattr(self.behavior, name)
+        if not callable(method):
+            raise AttributeError(
+                f'Attribute {name} of {type(self.behavior)} is not a method.',
+            )
+
+        @functools.wraps(method)
+        def func(*args: Any, **kwargs: Any) -> Future[R]:
+            return self.action(name, *args, **kwargs)
+
+        return func
 
     def action(
         self,
@@ -157,7 +234,18 @@ class ProxyHandle(Generic[BehaviorT_co]):
 
         Returns:
             Future to the result of the action.
+
+        Raises:
+            HandleClosedError: If the handle was closed.
+            MailboxClosedError: If the agent's mailbox was closed. This
+                typically indicates the agent shutdown for another reason
+                (it self terminated or via another handle).
         """
+        if self._agent_closed:
+            raise MailboxClosedError(self.agent_id)
+        elif self._handle_closed:
+            raise HandleClosedError(self.agent_id, self.mailbox_id)
+
         future: Future[R] = Future()
         try:
             method = getattr(self.behavior, action)
@@ -167,6 +255,70 @@ class ProxyHandle(Generic[BehaviorT_co]):
         else:
             future.set_result(result)
         return future
+
+    def close(
+        self,
+        wait_futures: bool = True,
+        *,
+        timeout: float | None = None,
+    ) -> None:
+        """Close this handle.
+
+        Note:
+            This is a no-op for proxy handles.
+
+        Args:
+            wait_futures: Wait to return until all pending futures are done
+                executing. If `False`, pending futures are cancelled.
+            timeout: Optional timeout used when `wait=True`.
+        """
+        self._handle_closed = True
+
+    def ping(self, *, timeout: float | None = None) -> float:
+        """Ping the agent.
+
+        Ping the agent and wait to get a response. Agents process messages
+        in order so the round-trip time will include processing time of
+        earlier messages in the queue.
+
+        Note:
+            This is a no-op for proxy handles and returns 0 latency.
+
+        Args:
+            timeout: Optional timeout in seconds to wait for the response.
+
+        Returns:
+            Round-trip time in seconds.
+
+        Raises:
+            HandleClosedError: If the handle was closed.
+            MailboxClosedError: If the agent's mailbox was closed. This
+                typically indicates the agent shutdown for another reason
+                (it self terminated or via another handle).
+            TimeoutError: If the timeout is exceeded.
+        """
+        if self._agent_closed:
+            raise MailboxClosedError(self.agent_id)
+        elif self._handle_closed:
+            raise HandleClosedError(self.agent_id, self.mailbox_id)
+        return 0
+
+    def shutdown(self) -> None:
+        """Instruct the agent to shutdown.
+
+        This is non-blocking and will only send the message.
+
+        Raises:
+            HandleClosedError: If the handle was closed.
+            MailboxClosedError: If the agent's mailbox was closed. This
+                typically indicates the agent shutdown for another reason
+                (it self terminated or via another handle).
+        """
+        if self._agent_closed:
+            raise MailboxClosedError(self.agent_id)
+        elif self._handle_closed:
+            raise HandleClosedError(self.agent_id, self.mailbox_id)
+        self._agent_closed = True
 
 
 class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
@@ -242,6 +394,12 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
     def __str__(self) -> str:
         name = type(self).__name__
         return f'{name}<agent: {self.agent_id}; mailbox: {self.mailbox_id}>'
+
+    def __getattr__(self, name: str) -> Any:
+        def remote_method_call(*args: Any, **kwargs: Any) -> Future[R]:
+            return self.action(name, *args, **kwargs)
+
+        return remote_method_call
 
     def _process_response(self, response: ResponseMessage) -> None:
         if isinstance(response, (ActionResponse, PingResponse)):
