@@ -34,6 +34,9 @@ class RedisExchange(ExchangeMixin):
             [`redis.Redis()`][redis.Redis].
         timeout: Timeout for waiting on the next message. If `None`, the
             timeout will be set to one second but will loop indefinitely.
+
+    Raises:
+        redis.exceptions.ConnectionError: If the Redis server is not reachable.
     """
 
     def __init__(
@@ -54,6 +57,7 @@ class RedisExchange(ExchangeMixin):
             decode_responses=False,
             **kwargs,
         )
+        self._client.ping()
 
     def __getstate__(self) -> dict[str, Any]:
         return {

@@ -62,6 +62,9 @@ class HybridExchange(ExchangeMixin):
             generated.
         redis_kwargs: Extra keyword arguments to pass to
             [`redis.Redis()`][redis.Redis].
+
+    Raises:
+        redis.exceptions.ConnectionError: If the Redis server is not reachable.
     """
 
     _address_cache: dict[Identifier, str]
@@ -97,6 +100,7 @@ class HybridExchange(ExchangeMixin):
             decode_responses=False,
             **self._redis_kwargs,
         )
+        self._redis_client.ping()
         self._socket_pool = _SocketPool()
 
     def __getstate__(self) -> dict[str, Any]:
