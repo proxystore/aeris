@@ -81,7 +81,7 @@ class Behavior:
         actions: dict[str, Action[Any, Any]] = {}
         for name in dir(self):
             attr = getattr(self, name)
-            if _is_actor_method_type(attr, 'action'):
+            if _is_agent_method_type(attr, 'action'):
                 actions[name] = attr
         return actions
 
@@ -94,7 +94,7 @@ class Behavior:
         loops: dict[str, ControlLoop] = {}
         for name in dir(self):
             attr = getattr(self, name)
-            if _is_actor_method_type(attr, 'loop'):
+            if _is_agent_method_type(attr, 'loop'):
                 loops[name] = attr
         return loops
 
@@ -211,7 +211,7 @@ def action(method: Callable[P, R]) -> Callable[P, R]:
                 ...
         ```
     """
-    method._actor_method_type = 'action'  # type: ignore[attr-defined]
+    method._agent_method_type = 'action'  # type: ignore[attr-defined]
     return method
 
 
@@ -241,7 +241,7 @@ def loop(
         TypeError: if the method signature does not conform to the
             [`ControlLoop`][aeris.behavior.ControlLoop] protocol.
     """
-    method._actor_method_type = 'loop'  # type: ignore[attr-defined]
+    method._agent_method_type = 'loop'  # type: ignore[attr-defined]
 
     if sys.version_info >= (3, 10):  # pragma: >=3.10 cover
         found_sig = inspect.signature(method, eval_str=True)
@@ -269,9 +269,9 @@ def loop(
     return _wrapped
 
 
-def _is_actor_method_type(obj: Any, kind: str) -> bool:
+def _is_agent_method_type(obj: Any, kind: str) -> bool:
     return (
         callable(obj)
-        and hasattr(obj, '_actor_method_type')
-        and obj._actor_method_type == kind
+        and hasattr(obj, '_agent_method_type')
+        and obj._agent_method_type == kind
     )
