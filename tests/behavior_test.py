@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import threading
+import time
 
 import pytest
 
 from aeris.behavior import Behavior
 from aeris.behavior import loop
+from aeris.behavior import timer
 from aeris.handle import Handle
 from aeris.handle import HandleDict
 from aeris.handle import HandleList
@@ -14,6 +16,8 @@ from testing.behavior import EmptyBehavior
 from testing.behavior import HandleBehavior
 from testing.behavior import IdentityBehavior
 from testing.behavior import WaitBehavior
+from testing.constant import TEST_LOOP_SLEEP
+from testing.constant import TEST_THREAD_JOIN_TIMEOUT
 
 
 def test_initialize_base_type_error() -> None:
@@ -61,6 +65,27 @@ def test_behavior_loops() -> None:
     behavior.wait(shutdown)
 
     behavior.on_shutdown()
+
+
+def test_behavior_timer() -> None:
+    class _Timer(Behavior):
+        def __init__(self) -> None:
+            self.count = 0
+
+        @timer(TEST_LOOP_SLEEP)
+        def counter(self) -> None:
+            self.count += 1
+
+    behavior = _Timer()
+
+    shutdown = threading.Event()
+    handle = threading.Thread(target=behavior.counter, args=(shutdown,))
+    handle.start()
+
+    time.sleep(TEST_LOOP_SLEEP * 10)
+    shutdown.set()
+
+    handle.join(TEST_THREAD_JOIN_TIMEOUT)
 
 
 def test_behavior_handles() -> None:

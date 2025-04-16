@@ -5,6 +5,7 @@ import inspect
 import logging
 import sys
 import threading
+from datetime import timedelta
 from typing import Any
 from typing import Callable
 from typing import Generic
@@ -267,6 +268,59 @@ def loop(
         return result
 
     return _wrapped
+
+
+def timer(
+    duration: float | timedelta,
+) -> Callable[
+    [Callable[[BehaviorT], None]],
+    Callable[[BehaviorT, threading.Event], None],
+]:
+    """Decorator that annotates a method of a behavior as timer loop.
+
+    A timer loop is a special type of control loop that runs at a set
+    interval.
+
+    Example:
+        ```python
+        from aeris.behavior import Behavior, timer
+
+        class Example(Behavior):
+            @loop(1)
+            def listen(self) -> None:
+                # Runs every 1 second
+                ...
+        ```
+    """
+    duration = (
+        duration.total_seconds()
+        if isinstance(duration, timedelta)
+        else duration
+    )
+
+    def decorator(
+        method: Callable[[BehaviorT], None],
+    ) -> Callable[[BehaviorT, threading.Event], None]:
+        method._agent_method_type = 'loop'  # type: ignore[attr-defined]
+
+        @functools.wraps(method)
+        def _wrapped(self: BehaviorT, shutdown: threading.Event) -> None:
+            logger.debug(
+                'Started %r timer loop for %s (duration: %fs)',
+                method.__name__,
+                self,
+                duration,
+            )
+            while True:
+                if shutdown.wait(duration):
+                    break
+                else:
+                    method(self)
+            logger.debug('Exited %r timer loop for %s', method.__name__, self)
+
+        return _wrapped
+
+    return decorator
 
 
 def _is_agent_method_type(obj: Any, kind: str) -> bool:
