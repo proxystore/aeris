@@ -62,19 +62,22 @@ def _os_thread_filter(
     return record
 
 
-def init_logging(
+def init_logging(  # noqa: PLR0913
     level: int | str = logging.INFO,
     *,
     logfile: str | pathlib.Path | None = None,
+    logfile_level: int | str | None = None,
     color: bool = True,
     extra: bool = False,
     force: bool = False,
-) -> None:
+) -> logging.Logger:
     """Initialize global logger.
 
     Args:
         level: Minimum logging level.
         logfile: Configure a file handler for this path.
+        logfile_level: Minimum logging level for the file handler. Defaults
+            to that of `level`.
         color: Use colorful logging for stdout.
         extra: Include extra info in log messages, such as thread ID and
             process ID. This is helpful for debugging.
@@ -82,23 +85,29 @@ def init_logging(
             handler. This option is useful to silencing the third-party
             package logging. Note: should not be set when running inside
             pytest.
+
+    Returns:
+        The root logger.
     """
-    path = pathlib.Path(logfile) if logfile is not None else None
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setFormatter(_Formatter(color=color, extra=extra))
+    stdout_handler.setLevel(level)
     if extra:
         stdout_handler.addFilter(_os_thread_filter)
     handlers: list[logging.Handler] = [stdout_handler]
 
-    if path is not None:
+    if logfile is not None:
+        logfile_level = level if logfile_level is None else logfile_level
+        path = pathlib.Path(logfile)
         path.parent.mkdir(parents=True, exist_ok=True)
         handler = logging.FileHandler(path)
         handler.setFormatter(_Formatter(color=False, extra=extra))
+        handler.setLevel(logfile_level)
         handlers.append(handler)
 
     logging.basicConfig(
         datefmt='%Y-%m-%d %H:%M:%S',
-        level=level,
+        level=logging.NOTSET,
         handlers=handlers,
         force=force,
     )
@@ -107,8 +116,14 @@ def init_logging(
     # warnings get logged to a 'py.warnings' logger.
     logging.captureWarnings(True)
 
-    logging.info(
-        'Configured logger (level=%s, file=%s)',
+    logger = logging.getLogger()
+    logger.info(
+        'Configured logger (stdout-level=%s, logfile=%s, logfile-level=%s)',
         logging.getLevelName(level) if isinstance(level, int) else level,
-        path,
+        logfile,
+        logging.getLevelName(logfile_level)
+        if isinstance(logfile_level, int)
+        else logfile_level,
     )
+
+    return logger
