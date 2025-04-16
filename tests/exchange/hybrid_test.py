@@ -9,8 +9,10 @@ import pytest
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
 from aeris.exchange.hybrid import HybridExchange
+from aeris.exchange.hybrid import HybridMailbox
 from aeris.identifier import ClientIdentifier
 from aeris.message import PingRequest
+from aeris.socket import open_port
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_SLEEP
 from testing.constant import TEST_THREAD_JOIN_TIMEOUT
@@ -144,17 +146,21 @@ def test_send_to_mailbox_bad_cached_address(mock_redis) -> None:
         aid = exchange.create_agent()
         cid = exchange.create_client()
         message = PingRequest(src=cid, dest=aid)
+        # Ensure mailboxes listen on different ports so addresses are different
+        port1, port2 = open_port(), open_port()
 
-        with exchange.get_mailbox(aid) as mailbox:
+        with HybridMailbox(aid, exchange, port=port1) as mailbox:
             exchange.send(aid, message)
             assert mailbox.recv(timeout=TEST_CONNECTION_TIMEOUT) == message
 
         # Address of mailbox is now in the exchanges cache but
         # the mailbox is no longer listening on that address.
-        assert aid in exchange._address_cache
+        address = exchange._address_cache[aid]
+        socket = exchange._socket_pool._sockets[address]
+        socket.close()
 
         # This send will try the cached address, fail, catch the error,
         # and retry via redis.
         exchange.send(aid, message)
-        with exchange.get_mailbox(aid) as mailbox:
+        with HybridMailbox(aid, exchange, port=port2) as mailbox:
             assert mailbox.recv(timeout=TEST_CONNECTION_TIMEOUT) == message

@@ -190,14 +190,15 @@ class HybridExchange(ExchangeMixin):
         status = self._redis_client.get(self._status_key(uid))
         if status is None:
             raise BadIdentifierError(uid)
-        return HybridMailbox(uid, self, self._interface)
+        return HybridMailbox(uid, self, interface=self._interface)
 
     def _send_direct(self, address: str, message: Message) -> None:
         self._socket_pool.send(address, message.model_serialize())
         logger.debug(
-            'Sent %s to %s via p2p',
+            'Sent %s to %s via p2p at %s',
             type(message).__name__,
             message.dest,
+            address,
         )
 
     def send(self, uid: Identifier, message: Message) -> None:
@@ -312,13 +313,17 @@ class HybridMailbox(NoPickleMixin):
         exchange: Exchange client.
         interface: Network interface use for peer-to-peer communication. If
             `None`, the hostname of the local host is used.
+        port: Port to use for peer-to-peer communication. Randomly selected
+            if `None`.
     """
 
     def __init__(
         self,
         uid: Identifier,
         exchange: HybridExchange,
+        *,
         interface: str | None = None,
+        port: int | None = None,
     ) -> None:
         self._uid = uid
         self._exchange = exchange
@@ -336,7 +341,7 @@ class HybridMailbox(NoPickleMixin):
         self._server = SimpleSocketServer(
             handler=self._server_handler,
             host=host,
-            port=None,
+            port=port,
             timeout=_THREAD_JOIN_TIMEOUT,
         )
         self._server.start_server_thread()
