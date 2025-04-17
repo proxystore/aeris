@@ -395,7 +395,7 @@ def address_by_hostname() -> str:
     return socket.gethostbyname(platform.node())
 
 
-def address_by_interface(ifname: str) -> str:
+def address_by_interface(ifname: str) -> str:  # pragma: darwin no cover
     """Get the IP address of the given interface.
 
     Source: https://stackoverflow.com/questions/24196932/how-can-i-get-the-ip-address-of-eth0-in-python#24196955
