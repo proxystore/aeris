@@ -7,6 +7,7 @@ from concurrent.futures import Future
 import pytest
 
 from aeris.agent import Agent
+from aeris.agent import AgentRunConfig
 from aeris.behavior import action
 from aeris.behavior import Behavior
 from aeris.behavior import loop
@@ -63,6 +64,23 @@ def test_agent_start_shutdown(exchange: Exchange) -> None:
 
     assert agent.behavior.setup_event.is_set()
     assert agent.behavior.shutdown_event.is_set()
+
+
+def test_agent_shutdown_without_terminate(exchange: Exchange) -> None:
+    agent_id = exchange.create_agent()
+    agent = Agent(
+        SignalingBehavior(),
+        agent_id=agent_id,
+        exchange=exchange,
+        config=AgentRunConfig(
+            close_exchange_on_exit=False,
+            terminate_on_exit=False,
+        ),
+    )
+    agent.start()
+    agent.shutdown()
+    # Verify mailbox is open
+    exchange.send(agent_id, PingRequest(src=agent_id, dest=agent_id))
 
 
 def test_agent_shutdown_without_start(exchange: Exchange) -> None:

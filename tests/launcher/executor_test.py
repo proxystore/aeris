@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import threading
 import time
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import ThreadPoolExecutor
@@ -8,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from aeris.behavior import Behavior
+from aeris.behavior import loop
 from aeris.exception import BadIdentifierError
 from aeris.exchange import Exchange
 from aeris.exchange.http import HttpExchange
@@ -95,17 +97,51 @@ def test_wait_timeout(exchange: Exchange) -> None:
 
 
 class FailOnStartupBehavior(Behavior):
+    def __init__(self, max_errors: int | None = None) -> None:
+        self.errors = 0
+        self.max_errors = max_errors
+
     def on_setup(self) -> None:
-        raise RuntimeError('Agent startup failed')
+        if self.max_errors is None or self.errors < self.max_errors:
+            self.errors += 1
+            raise RuntimeError('Agent startup failed')
+
+    @loop
+    def exit_after_startup(self, shutdown: threading.Event) -> None:
+        shutdown.set()
 
 
-def test_wait_ignore_agent_errors(exchange: Exchange) -> None:
+def test_restart_on_error(exchange: Exchange) -> None:
+    behavior = FailOnStartupBehavior(max_errors=2)
+    # This test only works because we are using a ThreadPoolExecutor so
+    # the state inside FailOnStartupBehavior is shared.
+    executor = ThreadPoolExecutor(max_workers=1)
+    with ExecutorLauncher(
+        executor,
+        close_exchange=False,
+        max_restarts=3,
+    ) as launcher:
+        handle = launcher.launch(behavior, exchange).bind_as_client()
+        launcher.wait(handle.agent_id)
+        handle.close()
+        assert behavior.errors == 2  # noqa: PLR2004
+
+
+@pytest.mark.parametrize('ignore_error', (True, False))
+def test_wait_ignore_agent_errors(
+    ignore_error: bool,
+    exchange: Exchange,
+) -> None:
     behavior = FailOnStartupBehavior()
     executor = ThreadPoolExecutor(max_workers=1)
     launcher = ExecutorLauncher(executor, close_exchange=False)
 
     handle = launcher.launch(behavior, exchange).bind_as_client()
-    launcher.wait(handle.agent_id)
+    if ignore_error:
+        launcher.wait(handle.agent_id, ignore_error=ignore_error)
+    else:
+        with pytest.raises(RuntimeError, match='Agent startup failed'):
+            launcher.wait(handle.agent_id, ignore_error=ignore_error)
     handle.close()
 
     with pytest.raises(RuntimeError, match='Agent startup failed'):

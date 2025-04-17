@@ -15,6 +15,7 @@ else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
 from aeris.agent import Agent
+from aeris.agent import AgentRunConfig
 from aeris.behavior import Behavior
 from aeris.exception import BadIdentifierError
 from aeris.exchange import Exchange
@@ -93,7 +94,7 @@ class ThreadLauncher:
             behavior,
             agent_id=agent_id,
             exchange=exchange,
-            close_exchange=False,
+            config=AgentRunConfig(close_exchange_on_exit=False),
         )
         thread = threading.Thread(target=agent, name=f'{self}-{agent_id}')
         thread.start()

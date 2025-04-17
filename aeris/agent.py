@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import enum
 import logging
 import sys
@@ -42,19 +43,29 @@ class _AgentState(enum.Enum):
     SHUTDOWN = 'shutdown'
 
 
+@dataclasses.dataclass(frozen=True)
+class AgentRunConfig:
+    """Agent run configuration."""
+
+    close_exchange_on_exit: bool = True
+    max_action_concurrency: int | None = None
+    terminate_on_error: bool = True
+    terminate_on_exit: bool = True
+
+
 # Helper for Agent.__reduce__ which cannot handle the keyword arguments
 # of the Agent constructor.
 def _agent_trampoline(
     behavior: BehaviorT,
     agent_id: AgentIdentifier,
     exchange: Exchange,
-    close_exchange: bool,
+    config: AgentRunConfig,
 ) -> Agent[BehaviorT]:
     return Agent(
         behavior,
         agent_id=agent_id,
         exchange=exchange,
-        close_exchange=close_exchange,
+        config=config,
     )
 
 
@@ -78,8 +89,7 @@ class Agent(Generic[BehaviorT]):
         agent_id: Identifier of this agent in a multi-agent system.
         exchange: Message exchange of multi-agent system. The agent will close
             the exchange when it finished running.
-        close_exchange: Close the `exchange` object when the agent is
-            shutdown.
+        config: Agent execution parameters.
     """
 
     def __init__(
@@ -88,17 +98,18 @@ class Agent(Generic[BehaviorT]):
         *,
         agent_id: AgentIdentifier,
         exchange: Exchange,
-        close_exchange: bool = False,
+        config: AgentRunConfig | None = None,
     ) -> None:
         self.agent_id = agent_id
         self.behavior = behavior
         self.exchange = exchange
-        self.close_exchange = close_exchange
+        self.config = config if config is not None else AgentRunConfig()
 
         self._actions = behavior.behavior_actions()
         self._loops = behavior.behavior_loops()
 
         self._shutdown = threading.Event()
+        self._expected_shutdown = True
         self._state_lock = threading.Lock()
         self._state = _AgentState.INITIALIZED
 
@@ -132,7 +143,7 @@ class Agent(Generic[BehaviorT]):
     def __reduce__(self) -> Any:
         return (
             _agent_trampoline,
-            (self.behavior, self.agent_id, self.exchange, self.close_exchange),
+            (self.behavior, self.agent_id, self.exchange, self.config),
         )
 
     def _bind_handle(self, handle: Handle[BehaviorT]) -> Handle[BehaviorT]:
@@ -208,7 +219,7 @@ class Agent(Generic[BehaviorT]):
                 name,
                 future.exception(),
             )
-            self.signal_shutdown()
+            self.signal_shutdown(expected=False)
 
     def action(self, action: str, args: Any, kwargs: Any) -> Any:
         """Invoke an action of the agent.
@@ -280,7 +291,9 @@ class Agent(Generic[BehaviorT]):
             self._state = _AgentState.STARTING
             self._bind_handles()
             self.behavior.on_setup()
-            self._action_pool = ThreadPoolExecutor()
+            self._action_pool = ThreadPoolExecutor(
+                self.config.max_action_concurrency,
+            )
             self._loop_pool = ThreadPoolExecutor(
                 max_workers=len(self._loops) + 1,
             )
@@ -321,7 +334,8 @@ class Agent(Generic[BehaviorT]):
                 return
 
             logger.debug(
-                'Shutting down agent... (%s; %s)',
+                'Shutting down agent... (expected: %s; %s; %s)',
+                self._expected_shutdown,
                 self.agent_id,
                 self.behavior,
             )
@@ -345,12 +359,26 @@ class Agent(Generic[BehaviorT]):
             if self._loop_pool is not None:
                 self._loop_pool.shutdown(wait=True)
 
-            # Close the exchange last since the actions that finished
-            # up may still need to use it to send replies.
-            if self.close_exchange:
-                self.exchange.close()
+            if (
+                self._expected_shutdown and not self.config.terminate_on_exit
+            ) or (
+                not self._expected_shutdown
+                and not self.config.terminate_on_error
+            ):
+                # TODO: This is a hack because we need to close the mailbox
+                # for the multiplexer listener thread to exit, but in some
+                # cases we don't actually want to close it permanently. This
+                # means there is a race where the mailbox is temporarily
+                # closed.
+                self.exchange.create_mailbox(self.agent_id)
 
             self.behavior.on_shutdown()
+
+            # Close the exchange last since the actions that finished
+            # up may still need to use it to send replies.
+            if self.config.close_exchange_on_exit:
+                self.exchange.close()
+
             self._state = _AgentState.SHUTDOWN
 
             # Raise any exceptions from the loop threads as the final step.
@@ -362,13 +390,14 @@ class Agent(Generic[BehaviorT]):
                 self.behavior,
             )
 
-    def signal_shutdown(self) -> None:
+    def signal_shutdown(self, expected: bool = True) -> None:
         """Signal that the agent should exit.
 
         If the agent has not started, this will cause the agent to immediately
         shutdown when next started. If the agent is shutdown, this has no
         effect.
         """
+        self._expected_shutdown = expected
         self._shutdown.set()
 
 
