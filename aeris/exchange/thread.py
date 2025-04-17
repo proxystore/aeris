@@ -3,11 +3,13 @@ from __future__ import annotations
 import logging
 import pickle
 
+from aeris.behavior import Behavior
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import Queue
 from aeris.exchange.queue import QueueClosedError
+from aeris.identifier import AgentIdentifier
 from aeris.identifier import Identifier
 from aeris.message import Message
 
@@ -24,6 +26,7 @@ class ThreadExchange(ExchangeMixin):
 
     def __init__(self) -> None:
         self._queues: dict[Identifier, Queue[Message]] = {}
+        self._behaviors: dict[Identifier, Behavior] = {}
 
     def __getstate__(self) -> None:
         raise pickle.PicklingError(
@@ -65,6 +68,24 @@ class ThreadExchange(ExchangeMixin):
         if queue is not None and not queue.closed():
             queue.close()
             logger.debug('Closed mailbox for %s (%s)', uid, self)
+
+    def discover(
+        self,
+        behavior: type[Behavior],
+        *,
+        allow_subclasses: bool = True,
+    ) -> tuple[AgentIdentifier, ...]:
+        """Discover peer agents with a given behavior.
+
+        Args:
+            behavior: Behavior type of interest.
+            allow_subclasses: Return agents implementing subclasses of the
+                behavior.
+
+        Returns:
+            Tuple of agent IDs implementing the behavior.
+        """
+        ...
 
     def get_mailbox(self, uid: Identifier) -> ThreadMailbox:
         """Get a client to a specific mailbox.

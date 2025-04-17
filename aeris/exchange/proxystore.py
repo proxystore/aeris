@@ -12,9 +12,11 @@ from proxystore.store import register_store
 from proxystore.store import Store
 from proxystore.store.utils import resolve_async
 
+from aeris.behavior import Behavior
 from aeris.exchange import Exchange
 from aeris.exchange import ExchangeMixin
 from aeris.exchange import Mailbox
+from aeris.identifier import AgentIdentifier
 from aeris.identifier import Identifier
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
@@ -134,6 +136,27 @@ class ProxyStoreExchange(ExchangeMixin):
             uid: Entity identifier of the mailbox to close.
         """
         self.exchange.close_mailbox(uid)
+
+    def discover(
+        self,
+        behavior: type[Behavior],
+        *,
+        allow_subclasses: bool = True,
+    ) -> tuple[AgentIdentifier, ...]:
+        """Discover peer agents with a given behavior.
+
+        Args:
+            behavior: Behavior type of interest.
+            allow_subclasses: Return agents implementing subclasses of the
+                behavior.
+
+        Returns:
+            Tuple of agent IDs implementing the behavior.
+        """
+        return self.exchange.discover(
+            behavior,
+            allow_subclasses=allow_subclasses,
+        )
 
     def get_mailbox(self, uid: Identifier) -> Mailbox:
         """Get a client to a specific mailbox.

@@ -44,11 +44,13 @@ from aiohttp.web import run_app
 from aiohttp.web import TCPSite
 from pydantic import ValidationError
 
+from aeris.behavior import Behavior
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import AsyncQueue
 from aeris.exchange.queue import QueueClosedError
+from aeris.identifier import AgentIdentifier
 from aeris.identifier import BaseIdentifier
 from aeris.identifier import Identifier
 from aeris.logging import init_logging
@@ -131,6 +133,24 @@ class HttpExchange(ExchangeMixin):
         )
         response.raise_for_status()
         logger.debug('Closed mailbox for %s (%s)', uid, self)
+
+    def discover(
+        self,
+        behavior: type[Behavior],
+        *,
+        allow_subclasses: bool = True,
+    ) -> tuple[AgentIdentifier, ...]:
+        """Discover peer agents with a given behavior.
+
+        Args:
+            behavior: Behavior type of interest.
+            allow_subclasses: Return agents implementing subclasses of the
+                behavior.
+
+        Returns:
+            Tuple of agent IDs implementing the behavior.
+        """
+        ...
 
     def get_mailbox(self, uid: Identifier) -> HttpMailbox:
         """Get a client to a specific mailbox.

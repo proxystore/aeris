@@ -17,11 +17,13 @@ else:  # pragma: <3.11 cover
 
 import redis
 
+from aeris.behavior import Behavior
 from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import Queue
 from aeris.exchange.queue import QueueClosedError
+from aeris.identifier import AgentIdentifier
 from aeris.identifier import Identifier
 from aeris.message import BaseMessage
 from aeris.message import Message
@@ -174,6 +176,23 @@ class HybridExchange(ExchangeMixin):
         # This assumes that only one entity is reading from the mailbox.
         self._redis_client.rpush(self._queue_key(uid), _CLOSE_SENTINEL)
         logger.debug('Closed mailbox for %s (%s)', uid, self)
+
+    def discover(
+        self,
+        behavior: type[Behavior],
+        allow_subclasses: bool = True,
+    ) -> tuple[AgentIdentifier, ...]:
+        """Discover peer agents with a given behavior.
+
+        Args:
+            behavior: Behavior type of interest.
+            allow_subclasses: Return agents implementing subclasses of the
+                behavior.
+
+        Returns:
+            Tuple of agent IDs implementing the behavior.
+        """
+        ...
 
     def get_mailbox(self, uid: Identifier) -> HybridMailbox:
         """Get a client to a specific mailbox.

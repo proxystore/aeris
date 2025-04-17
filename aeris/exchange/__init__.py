@@ -114,6 +114,24 @@ class Exchange(Protocol):
         """
         ...
 
+    def discover(
+        self,
+        behavior: type[Behavior],
+        *,
+        allow_subclasses: bool = True,
+    ) -> tuple[AgentIdentifier, ...]:
+        """Discover peer agents with a given behavior.
+
+        Args:
+            behavior: Behavior type of interest.
+            allow_subclasses: Return agents implementing subclasses of the
+                behavior.
+
+        Returns:
+            Tuple of agent IDs implementing the behavior.
+        """
+        ...
+
     def get_mailbox(self, uid: Identifier) -> Mailbox:
         """Get a client to a specific mailbox.
 
