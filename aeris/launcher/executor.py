@@ -17,6 +17,7 @@ else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
 from aeris.agent import Agent
+from aeris.agent import AgentRunConfig
 from aeris.behavior import Behavior
 from aeris.exception import BadIdentifierError
 from aeris.exchange import Exchange
@@ -128,7 +129,10 @@ class ExecutorLauncher:
             acb.behavior,
             agent_id=acb.agent_id,
             exchange=acb.exchange,
-            close_exchange=self._close_exchange,
+            config=AgentRunConfig(
+                close_exchange_on_exit=self._close_exchange,
+                terminate_on_error=acb.launch_count + 1 >= self._max_restarts,
+            ),
         )
         future = self._executor.submit(_run_agent_on_worker, agent)
         acb.launch_count += 1
