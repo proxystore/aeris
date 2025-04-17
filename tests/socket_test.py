@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import socket
 import string
+import sys
 from collections.abc import Generator
 from unittest import mock
 
@@ -149,6 +150,18 @@ def simple_socket_server() -> Generator[SimpleSocketServer]:
     server.stop_server_thread()
 
 
+def test_simple_socket_server_connect(
+    simple_socket_server: SimpleSocketServer,
+) -> None:
+    for _ in range(3):
+        with SimpleSocket(
+            simple_socket_server.host,
+            simple_socket_server.port,
+            timeout=TEST_CONNECTION_TIMEOUT,
+        ):
+            pass
+
+
 def test_simple_socket_server_ping_pong(
     simple_socket_server: SimpleSocketServer,
 ) -> None:
@@ -222,9 +235,15 @@ def test_simple_socket_server_client_disconnect_early(
         pass
 
 
-def test_get_address_by() -> None:
+def test_get_address_by_hostname() -> None:
     assert isinstance(address_by_hostname(), str)
 
+
+@pytest.mark.skipif(
+    sys.platform == 'darwin',
+    reason='Test does not run on darwin',
+)
+def test_get_address_by_interface() -> None:  # pragma: darwin no cover
     for _, ifname in socket.if_nameindex():
         try:
             assert isinstance(address_by_interface(ifname), str)
