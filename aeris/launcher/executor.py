@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import concurrent.futures
+import dataclasses
 import logging
 import sys
+import threading
 from concurrent.futures import CancelledError
 from concurrent.futures import Executor
 from concurrent.futures import Future
@@ -35,6 +36,17 @@ def _run_agent_on_worker(agent: Agent[Any]) -> None:
     agent.run()
 
 
+@dataclasses.dataclass
+class _ACB:
+    # Agent Control Block
+    agent_id: AgentIdentifier
+    behavior: Behavior
+    exchange: Exchange
+    done: threading.Event
+    future: Future[None] | None = None
+    launch_count: int = 0
+
+
 class ExecutorLauncher:
     """Launcher that wraps a [`concurrent.futures.Executor`][concurrent.futures.Executor].
 
@@ -46,6 +58,8 @@ class ExecutorLauncher:
             when the executor runs agents in separate processes, but should
             be `False` for the `ThreadPoolExecutor` to avoid closing
             shared exchange objects.
+        max_restarts: Maximum times to restart an agent if it exits with
+            an error.
     """  # noqa: E501
 
     def __init__(
@@ -53,11 +67,13 @@ class ExecutorLauncher:
         executor: Executor,
         *,
         close_exchange: bool = True,
+        max_restarts: int = 0,
     ) -> None:
         self._executor = executor
         self._close_exchange = close_exchange
-        self._future_to_id: dict[Future[None], AgentIdentifier] = {}
-        self._id_to_future: dict[AgentIdentifier, Future[None]] = {}
+        self._max_restarts = max_restarts
+        self._acbs: dict[AgentIdentifier, _ACB] = {}
+        self._future_to_acb: dict[Future[None], _ACB] = {}
 
     def __enter__(self) -> Self:
         return self
@@ -77,22 +93,64 @@ class ExecutorLauncher:
         return f'{type(self).__name__}<{type(self._executor).__name__}>'
 
     def _callback(self, future: Future[None]) -> None:
-        agent_id = self._future_to_id[future]
+        acb = self._future_to_acb.pop(future)
+        done = True
+
         try:
             future.result()
-            logger.debug('Completed agent future (%s)', agent_id)
+            logger.debug('Completed agent future (%s)', acb.agent_id)
         except CancelledError:  # pragma: no cover
-            logger.warning('Cancelled agent future (%s)', agent_id)
+            logger.warning('Cancelled agent future (%s)', acb.agent_id)
         except Exception:  # pragma: no cover
-            logger.exception('Received agent exception (%s)', agent_id)
+            logger.exception('Received agent exception (%s)', acb.agent_id)
+            if acb.launch_count < self._max_restarts + 1:
+                self._launch(acb.agent_id)
+                done = False
+
+        if done:
+            acb.done.set()
 
     def close(self) -> None:
         """Close the launcher and shutdown agents."""
         logger.debug('Waiting for agents to shutdown...')
-        for future in self._future_to_id.copy():
-            future.result()
+        for acb in self._acbs.values():
+            if acb.done.is_set() and acb.future is not None:
+                # Raise possible errors from agents so user is sure
+                # to see them.
+                acb.future.result()
         self._executor.shutdown(wait=True, cancel_futures=True)
         logger.debug('Closed launcher (%s)', self)
+
+    def _launch(self, agent_id: AgentIdentifier) -> None:
+        acb = self._acbs[agent_id]
+
+        agent = Agent(
+            acb.behavior,
+            agent_id=acb.agent_id,
+            exchange=acb.exchange,
+            close_exchange=self._close_exchange,
+        )
+        future = self._executor.submit(_run_agent_on_worker, agent)
+        acb.launch_count += 1
+        acb.future = future
+        self._future_to_acb[future] = acb
+        future.add_done_callback(self._callback)
+
+        if acb.launch_count == 1:
+            logger.debug(
+                'Launched agent (%s; %s)',
+                acb.agent_id,
+                acb.behavior,
+            )
+        else:
+            restarts = acb.launch_count - 1
+            logger.debug(
+                'Restarted agent (%d/%d retries; %s; %s)',
+                restarts,
+                self._max_restarts,
+                acb.agent_id,
+                acb.behavior,
+            )
 
     def launch(
         self,
@@ -114,17 +172,9 @@ class ExecutorLauncher:
         """
         agent_id = exchange.create_agent() if agent_id is None else agent_id
 
-        agent = Agent(
-            behavior,
-            agent_id=agent_id,
-            exchange=exchange,
-            close_exchange=self._close_exchange,
-        )
-        future = self._executor.submit(_run_agent_on_worker, agent)
-        future.add_done_callback(self._callback)
-        self._future_to_id[future] = agent_id
-        self._id_to_future[agent_id] = future
-        logger.debug('Launched agent (%s; %s)', agent_id, behavior)
+        acb = _ACB(agent_id, behavior, exchange, done=threading.Event())
+        self._acbs[agent_id] = acb
+        self._launch(agent_id)
 
         return exchange.create_handle(agent_id)
 
@@ -136,44 +186,54 @@ class ExecutorLauncher:
             launcher that have not completed yet.
         """
         running: set[AgentIdentifier] = set()
-        for future, agent_id in self._future_to_id.items():
-            if not future.done():
-                running.add(agent_id)
+        for acb in self._acbs.values():
+            if not acb.done.is_set():
+                running.add(acb.agent_id)
         return running
 
     def wait(
         self,
         agent_id: AgentIdentifier,
         *,
+        ignore_error: bool = False,
         timeout: float | None = None,
     ) -> None:
         """Wait for a launched agent to exit.
 
+        Note:
+            Calling `wait()` is only valid after `launch()` has succeeded.
+
         Args:
             agent_id: ID of launched agent.
+            ignore_error: Ignore any errors raised by the agent.
             timeout: Optional timeout in seconds to wait for agent.
 
         Raises:
             BadIdentifierError: If an agent with `agent_id` was not
                 launched by this launcher.
             TimeoutError: If `timeout` was exceeded while waiting for agent.
+            Exception: Any exception raised by the agent if
+                `ignore_error=False`.
         """
         try:
-            future = self._id_to_future[agent_id]
+            acb = self._acbs[agent_id]
         except KeyError:
             raise BadIdentifierError(agent_id) from None
 
-        if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
-            try:
-                future.result(timeout=timeout)
-            except TimeoutError:
-                raise
-            except Exception:
-                pass
-        else:  # pragma: <3.11 cover
-            try:
-                future.result(timeout=timeout)
-            except concurrent.futures.TimeoutError:
-                raise TimeoutError() from None
-            except Exception:
-                pass
+        if not acb.done.wait(timeout):
+            raise TimeoutError(
+                f'Agent did not complete within {timeout}s timeout '
+                f'({acb.agent_id})',
+            )
+
+        # The only time _ACB.future is None is between constructing the _ACB
+        # in launch() and creating the future in _launch().
+        assert acb.future is not None
+        # _ACB.done event should only be set in callback of future so
+        # the future must be done.
+        assert acb.future.done()
+
+        if not ignore_error:
+            exc = acb.future.exception()
+            if exc is not None:
+                raise exc
