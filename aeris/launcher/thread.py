@@ -76,6 +76,7 @@ class ThreadLauncher:
         exchange: Exchange,
         *,
         agent_id: AgentId[BehaviorT] | None = None,
+        name: str | None = None,
     ) -> RemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
@@ -84,12 +85,14 @@ class ThreadLauncher:
             exchange: Exchange the agent will use for messaging.
             agent_id: Specify ID of the launched agent. If `None`, a new
                 agent ID will be created within the exchange.
+            name: Readable name of the agent. Ignored if `agent_id` is
+                provided.
 
         Returns:
             Mailbox used to communicate with agent.
         """
         agent_id = (
-            exchange.register_agent(type(behavior))
+            exchange.register_agent(type(behavior), name=name)
             if agent_id is None
             else agent_id
         )

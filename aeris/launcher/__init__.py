@@ -32,6 +32,7 @@ class Launcher(Protocol):
         exchange: Exchange,
         *,
         agent_id: AgentId[BehaviorT] | None = None,
+        name: str | None = None,
     ) -> RemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
@@ -40,6 +41,8 @@ class Launcher(Protocol):
             exchange: Exchange the agent will use for messaging.
             agent_id: Specify ID of the launched agent. If `None`, a new
                 agent ID will be created within the exchange.
+            name: Readable name of the agent. Ignored if `agent_id` is
+                provided.
 
         Returns:
             Handle to the agent.

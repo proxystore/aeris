@@ -148,6 +148,7 @@ class Manager(NoPickleMixin):
         behavior: BehaviorT,
         *,
         agent_id: AgentId[BehaviorT] | None = None,
+        name: str | None = None,
     ) -> BoundRemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
@@ -159,6 +160,8 @@ class Manager(NoPickleMixin):
             behavior: Behavior the agent should implement.
             agent_id: Specify ID of the launched agent. If `None`, a new
                 agent ID will be created within the exchange.
+            name: Readable name of the agent. Ignored if `agent_id` is
+                provided.
 
         Returns:
             Handle (client bound) used to interact with the agent.
@@ -167,6 +170,7 @@ class Manager(NoPickleMixin):
             behavior,
             exchange=self.exchange,
             agent_id=agent_id,
+            name=name,
         )
         logger.info('Launched agent (%s; %s)', unbound.agent_id, behavior)
         bound = self._multiplexer.bind(unbound)
