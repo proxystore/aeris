@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import Identifier
+from typing import Any
+
+from aeris.identifier import AgentId
+from aeris.identifier import EntityId
 
 
-class BadIdentifierError(Exception):
+class BadEntityIdError(Exception):
     """Entity associated with the identifier is unknown."""
 
-    def __init__(self, uid: Identifier) -> None:
+    def __init__(self, uid: EntityId) -> None:
         super().__init__(f'Unknown identifier {uid}.')
 
 
@@ -16,8 +18,8 @@ class HandleClosedError(Exception):
 
     def __init__(
         self,
-        agent_id: AgentIdentifier,
-        mailbox_id: Identifier | None,
+        agent_id: AgentId[Any],
+        mailbox_id: EntityId | None,
     ) -> None:
         message = (
             f'Handle to {agent_id} bound to {mailbox_id} has been closed.'
@@ -45,7 +47,7 @@ class HandleNotBoundError(Exception):
     running.
     """
 
-    def __init__(self, aid: AgentIdentifier) -> None:
+    def __init__(self, aid: AgentId[Any]) -> None:
         super().__init__(
             f'Handle to {aid} is not bound as a client nor to a running '
             'agent. See the exception docstring for troubleshooting.',
@@ -55,5 +57,5 @@ class HandleNotBoundError(Exception):
 class MailboxClosedError(Exception):
     """Mailbox is closed and cannot send or receive messages."""
 
-    def __init__(self, uid: Identifier) -> None:
+    def __init__(self, uid: EntityId) -> None:
         super().__init__(f'Mailbox for {uid} has been closed.')

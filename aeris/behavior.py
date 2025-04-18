@@ -149,6 +149,39 @@ class Behavior:
             else:
                 raise AssertionError('Unreachable.')
 
+    @classmethod
+    def behavior_mro(cls) -> tuple[str, ...]:
+        """Get the method resolution order of the behavior.
+
+        Example:
+            ```python
+            >>> from aeris.behavior import Behavior
+            >>>
+            >>> class A(Behavior): ...
+            >>> class B(Behavior): ...
+            >>> class C(A): ...
+            >>> class D(A, B): ...
+            >>>
+            >>> A.behavior_mro()
+            ('__main__.A',)
+            >>> B.behavior_mro()
+            ('__main__.B',)
+            >>> C.behavior_mro()
+            ('__main__.C', '__main__.A')
+            >>> D.behavior_mro()
+            ('__main__.D', '__main__.A', '__main__.B')
+            ```
+
+        Returns:
+            Tuple of fully-qualified paths of types in the MRO of this \
+            behavior type, not including the base \
+            [`Behavior`][aeris.behavior.Behavior] or [`object`][object].
+        """
+        mro = cls.mro()
+        base_index = mro.index(Behavior)
+        mro = mro[:base_index]
+        return tuple(f'{t.__module__}.{t.__qualname__}' for t in mro)
+
     def on_setup(self) -> None:
         """Setup up resources needed for the agents execution.
 

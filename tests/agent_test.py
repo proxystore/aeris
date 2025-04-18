@@ -51,7 +51,7 @@ class SignalingBehavior(Behavior):
 
 
 def test_agent_start_shutdown(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
+    agent_id = exchange.register_agent(SignalingBehavior)
     agent = Agent(SignalingBehavior(), agent_id=agent_id, exchange=exchange)
 
     agent.start()
@@ -67,7 +67,7 @@ def test_agent_start_shutdown(exchange: Exchange) -> None:
 
 
 def test_agent_shutdown_without_terminate(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
+    agent_id = exchange.register_agent(SignalingBehavior)
     agent = Agent(
         SignalingBehavior(),
         agent_id=agent_id,
@@ -84,7 +84,7 @@ def test_agent_shutdown_without_terminate(exchange: Exchange) -> None:
 
 
 def test_agent_shutdown_without_start(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
+    agent_id = exchange.register_agent(SignalingBehavior)
     agent = Agent(SignalingBehavior(), agent_id=agent_id, exchange=exchange)
 
     agent.shutdown()
@@ -104,7 +104,7 @@ class LoopFailureBehavior(Behavior):
 
 
 def test_loop_failure_triggers_shutdown(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
+    agent_id = exchange.register_agent(LoopFailureBehavior)
     agent = Agent(LoopFailureBehavior(), agent_id=agent_id, exchange=exchange)
 
     agent.start()
@@ -122,7 +122,7 @@ def test_loop_failure_triggers_shutdown(exchange: Exchange) -> None:
 
 
 def test_agent_run_in_thread(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
+    agent_id = exchange.register_agent(SignalingBehavior)
     agent = Agent(SignalingBehavior(), agent_id=agent_id, exchange=exchange)
     assert isinstance(repr(agent), str)
     assert isinstance(str(agent), str)
@@ -139,8 +139,8 @@ def test_agent_run_in_thread(exchange: Exchange) -> None:
 
 
 def test_agent_shutdown_message(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    client_id = exchange.create_client()
+    agent_id = exchange.register_agent(EmptyBehavior)
+    client_id = exchange.register_client()
 
     agent = Agent(EmptyBehavior(), agent_id=agent_id, exchange=exchange)
     thread = threading.Thread(target=agent)
@@ -154,8 +154,8 @@ def test_agent_shutdown_message(exchange: Exchange) -> None:
 
 
 def test_agent_ping_message(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    client_id = exchange.create_client()
+    agent_id = exchange.register_agent(EmptyBehavior)
+    client_id = exchange.register_client()
 
     agent = Agent(EmptyBehavior(), agent_id=agent_id, exchange=exchange)
     assert isinstance(repr(agent), str)
@@ -179,8 +179,8 @@ def test_agent_ping_message(exchange: Exchange) -> None:
 
 
 def test_agent_action_message(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    client_id = exchange.create_client()
+    agent_id = exchange.register_agent(CounterBehavior)
+    client_id = exchange.register_client()
     mailbox = exchange.get_mailbox(client_id)
 
     agent = Agent(CounterBehavior(), agent_id=agent_id, exchange=exchange)
@@ -217,8 +217,8 @@ def test_agent_action_message(exchange: Exchange) -> None:
 
 
 def test_agent_action_message_error(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    client_id = exchange.create_client()
+    agent_id = exchange.register_agent(ErrorBehavior)
+    client_id = exchange.register_client()
     mailbox = exchange.get_mailbox(client_id)
 
     agent = Agent(ErrorBehavior(), agent_id=agent_id, exchange=exchange)
@@ -242,8 +242,8 @@ def test_agent_action_message_error(exchange: Exchange) -> None:
 
 
 def test_agent_action_message_unknown(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    client_id = exchange.create_client()
+    agent_id = exchange.register_agent(EmptyBehavior)
+    client_id = exchange.register_client()
     mailbox = exchange.get_mailbox(client_id)
 
     agent = Agent(EmptyBehavior(), agent_id=agent_id, exchange=exchange)
@@ -300,18 +300,24 @@ class HandleBindingBehavior(Behavior):
 
 
 def test_agent_run_bind_handles(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
+    agent_id = exchange.register_agent(HandleBindingBehavior)
     behavior = HandleBindingBehavior(
-        unbound=UnboundRemoteHandle(exchange, exchange.create_agent()),
-        client_bound=ClientRemoteHandle(exchange, exchange.create_agent()),
+        unbound=UnboundRemoteHandle(
+            exchange,
+            exchange.register_agent(EmptyBehavior),
+        ),
+        client_bound=ClientRemoteHandle(
+            exchange,
+            exchange.register_agent(EmptyBehavior),
+        ),
         agent_bound=BoundRemoteHandle(
             exchange,
-            exchange.create_agent(),
-            exchange.create_agent(),
+            exchange.register_agent(EmptyBehavior),
+            exchange.register_agent(EmptyBehavior),
         ),
         self_bound=BoundRemoteHandle(
             exchange,
-            exchange.create_agent(),
+            exchange.register_agent(EmptyBehavior),
             agent_id,
         ),
     )
@@ -345,15 +351,11 @@ class DoubleBehavior(Behavior):
 
 
 def test_agent_to_handle_handles(exchange: Exchange) -> None:
-    runner_id = exchange.create_agent()
-    doubler_id = exchange.create_agent()
+    runner_id = exchange.register_agent(RunBehavior)
+    doubler_id = exchange.register_agent(DoubleBehavior)
 
-    runner_handle: UnboundRemoteHandle[RunBehavior] = exchange.create_handle(
-        runner_id,
-    )
-    doubler_handle: UnboundRemoteHandle[DoubleBehavior] = (
-        exchange.create_handle(doubler_id)
-    )
+    runner_handle = exchange.get_handle(runner_id)
+    doubler_handle = exchange.get_handle(doubler_id)
 
     runner_behavior = RunBehavior(doubler_handle)
     doubler_behavior = DoubleBehavior()

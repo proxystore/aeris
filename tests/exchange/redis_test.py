@@ -6,14 +6,16 @@ from unittest import mock
 
 import pytest
 
-from aeris.exception import BadIdentifierError
+from aeris.behavior import Behavior
+from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
 from aeris.exchange.redis import RedisExchange
 from aeris.handle import RemoteHandle
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import ClientIdentifier
+from aeris.identifier import AgentId
+from aeris.identifier import ClientId
 from aeris.message import PingRequest
+from testing.behavior import EmptyBehavior
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.redis import MockRedis
 
@@ -25,12 +27,15 @@ def test_basic_usage(mock_redis) -> None:
         assert isinstance(repr(exchange), str)
         assert isinstance(str(exchange), str)
 
-        aid = exchange.create_agent()
-        cid = exchange.create_client()
-        exchange.create_mailbox(cid)  # Idempotency check
+        aid = exchange.register_agent(EmptyBehavior)
+        exchange.register_agent(
+            EmptyBehavior,
+            agent_id=aid,
+        )  # Idempotency check
+        cid = exchange.register_client()
 
-        assert isinstance(aid, AgentIdentifier)
-        assert isinstance(cid, ClientIdentifier)
+        assert isinstance(aid, AgentId)
+        assert isinstance(cid, ClientId)
 
         mailbox = exchange.get_mailbox(aid)
 
@@ -42,27 +47,27 @@ def test_basic_usage(mock_redis) -> None:
         mailbox.close()
         mailbox.close()  # Idempotency check
 
-        exchange.close_mailbox(aid)
-        exchange.close_mailbox(cid)
-        exchange.close_mailbox(cid)  # Idempotency check
+        exchange.terminate(aid)
+        exchange.terminate(cid)
+        exchange.terminate(cid)  # Idempotency check
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_bad_identifier_error(mock_redis) -> None:
     with RedisExchange('localhost', port=0) as exchange:
-        uid = AgentIdentifier.new()
-        with pytest.raises(BadIdentifierError):
+        uid = ClientId.new()
+        with pytest.raises(BadEntityIdError):
             exchange.send(uid, PingRequest(src=uid, dest=uid))
-        with pytest.raises(BadIdentifierError):
+        with pytest.raises(BadEntityIdError):
             exchange.get_mailbox(uid)
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_mailbox_closed_error(mock_redis) -> None:
     with RedisExchange('localhost', port=0) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.register_agent(EmptyBehavior)
         mailbox = exchange.get_mailbox(aid)
-        exchange.close_mailbox(aid)
+        exchange.terminate(aid)
         with pytest.raises(MailboxClosedError):
             exchange.send(aid, PingRequest(src=aid, dest=aid))
         with pytest.raises(MailboxClosedError):
@@ -71,14 +76,14 @@ def test_mailbox_closed_error(mock_redis) -> None:
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
-def test_create_handle_to_client(mock_redis) -> None:
+def test_get_handle_to_client(mock_redis) -> None:
     with RedisExchange('localhost', port=0) as exchange:
-        aid = exchange.create_agent()
-        handle: RemoteHandle[Any] = exchange.create_handle(aid)
+        aid = exchange.register_agent(EmptyBehavior)
+        handle: RemoteHandle[Any] = exchange.get_handle(aid)
         handle.close()
 
         with pytest.raises(TypeError, match='Handle must be created from an'):
-            exchange.create_handle(ClientIdentifier.new())  # type: ignore[arg-type]
+            exchange.get_handle(ClientId.new())  # type: ignore[arg-type]
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
@@ -88,7 +93,7 @@ def test_mailbox_timeout(mock_redis) -> None:
         port=0,
         timeout=TEST_CONNECTION_TIMEOUT,
     ) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.register_agent(EmptyBehavior)
         mailbox = exchange.get_mailbox(aid)
         with pytest.raises(TimeoutError):
             mailbox.recv(timeout=0.001)
@@ -102,3 +107,25 @@ def test_exchange_serialization(mock_redis) -> None:
         reconstructed = pickle.loads(pickled)
         assert isinstance(reconstructed, RedisExchange)
         reconstructed.close()
+
+
+class A(Behavior): ...
+
+
+class B(Behavior): ...
+
+
+class C(B): ...
+
+
+@mock.patch('redis.Redis', side_effect=MockRedis)
+def test_exchange_discover(mock_redis) -> None:
+    with RedisExchange('localhost', port=0) as exchange:
+        bid = exchange.register_agent(B)
+        cid = exchange.register_agent(C)
+        did = exchange.register_agent(C)
+        exchange.terminate(did)
+
+        assert len(exchange.discover(A)) == 0
+        assert exchange.discover(B, allow_subclasses=False) == (bid,)
+        assert exchange.discover(B, allow_subclasses=True) == (bid, cid)

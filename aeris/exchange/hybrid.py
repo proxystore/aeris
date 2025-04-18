@@ -9,6 +9,7 @@ import uuid
 from types import TracebackType
 from typing import Any
 from typing import get_args
+from typing import TypeVar
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
     from typing import Self
@@ -17,12 +18,15 @@ else:  # pragma: <3.11 cover
 
 import redis
 
-from aeris.exception import BadIdentifierError
+from aeris.behavior import Behavior
+from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import Queue
 from aeris.exchange.queue import QueueClosedError
-from aeris.identifier import Identifier
+from aeris.identifier import AgentId
+from aeris.identifier import ClientId
+from aeris.identifier import EntityId
 from aeris.message import BaseMessage
 from aeris.message import Message
 from aeris.serialize import NoPickleMixin
@@ -33,6 +37,8 @@ from aeris.socket import SimpleSocketServer
 from aeris.socket import SocketClosedError
 
 logger = logging.getLogger(__name__)
+
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 _CLOSE_SENTINEL = b'<CLOSED>'
 _THREAD_START_TIMEOUT = 5
@@ -67,7 +73,7 @@ class HybridExchange(ExchangeMixin):
         redis.exceptions.ConnectionError: If the Redis server is not reachable.
     """
 
-    _address_cache: dict[Identifier, str]
+    _address_cache: dict[EntityId, str]
     _redis_client: redis.Redis
     _socket_pool: _SocketPool
 
@@ -127,14 +133,17 @@ class HybridExchange(ExchangeMixin):
         redis_addr = f'{self._redis_host}:{self._redis_port}'
         return f'{type(self).__name__}<{redis_addr}; {self._namespace}>'
 
-    def _address_key(self, uid: Identifier) -> str:
-        return f'{self._namespace}:{uuid_to_base32(uid.uid)}:address'
+    def _address_key(self, uid: EntityId) -> str:
+        return f'{self._namespace}:address:{uuid_to_base32(uid.uid)}'
 
-    def _status_key(self, uid: Identifier) -> str:
-        return f'{self._namespace}:{uuid_to_base32(uid.uid)}:status'
+    def _behavior_key(self, aid: AgentId[Any]) -> str:
+        return f'{self._namespace}:behavior:{uuid_to_base32(aid.uid)}'
 
-    def _queue_key(self, uid: Identifier) -> str:
-        return f'{self._namespace}:{uuid_to_base32(uid.uid)}:queue'
+    def _status_key(self, uid: EntityId) -> str:
+        return f'{self._namespace}:status:{uuid_to_base32(uid.uid)}'
+
+    def _queue_key(self, uid: EntityId) -> str:
+        return f'{self._namespace}:queue:{uuid_to_base32(uid.uid)}'
 
     def close(self) -> None:
         """Close the exchange interface."""
@@ -142,21 +151,59 @@ class HybridExchange(ExchangeMixin):
         self._socket_pool.close()
         logger.debug('Closed exchange (%s)', self)
 
-    def create_mailbox(self, uid: Identifier) -> None:
-        """Create the mailbox in the exchange for a new entity.
-
-        This sets the state of the mailbox to active in the Redis server.
+    def register_agent(
+        self,
+        behavior: type[BehaviorT],
+        *,
+        agent_id: AgentId[BehaviorT] | None = None,
+        name: str | None = None,
+    ) -> AgentId[BehaviorT]:
+        """Create a new agent identifier and associated mailbox.
 
         Args:
-            uid: Entity identifier used as the mailbox address.
+            behavior: Type of the behavior this agent will implement.
+            agent_id: Specify the ID of the agent. Randomly generated
+                default.
+            name: Optional human-readable name for the agent. Ignored if
+                `agent_id` is provided.
+
+        Returns:
+            Unique identifier for the agent's mailbox.
         """
+        aid = AgentId.new(name=name) if agent_id is None else agent_id
         self._redis_client.set(
-            self._status_key(uid),
+            self._status_key(aid),
             _MailboxState.ACTIVE.value,
         )
-        logger.debug('Created mailbox for %s (%s)', uid, self)
+        self._redis_client.set(
+            self._behavior_key(aid),
+            ','.join(behavior.behavior_mro()),
+        )
+        logger.debug('Registered %s in %s', aid, self)
+        return aid
 
-    def close_mailbox(self, uid: Identifier) -> None:
+    def register_client(
+        self,
+        *,
+        name: str | None = None,
+    ) -> ClientId:
+        """Create a new client identifier and associated mailbox.
+
+        Args:
+            name: Optional human-readable name for the client.
+
+        Returns:
+            Unique identifier for the client's mailbox.
+        """
+        cid = ClientId.new(name=name)
+        self._redis_client.set(
+            self._status_key(cid),
+            _MailboxState.ACTIVE.value,
+        )
+        logger.debug('Registered %s in %s', cid, self)
+        return cid
+
+    def terminate(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         This sets the state of the mailbox to inactive in the Redis server,
@@ -173,23 +220,64 @@ class HybridExchange(ExchangeMixin):
         # the entity waiting on messages to the mailbox to stop blocking.
         # This assumes that only one entity is reading from the mailbox.
         self._redis_client.rpush(self._queue_key(uid), _CLOSE_SENTINEL)
+        if isinstance(uid, AgentId):
+            self._redis_client.delete(self._behavior_key(uid))
         logger.debug('Closed mailbox for %s (%s)', uid, self)
 
-    def get_mailbox(self, uid: Identifier) -> HybridMailbox:
+    def discover(
+        self,
+        behavior: type[Behavior],
+        *,
+        allow_subclasses: bool = True,
+    ) -> tuple[AgentId[Any], ...]:
+        """Discover peer agents with a given behavior.
+
+        Warning:
+            This method is O(n) and scans all keys in the Redis server.
+
+        Args:
+            behavior: Behavior type of interest.
+            allow_subclasses: Return agents implementing subclasses of the
+                behavior.
+
+        Returns:
+            Tuple of agent IDs implementing the behavior.
+        """
+        found: list[AgentId[Any]] = []
+        fqp = f'{behavior.__module__}.{behavior.__name__}'
+        for key in self._redis_client.scan_iter(
+            f'{self._namespace}:behavior:*',
+        ):
+            mro_str = self._redis_client.get(key)
+            assert isinstance(mro_str, str)
+            mro = mro_str.split(',')
+            if fqp == mro[0] or (allow_subclasses and fqp in mro):
+                aid: AgentId[Any] = AgentId(
+                    uid=base32_to_uuid(key.split(':')[-1]),
+                )
+                found.append(aid)
+        active: list[AgentId[Any]] = []
+        for aid in found:
+            status = self._redis_client.get(self._status_key(aid))
+            if status == _MailboxState.ACTIVE.value:  # pragma: no branch
+                active.append(aid)
+        return tuple(active)
+
+    def get_mailbox(self, uid: EntityId) -> HybridMailbox:
         """Get a client to a specific mailbox.
 
         Args:
-            uid: Identifier of the mailbox.
+            uid: EntityId of the mailbox.
 
         Returns:
             Mailbox client.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
         """
         status = self._redis_client.get(self._status_key(uid))
         if status is None:
-            raise BadIdentifierError(uid)
+            raise BadEntityIdError(uid)
         return HybridMailbox(uid, self, interface=self._interface)
 
     def _send_direct(self, address: str, message: Message) -> None:
@@ -201,7 +289,7 @@ class HybridExchange(ExchangeMixin):
             address,
         )
 
-    def send(self, uid: Identifier, message: Message) -> None:
+    def send(self, uid: EntityId, message: Message) -> None:
         """Send a message to a mailbox.
 
         To send a message, the client first checks that the state of the
@@ -216,7 +304,7 @@ class HybridExchange(ExchangeMixin):
             message: Message to send.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
             MailboxClosedError: if the mailbox was closed.
         """
         address = self._address_cache.get(uid, None)
@@ -235,7 +323,7 @@ class HybridExchange(ExchangeMixin):
 
         status = self._redis_client.get(self._status_key(uid))
         if status is None:
-            raise BadIdentifierError(uid)
+            raise BadEntityIdError(uid)
         elif status == _MailboxState.INACTIVE.value:
             raise MailboxClosedError(uid)
 
@@ -309,7 +397,7 @@ class HybridMailbox(NoPickleMixin):
     state changes to the mailbox (i.e., mailbox closure).
 
     Args:
-        uid: Identifier of the mailbox.
+        uid: EntityId of the mailbox.
         exchange: Exchange client.
         interface: Network interface use for peer-to-peer communication. If
             `None`, the hostname of the local host is used.
@@ -319,7 +407,7 @@ class HybridMailbox(NoPickleMixin):
 
     def __init__(
         self,
-        uid: Identifier,
+        uid: EntityId,
         exchange: HybridExchange,
         *,
         interface: str | None = None,
@@ -365,7 +453,7 @@ class HybridMailbox(NoPickleMixin):
         return self._exchange
 
     @property
-    def mailbox_id(self) -> Identifier:
+    def mailbox_id(self) -> EntityId:
         """Mailbox address/identifier."""
         return self._uid
 
@@ -493,6 +581,14 @@ class HybridMailbox(NoPickleMixin):
             return self._messages.get(timeout=timeout)
         except QueueClosedError:
             raise MailboxClosedError(self.mailbox_id) from None
+
+
+def base32_to_uuid(uid: str) -> uuid.UUID:
+    """Parse a base32 string as a UUID."""
+    padding = '=' * ((8 - len(uid) % 8) % 8)
+    padded = uid + padding
+    uid_bytes = base64.b32decode(padded)
+    return uuid.UUID(bytes=uid_bytes)
 
 
 def uuid_to_base32(uid: uuid.UUID) -> str:

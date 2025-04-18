@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
 from unittest import mock
 
 import pytest
@@ -10,14 +9,15 @@ from aeris.exception import MailboxClosedError
 from aeris.exchange.thread import ThreadExchange
 from aeris.handle import BoundRemoteHandle
 from aeris.handle import UnboundRemoteHandle
-from aeris.identifier import ClientIdentifier
+from aeris.identifier import ClientId
 from aeris.message import PingRequest
 from aeris.message import PingResponse
 from aeris.multiplex import MailboxMultiplexer
+from testing.behavior import EmptyBehavior
 
 
 def test_protocol(exchange: ThreadExchange) -> None:
-    uid = exchange.create_client()
+    uid = exchange.register_client()
     with MailboxMultiplexer(
         uid,
         exchange,
@@ -28,8 +28,8 @@ def test_protocol(exchange: ThreadExchange) -> None:
 
 
 def test_listen_exit_on_mailbox_close(exchange: ThreadExchange) -> None:
-    uid = exchange.create_client()
-    exchange.close_mailbox(uid)
+    uid = exchange.register_client()
+    exchange.terminate(uid)
     with MailboxMultiplexer(
         uid,
         exchange,
@@ -40,9 +40,9 @@ def test_listen_exit_on_mailbox_close(exchange: ThreadExchange) -> None:
 
 
 def test_bind_handle(exchange: ThreadExchange) -> None:
-    uid = exchange.create_client()
-    aid = exchange.create_agent()
-    unbound: UnboundRemoteHandle[Any] = UnboundRemoteHandle(exchange, aid)
+    uid = exchange.register_client()
+    aid = exchange.register_agent(EmptyBehavior)
+    unbound = UnboundRemoteHandle(exchange, aid)
     with MailboxMultiplexer(
         uid,
         exchange,
@@ -56,9 +56,9 @@ def test_bind_handle(exchange: ThreadExchange) -> None:
 
 
 def test_bind_duplicate_handle(exchange: ThreadExchange) -> None:
-    uid = exchange.create_client()
-    aid = exchange.create_agent()
-    unbound: UnboundRemoteHandle[Any] = UnboundRemoteHandle(exchange, aid)
+    uid = exchange.register_client()
+    aid = exchange.register_agent(EmptyBehavior)
+    unbound = UnboundRemoteHandle(exchange, aid)
     with MailboxMultiplexer(
         uid,
         exchange,
@@ -69,9 +69,9 @@ def test_bind_duplicate_handle(exchange: ThreadExchange) -> None:
 
 
 def test_request_message_handler(exchange: ThreadExchange) -> None:
-    uid = exchange.create_client()
+    uid = exchange.register_client()
     handler = mock.MagicMock()
-    request = PingRequest(src=ClientIdentifier.new(), dest=uid)
+    request = PingRequest(src=ClientId.new(), dest=uid)
 
     with MailboxMultiplexer(
         uid,
@@ -88,9 +88,9 @@ def test_request_message_handler(exchange: ThreadExchange) -> None:
 
 
 def test_response_message_handler(exchange: ThreadExchange) -> None:
-    uid = exchange.create_client()
-    aid = exchange.create_agent()
-    unbound: UnboundRemoteHandle[Any] = UnboundRemoteHandle(exchange, aid)
+    uid = exchange.register_client()
+    aid = exchange.register_agent(EmptyBehavior)
+    unbound = UnboundRemoteHandle(exchange, aid)
 
     with MailboxMultiplexer(
         uid,
@@ -109,10 +109,10 @@ def test_response_message_handler(exchange: ThreadExchange) -> None:
 
 
 def test_response_message_handler_bad_src(exchange: ThreadExchange) -> None:
-    uid = exchange.create_client()
-    aid = exchange.create_agent()
-    unbound: UnboundRemoteHandle[Any] = UnboundRemoteHandle(exchange, aid)
-    response = PingResponse(src=ClientIdentifier.new(), dest=uid)
+    uid = exchange.register_client()
+    aid = exchange.register_agent(EmptyBehavior)
+    unbound = UnboundRemoteHandle(exchange, aid)
+    response = PingResponse(src=ClientId.new(), dest=uid)
 
     with MailboxMultiplexer(
         uid,

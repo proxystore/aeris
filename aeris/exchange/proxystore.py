@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from collections.abc import Mapping
 from typing import Any
 from typing import Callable
+from typing import TypeVar
 
 from proxystore.proxy import Proxy
 from proxystore.store import get_or_create_store
@@ -12,14 +13,19 @@ from proxystore.store import register_store
 from proxystore.store import Store
 from proxystore.store.utils import resolve_async
 
+from aeris.behavior import Behavior
 from aeris.exchange import Exchange
 from aeris.exchange import ExchangeMixin
 from aeris.exchange import Mailbox
-from aeris.identifier import Identifier
+from aeris.identifier import AgentId
+from aeris.identifier import ClientId
+from aeris.identifier import EntityId
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
 from aeris.message import Message
 from aeris.serialize import NoPickleMixin
+
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
 def _proxy_item(
@@ -113,18 +119,47 @@ class ProxyStoreExchange(ExchangeMixin):
         """
         self.exchange.close()
 
-    def create_mailbox(self, uid: Identifier) -> None:
-        """Create the mailbox in the exchange for a new entity.
-
-        Note:
-            This method is a no-op if the mailbox already exists.
+    def register_agent(
+        self,
+        behavior: type[BehaviorT],
+        *,
+        agent_id: AgentId[BehaviorT] | None = None,
+        name: str | None = None,
+    ) -> AgentId[BehaviorT]:
+        """Create a new agent identifier and associated mailbox.
 
         Args:
-            uid: Entity identifier used as the mailbox address.
-        """
-        self.exchange.create_mailbox(uid)
+            behavior: Type of the behavior this agent will implement.
+            agent_id: Specify the ID of the agent. Randomly generated
+                default.
+            name: Optional human-readable name for the agent. Ignored if
+                `agent_id` is provided.
 
-    def close_mailbox(self, uid: Identifier) -> None:
+        Returns:
+            Unique identifier for the agent's mailbox.
+        """
+        return self.exchange.register_agent(
+            behavior,
+            agent_id=agent_id,
+            name=name,
+        )
+
+    def register_client(
+        self,
+        *,
+        name: str | None = None,
+    ) -> ClientId:
+        """Create a new client identifier and associated mailbox.
+
+        Args:
+            name: Optional human-readable name for the client.
+
+        Returns:
+            Unique identifier for the client's mailbox.
+        """
+        return self.exchange.register_client(name=name)
+
+    def terminate(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         Note:
@@ -133,24 +168,45 @@ class ProxyStoreExchange(ExchangeMixin):
         Args:
             uid: Entity identifier of the mailbox to close.
         """
-        self.exchange.close_mailbox(uid)
+        self.exchange.terminate(uid)
 
-    def get_mailbox(self, uid: Identifier) -> Mailbox:
+    def discover(
+        self,
+        behavior: type[Behavior],
+        *,
+        allow_subclasses: bool = True,
+    ) -> tuple[AgentId[Any], ...]:
+        """Discover peer agents with a given behavior.
+
+        Args:
+            behavior: Behavior type of interest.
+            allow_subclasses: Return agents implementing subclasses of the
+                behavior.
+
+        Returns:
+            Tuple of agent IDs implementing the behavior.
+        """
+        return self.exchange.discover(
+            behavior,
+            allow_subclasses=allow_subclasses,
+        )
+
+    def get_mailbox(self, uid: EntityId) -> Mailbox:
         """Get a client to a specific mailbox.
 
         Args:
-            uid: Identifier of the mailbox.
+            uid: EntityId of the mailbox.
 
         Returns:
             Mailbox client.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
         """
         base_mailbox = self.exchange.get_mailbox(uid)
         return ProxyStoreMailbox(base_mailbox, self, self.resolve_async)
 
-    def send(self, uid: Identifier, message: Message) -> None:
+    def send(self, uid: EntityId, message: Message) -> None:
         """Send a message to a mailbox.
 
         Args:
@@ -158,7 +214,7 @@ class ProxyStoreExchange(ExchangeMixin):
             message: Message to send.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
             MailboxClosedError: if the mailbox was closed.
         """
         if isinstance(message, ActionRequest):
@@ -208,7 +264,7 @@ class ProxyStoreMailbox(NoPickleMixin):
         return self._exchange
 
     @property
-    def mailbox_id(self) -> Identifier:
+    def mailbox_id(self) -> EntityId:
         """Mailbox address/identifier."""
         return self._mailbox.mailbox_id
 

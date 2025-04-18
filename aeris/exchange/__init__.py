@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from types import TracebackType
+from typing import Any
 from typing import Protocol
 from typing import runtime_checkable
 from typing import TypeVar
@@ -13,9 +14,9 @@ else:  # pragma: <3.11 cover
 
 from aeris.behavior import Behavior
 from aeris.handle import UnboundRemoteHandle
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import ClientIdentifier
-from aeris.identifier import Identifier
+from aeris.identifier import AgentId
+from aeris.identifier import ClientId
+from aeris.identifier import EntityId
 from aeris.message import Message
 
 __all__ = ['Exchange', 'ExchangeMixin']
@@ -45,40 +46,28 @@ class Exchange(Protocol):
         """
         ...
 
-    def create_mailbox(self, uid: Identifier) -> None:
-        """Create the mailbox in the exchange for a new entity.
-
-        Note:
-            This method is a no-op if the mailbox already exists.
-
-        Args:
-            uid: Entity identifier used as the mailbox address.
-        """
-        ...
-
-    def close_mailbox(self, uid: Identifier) -> None:
-        """Close the mailbox for an entity from the exchange.
-
-        Note:
-            This method is a no-op if the mailbox does not exist.
-
-        Args:
-            uid: Entity identifier of the mailbox to close.
-        """
-        ...
-
-    def create_agent(self, name: str | None = None) -> AgentIdentifier:
+    def register_agent(
+        self,
+        behavior: type[BehaviorT],
+        *,
+        agent_id: AgentId[BehaviorT] | None = None,
+        name: str | None = None,
+    ) -> AgentId[BehaviorT]:
         """Create a new agent identifier and associated mailbox.
 
         Args:
-            name: Optional human-readable name for the agent.
+            behavior: Behavior type of the agent.
+            agent_id: Specify the ID of the agent. Randomly generated
+                default.
+            name: Optional human-readable name for the agent. Ignored if
+                `agent_id` is provided.
 
         Returns:
             Unique identifier for the agent's mailbox.
         """
         ...
 
-    def create_client(self, name: str | None = None) -> ClientIdentifier:
+    def register_client(self, *, name: str | None = None) -> ClientId:
         """Create a new client identifier and associated mailbox.
 
         Args:
@@ -89,9 +78,38 @@ class Exchange(Protocol):
         """
         ...
 
-    def create_handle(
+    def terminate(self, uid: EntityId) -> None:
+        """Close the mailbox for an entity from the exchange.
+
+        Note:
+            This method is a no-op if the mailbox does not exist.
+
+        Args:
+            uid: Entity identifier of the mailbox to close.
+        """
+        ...
+
+    def discover(
         self,
-        aid: AgentIdentifier,
+        behavior: type[Behavior],
+        *,
+        allow_subclasses: bool = True,
+    ) -> tuple[AgentId[Any], ...]:
+        """Discover peer agents with a given behavior.
+
+        Args:
+            behavior: Behavior type of interest.
+            allow_subclasses: Return agents implementing subclasses of the
+                behavior.
+
+        Returns:
+            Tuple of agent IDs implementing the behavior.
+        """
+        ...
+
+    def get_handle(
+        self,
+        aid: AgentId[BehaviorT],
     ) -> UnboundRemoteHandle[BehaviorT]:
         """Create a new handle to an agent.
 
@@ -102,33 +120,33 @@ class Exchange(Protocol):
             is essentially a new client of a specific agent.
 
         Args:
-            aid: Identifier of the agent to create a handle to.
+            aid: EntityId of the agent to create a handle to.
 
         Returns:
             Handle to the agent.
 
         Raises:
-            BadIdentifierError: if a mailbox for `aid` does not exist.
+            BadEntityIdError: if a mailbox for `aid` does not exist.
             TypeError: if `aid` is not an instance of
-                [`AgentIdentifier`][aeris.identifier.AgentIdentifier].
+                [`AgentId`][aeris.identifier.AgentId].
         """
         ...
 
-    def get_mailbox(self, uid: Identifier) -> Mailbox:
+    def get_mailbox(self, uid: EntityId) -> Mailbox:
         """Get a client to a specific mailbox.
 
         Args:
-            uid: Identifier of the mailbox.
+            uid: EntityId of the mailbox.
 
         Returns:
             Mailbox client.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
         """
         ...
 
-    def send(self, uid: Identifier, message: Message) -> None:
+    def send(self, uid: EntityId, message: Message) -> None:
         """Send a message to a mailbox.
 
         Args:
@@ -136,7 +154,7 @@ class Exchange(Protocol):
             message: Message to send.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
             MailboxClosedError: if the mailbox was closed.
         """
         ...
@@ -146,7 +164,7 @@ class ExchangeMixin:
     """Mixin class that adds basic methods to an exchange implementation.
 
     This adds a simple `repr`/`str`, context manager support, and the
-    `create_agent`, `create_client`, and `create_handle` methods.
+    `register_agent`, `register_client`, and `get_handle` methods.
     """
 
     def __enter__(self) -> Self:
@@ -166,41 +184,9 @@ class ExchangeMixin:
     def __str__(self) -> str:
         return f'{type(self).__name__}<{id(self)}>'
 
-    def create_agent(
+    def get_handle(
         self: Exchange,
-        name: str | None = None,
-    ) -> AgentIdentifier:
-        """Create a new agent identifier and associated mailbox.
-
-        Args:
-            name: Optional human-readable name for the agent.
-
-        Returns:
-            Unique identifier for the agent's mailbox.
-        """
-        aid = AgentIdentifier.new(name=name)
-        self.create_mailbox(aid)
-        return aid
-
-    def create_client(
-        self: Exchange,
-        name: str | None = None,
-    ) -> ClientIdentifier:
-        """Create a new client identifier and associated mailbox.
-
-        Args:
-            name: Optional human-readable name for the client.
-
-        Returns:
-            Unique identifier for the client's mailbox.
-        """
-        cid = ClientIdentifier.new(name=name)
-        self.create_mailbox(cid)
-        return cid
-
-    def create_handle(
-        self: Exchange,
-        aid: AgentIdentifier,
+        aid: AgentId[BehaviorT],
     ) -> UnboundRemoteHandle[BehaviorT]:
         """Create a new handle to an agent.
 
@@ -211,18 +197,18 @@ class ExchangeMixin:
             is essentially a new client of a specific agent.
 
         Args:
-            aid: Identifier of the agent to create an handle to.
+            aid: EntityId of the agent to create an handle to.
 
         Returns:
             Handle to the agent.
 
         Raises:
             TypeError: if `aid` is not an instance of
-                [`AgentIdentifier`][aeris.identifier.AgentIdentifier].
+                [`AgentId`][aeris.identifier.AgentId].
         """
-        if not isinstance(aid, AgentIdentifier):
+        if not isinstance(aid, AgentId):
             raise TypeError(
-                f'Handle must be created from an {AgentIdentifier.__name__} '
+                f'Handle must be created from an {AgentId.__name__} '
                 f'but got identifier with type {type(aid).__name__}.',
             )
         return UnboundRemoteHandle(self, aid)
@@ -238,7 +224,7 @@ class Mailbox(Protocol):
         ...
 
     @property
-    def mailbox_id(self) -> Identifier:
+    def mailbox_id(self) -> EntityId:
         """Mailbox address/identifier."""
         ...
 

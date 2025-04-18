@@ -17,10 +17,10 @@ else:  # pragma: <3.11 cover
 from aeris.agent import Agent
 from aeris.agent import AgentRunConfig
 from aeris.behavior import Behavior
-from aeris.exception import BadIdentifierError
+from aeris.exception import BadEntityIdError
 from aeris.exchange import Exchange
 from aeris.handle import RemoteHandle
-from aeris.identifier import AgentIdentifier
+from aeris.identifier import AgentId
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class ThreadLauncher:
     """
 
     def __init__(self) -> None:
-        self._agents: dict[AgentIdentifier, _RunningAgent[Any]] = {}
+        self._agents: dict[AgentId[Any], _RunningAgent[Any]] = {}
 
     def __enter__(self) -> Self:
         return self
@@ -75,7 +75,8 @@ class ThreadLauncher:
         behavior: BehaviorT,
         exchange: Exchange,
         *,
-        agent_id: AgentIdentifier | None = None,
+        agent_id: AgentId[BehaviorT] | None = None,
+        name: str | None = None,
     ) -> RemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
@@ -84,11 +85,17 @@ class ThreadLauncher:
             exchange: Exchange the agent will use for messaging.
             agent_id: Specify ID of the launched agent. If `None`, a new
                 agent ID will be created within the exchange.
+            name: Readable name of the agent. Ignored if `agent_id` is
+                provided.
 
         Returns:
             Mailbox used to communicate with agent.
         """
-        agent_id = exchange.create_agent() if agent_id is None else agent_id
+        agent_id = (
+            exchange.register_agent(type(behavior), name=name)
+            if agent_id is None
+            else agent_id
+        )
 
         agent = Agent(
             behavior,
@@ -101,16 +108,16 @@ class ThreadLauncher:
         self._agents[agent_id] = _RunningAgent(agent, thread)
         logger.debug('Launched agent (%s; %s)', agent_id, behavior)
 
-        return exchange.create_handle(agent_id)
+        return exchange.get_handle(agent_id)
 
-    def running(self) -> set[AgentIdentifier]:
+    def running(self) -> set[AgentId[Any]]:
         """Get a set of IDs for all running agents.
 
         Returns:
             Set of agent IDs corresponding to all agents launched by this \
             launcher that have not completed yet.
         """
-        running: set[AgentIdentifier] = set()
+        running: set[AgentId[Any]] = set()
         for agent_id, agent in self._agents.items():
             if agent.thread.is_alive():
                 running.add(agent_id)
@@ -118,7 +125,7 @@ class ThreadLauncher:
 
     def wait(
         self,
-        agent_id: AgentIdentifier,
+        agent_id: AgentId[Any],
         *,
         timeout: float | None = None,
     ) -> None:
@@ -129,14 +136,14 @@ class ThreadLauncher:
             timeout: Optional timeout in seconds to wait for agent.
 
         Raises:
-            BadIdentifierError: If an agent with `agent_id` was not
+            BadEntityIdError: If an agent with `agent_id` was not
                 launched by this launcher.
             TimeoutError: If `timeout` was exceeded while waiting for agent.
         """
         try:
             agent = self._agents[agent_id]
         except KeyError:
-            raise BadIdentifierError(agent_id) from None
+            raise BadEntityIdError(agent_id) from None
 
         agent.thread.join(timeout=timeout)
         if agent.thread.is_alive():

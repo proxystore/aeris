@@ -33,9 +33,9 @@ else:  # pragma: <3.11 cover
 from aeris.exception import HandleClosedError
 from aeris.exception import HandleNotBoundError
 from aeris.exception import MailboxClosedError
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import ClientIdentifier
-from aeris.identifier import Identifier
+from aeris.identifier import AgentId
+from aeris.identifier import ClientId
+from aeris.identifier import EntityId
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
 from aeris.message import PingRequest
@@ -62,14 +62,14 @@ BehaviorT_co = TypeVar('BehaviorT_co', bound=Behavior, covariant=True)
 
 
 @runtime_checkable
-class Handle(Protocol[BehaviorT_co]):
+class Handle(Protocol[BehaviorT]):
     """Agent handle protocol.
 
     A handle enables a client or agent to invoke actions on another agent.
     """
 
-    agent_id: AgentIdentifier
-    mailbox_id: Identifier | None
+    agent_id: AgentId[BehaviorT]
+    mailbox_id: EntityId | None
 
     def action(
         self,
@@ -194,8 +194,8 @@ class ProxyHandle(Generic[BehaviorT_co]):
 
     def __init__(self, behavior: BehaviorT_co) -> None:
         self.behavior = behavior
-        self.agent_id = AgentIdentifier.new()
-        self.mailbox_id: Identifier | None = None
+        self.agent_id: AgentId[BehaviorT_co] = AgentId.new()
+        self.mailbox_id: EntityId | None = None
         self._agent_closed = False
         self._handle_closed = False
 
@@ -345,16 +345,16 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
 
     Args:
         exchange: Message exchange used for agent communication.
-        agent_id: Identifier of the target agent of this handle.
-        mailbox_id: Identifier of the mailbox this handle receives messages to.
+        agent_id: EntityId of the target agent of this handle.
+        mailbox_id: EntityId of the mailbox this handle receives messages to.
             If unbound, this is `None`.
     """
 
     def __init__(
         self,
         exchange: Exchange,
-        agent_id: AgentIdentifier,
-        mailbox_id: Identifier | None = None,
+        agent_id: AgentId[BehaviorT_co],
+        mailbox_id: EntityId | None = None,
     ) -> None:
         self.exchange = exchange
         self.agent_id = agent_id
@@ -381,7 +381,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
         self,
     ) -> tuple[
         type[UnboundRemoteHandle[Any]],
-        tuple[Exchange, AgentIdentifier],
+        tuple[Exchange, AgentId[BehaviorT_co]],
     ]:
         return (UnboundRemoteHandle, (self.exchange, self.agent_id))
 
@@ -424,7 +424,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
     @abc.abstractmethod
     def bind_as_client(
         self,
-        client_id: ClientIdentifier | None = None,
+        client_id: ClientId | None = None,
     ) -> ClientRemoteHandle[BehaviorT_co]:
         """Bind the handle as a unique client in the exchange.
 
@@ -444,12 +444,12 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
     @abc.abstractmethod
     def bind_to_mailbox(
         self,
-        mailbox_id: Identifier,
+        mailbox_id: EntityId,
     ) -> BoundRemoteHandle[BehaviorT_co]:
         """Bind the handle to an existing mailbox.
 
         Args:
-            mailbox_id: Identifier of the mailbox to bind to.
+            mailbox_id: EntityId of the mailbox to bind to.
 
         Returns:
             Remote handle bound to the identifier.
@@ -624,10 +624,14 @@ class UnboundRemoteHandle(RemoteHandle[BehaviorT_co]):
 
     Args:
         exchange: Message exchange used for agent communication.
-        agent_id: Identifier of the agent.
+        agent_id: EntityId of the agent.
     """
 
-    def __init__(self, exchange: Exchange, agent_id: AgentIdentifier) -> None:
+    def __init__(
+        self,
+        exchange: Exchange,
+        agent_id: AgentId[BehaviorT_co],
+    ) -> None:
         super().__init__(exchange, agent_id=agent_id)
 
     def __repr__(self) -> str:
@@ -644,7 +648,7 @@ class UnboundRemoteHandle(RemoteHandle[BehaviorT_co]):
 
     def bind_as_client(
         self,
-        client_id: ClientIdentifier | None = None,
+        client_id: ClientId | None = None,
     ) -> ClientRemoteHandle[BehaviorT_co]:
         """Bind the handle as a unique client in the exchange.
 
@@ -659,12 +663,12 @@ class UnboundRemoteHandle(RemoteHandle[BehaviorT_co]):
 
     def bind_to_mailbox(
         self,
-        mailbox_id: Identifier,
+        mailbox_id: EntityId,
     ) -> BoundRemoteHandle[BehaviorT_co]:
         """Bind the handle to an existing mailbox.
 
         Args:
-            mailbox_id: Identifier of the mailbox to bind to.
+            mailbox_id: EntityId of the mailbox to bind to.
 
         Returns:
             Remote handle bound to the identifier.
@@ -695,15 +699,15 @@ class BoundRemoteHandle(RemoteHandle[BehaviorT_co]):
 
     Args:
         exchange: Message exchange used for agent communication.
-        agent_id: Identifier of the target agent of this handle.
-        mailbox_id: Identifier of the mailbox this handle receives messages to.
+        agent_id: EntityId of the target agent of this handle.
+        mailbox_id: EntityId of the mailbox this handle receives messages to.
     """
 
     def __init__(
         self,
         exchange: Exchange,
-        agent_id: AgentIdentifier,
-        mailbox_id: Identifier,
+        agent_id: AgentId[BehaviorT_co],
+        mailbox_id: EntityId,
     ) -> None:
         if agent_id == mailbox_id:
             raise ValueError(
@@ -715,7 +719,7 @@ class BoundRemoteHandle(RemoteHandle[BehaviorT_co]):
 
     def bind_as_client(
         self,
-        client_id: ClientIdentifier | None = None,
+        client_id: ClientId | None = None,
     ) -> ClientRemoteHandle[BehaviorT_co]:
         """Bind the handle as a unique client in the exchange.
 
@@ -730,12 +734,12 @@ class BoundRemoteHandle(RemoteHandle[BehaviorT_co]):
 
     def bind_to_mailbox(
         self,
-        mailbox_id: Identifier,
+        mailbox_id: EntityId,
     ) -> BoundRemoteHandle[BehaviorT_co]:
         """Bind the handle to an existing mailbox.
 
         Args:
-            mailbox_id: Identifier of the mailbox to bind to.
+            mailbox_id: EntityId of the mailbox to bind to.
 
         Returns:
             Remote handle bound to the identifier.
@@ -767,7 +771,7 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
 
     Args:
         exchange: Message exchange used for agent communication.
-        agent_id: Identifier of the target agent of this handle.
+        agent_id: EntityId of the target agent of this handle.
         client_id: Client identifier of this handle. If `None`, a new
             identifier will be created using the exchange. Note this will
             become the `mailbox_id` attribute of the handle.
@@ -776,11 +780,11 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
     def __init__(
         self,
         exchange: Exchange,
-        agent_id: AgentIdentifier,
-        client_id: ClientIdentifier | None = None,
+        agent_id: AgentId[BehaviorT_co],
+        client_id: ClientId | None = None,
     ) -> None:
         if client_id is None:
-            client_id = exchange.create_client()
+            client_id = exchange.register_client()
         super().__init__(exchange, agent_id, client_id)
         assert self.mailbox_id is not None
         self._mailbox = self.exchange.get_mailbox(self.mailbox_id)
@@ -815,7 +819,7 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
 
     def bind_as_client(
         self,
-        client_id: ClientIdentifier | None = None,
+        client_id: ClientId | None = None,
     ) -> ClientRemoteHandle[BehaviorT_co]:
         """Bind the handle as a unique client in the exchange.
 
@@ -834,12 +838,12 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
 
     def bind_to_mailbox(
         self,
-        mailbox_id: Identifier,
+        mailbox_id: EntityId,
     ) -> BoundRemoteHandle[BehaviorT_co]:
         """Bind the handle to an existing mailbox.
 
         Args:
-            mailbox_id: Identifier of the mailbox to bind to.
+            mailbox_id: EntityId of the mailbox to bind to.
 
         Returns:
             Remote handle bound to the identifier.
@@ -866,14 +870,14 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
         """
         super().close(wait_futures, timeout=timeout)
 
-        assert isinstance(self.mailbox_id, ClientIdentifier)
+        assert isinstance(self.mailbox_id, ClientId)
         if not self._recv_thread.is_alive():
             raise RuntimeError(
                 f'Result message listener for {self.mailbox_id} is not alive. '
                 'This likely means the listener thread crashed.',
             )
 
-        self.exchange.close_mailbox(self.mailbox_id)
+        self.exchange.terminate(self.mailbox_id)
         timeout = 5
         self._recv_thread.join(timeout=timeout)
         if self._recv_thread.is_alive():  # pragma: no cover

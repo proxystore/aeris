@@ -5,14 +5,16 @@ import threading
 import time
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 import pytest
 
 from aeris.behavior import Behavior
 from aeris.behavior import loop
-from aeris.exception import BadIdentifierError
+from aeris.exception import BadEntityIdError
 from aeris.exchange import Exchange
 from aeris.exchange.http import HttpExchange
+from aeris.identifier import AgentId
 from aeris.launcher import Launcher
 from aeris.launcher.executor import ExecutorLauncher
 from testing.behavior import SleepBehavior
@@ -77,9 +79,9 @@ def test_launch_agents_processes(
 def test_wait_bad_identifier(exchange: Exchange) -> None:
     executor = ThreadPoolExecutor(max_workers=1)
     with ExecutorLauncher(executor) as launcher:
-        agent_id = exchange.create_agent()
+        agent_id: AgentId[Any] = AgentId.new()
 
-        with pytest.raises(BadIdentifierError):
+        with pytest.raises(BadEntityIdError):
             launcher.wait(agent_id)
 
 

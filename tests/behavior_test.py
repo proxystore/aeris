@@ -170,6 +170,30 @@ def test_behavior_handles_bind() -> None:
     behavior.on_shutdown()
 
 
+class A(Behavior): ...
+
+
+class B(Behavior): ...
+
+
+class C(A): ...
+
+
+class D(A, B): ...
+
+
+def test_behavior_mro() -> None:
+    assert Behavior.behavior_mro() == ()
+    assert A.behavior_mro() == (f'{__name__}.A',)
+    assert B.behavior_mro() == (f'{__name__}.B',)
+    assert C.behavior_mro() == (f'{__name__}.C', f'{__name__}.A')
+    assert D.behavior_mro() == (
+        f'{__name__}.D',
+        f'{__name__}.A',
+        f'{__name__}.B',
+    )
+
+
 def test_invalid_loop_signature() -> None:
     class BadBehavior(Behavior):
         def loop(self) -> None: ...

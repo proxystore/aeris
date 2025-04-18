@@ -10,7 +10,7 @@ Connect to the exchange through the client.
 from aeris.exchange.http import HttpExchange
 
 with HttpExchange('localhost', 1234) as exchange:
-    aid = exchange.create_agent()
+    aid = exchange.register_agent()
     mailbox = exchange.get_mailbox(aid)
     ...
     mailbox.close()
@@ -24,9 +24,12 @@ import contextlib
 import logging
 import multiprocessing
 import sys
+import uuid
 from collections.abc import AsyncGenerator
 from collections.abc import Generator
 from collections.abc import Sequence
+from typing import Any
+from typing import TypeVar
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
     from typing import Self
@@ -42,21 +45,26 @@ from aiohttp.web import Request
 from aiohttp.web import Response
 from aiohttp.web import run_app
 from aiohttp.web import TCPSite
+from pydantic import TypeAdapter
 from pydantic import ValidationError
 
-from aeris.exception import BadIdentifierError
+from aeris.behavior import Behavior
+from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import AsyncQueue
 from aeris.exchange.queue import QueueClosedError
-from aeris.identifier import BaseIdentifier
-from aeris.identifier import Identifier
+from aeris.identifier import AgentId
+from aeris.identifier import ClientId
+from aeris.identifier import EntityId
 from aeris.logging import init_logging
 from aeris.message import BaseMessage
 from aeris.message import Message
 from aeris.socket import wait_connection
 
 logger = logging.getLogger(__name__)
+
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 _OKAY_CODE = 200
 _BAD_REQUEST_CODE = 400
@@ -83,6 +91,7 @@ class HttpExchange(ExchangeMixin):
         self._session = requests.Session()
         self._mailbox_url = f'http://{self.host}:{self.port}/mailbox'
         self._message_url = f'http://{self.host}:{self.port}/message'
+        self._discover_url = f'http://{self.host}:{self.port}/discover'
 
     def __reduce__(
         self,
@@ -100,23 +109,60 @@ class HttpExchange(ExchangeMixin):
         self._session.close()
         logger.debug('Closed exchange (%s)', self)
 
-    def create_mailbox(self, uid: Identifier) -> None:
-        """Create the mailbox in the exchange for a new entity.
-
-        Note:
-            This method is a no-op if the mailbox already exists.
+    def register_agent(
+        self,
+        behavior: type[BehaviorT],
+        *,
+        agent_id: AgentId[BehaviorT] | None = None,
+        name: str | None = None,
+    ) -> AgentId[BehaviorT]:
+        """Create a new agent identifier and associated mailbox.
 
         Args:
-            uid: Entity identifier used as the mailbox address.
+            behavior: Type of the behavior this agent will implement.
+            agent_id: Specify the ID of the agent. Randomly generated
+                default.
+            name: Optional human-readable name for the agent. Ignored if
+                `agent_id` is provided.
+
+        Returns:
+            Unique identifier for the agent's mailbox.
         """
+        aid = AgentId.new(name=name) if agent_id is None else agent_id
         response = self._session.post(
             self._mailbox_url,
-            json={'mailbox': uid.model_dump_json()},
+            json={
+                'mailbox': aid.model_dump_json(),
+                'behavior': ','.join(behavior.behavior_mro()),
+            },
         )
         response.raise_for_status()
-        logger.debug('Created mailbox for %s (%s)', uid, self)
+        logger.debug('Registered %s in %s', aid, self)
+        return aid
 
-    def close_mailbox(self, uid: Identifier) -> None:
+    def register_client(
+        self,
+        *,
+        name: str | None = None,
+    ) -> ClientId:
+        """Create a new client identifier and associated mailbox.
+
+        Args:
+            name: Optional human-readable name for the client.
+
+        Returns:
+            Unique identifier for the client's mailbox.
+        """
+        cid = ClientId.new(name=name)
+        response = self._session.post(
+            self._mailbox_url,
+            json={'mailbox': cid.model_dump_json()},
+        )
+        response.raise_for_status()
+        logger.debug('Registered %s in %s', cid, self)
+        return cid
+
+    def terminate(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         Note:
@@ -132,21 +178,56 @@ class HttpExchange(ExchangeMixin):
         response.raise_for_status()
         logger.debug('Closed mailbox for %s (%s)', uid, self)
 
-    def get_mailbox(self, uid: Identifier) -> HttpMailbox:
+    def discover(
+        self,
+        behavior: type[Behavior],
+        *,
+        allow_subclasses: bool = True,
+    ) -> tuple[AgentId[Any], ...]:
+        """Discover peer agents with a given behavior.
+
+        Warning:
+            Discoverability is not implemented on the HTTP exchange.
+
+        Args:
+            behavior: Behavior type of interest.
+            allow_subclasses: Return agents implementing subclasses of the
+                behavior.
+
+        Returns:
+            Tuple of agent IDs implementing the behavior.
+        """
+        behavior_str = f'{behavior.__module__}.{behavior.__name__}'
+        response = self._session.get(
+            self._discover_url,
+            json={
+                'behavior': behavior_str,
+                'allow_subclasses': allow_subclasses,
+            },
+        )
+        response.raise_for_status()
+        agent_ids = [
+            aid
+            for aid in response.json()['agent_ids'].split(',')
+            if len(aid) > 0
+        ]
+        return tuple(AgentId(uid=uuid.UUID(aid)) for aid in agent_ids)
+
+    def get_mailbox(self, uid: EntityId) -> HttpMailbox:
         """Get a client to a specific mailbox.
 
         Args:
-            uid: Identifier of the mailbox.
+            uid: EntityId of the mailbox.
 
         Returns:
             Mailbox client.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
         """
         return HttpMailbox(uid, self)
 
-    def send(self, uid: Identifier, message: Message) -> None:
+    def send(self, uid: EntityId, message: Message) -> None:
         """Send a message to a mailbox.
 
         Args:
@@ -154,7 +235,7 @@ class HttpExchange(ExchangeMixin):
             message: Message to send.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
             MailboxClosedError: if the mailbox was closed.
         """
         response = self._session.put(
@@ -162,7 +243,7 @@ class HttpExchange(ExchangeMixin):
             json={'message': message.model_dump_json()},
         )
         if response.status_code == _NOT_FOUND_CODE:
-            raise BadIdentifierError(uid)
+            raise BadEntityIdError(uid)
         elif response.status_code == _FORBIDDEN_CODE:
             raise MailboxClosedError(uid)
         response.raise_for_status()
@@ -173,16 +254,16 @@ class HttpMailbox:
     """Client interface to a mailbox hosted in an HTTP exchange.
 
     Args:
-        uid: Identifier of the mailbox.
+        uid: EntityId of the mailbox.
         exchange: Exchange client.
 
     Raises:
-        BadIdentifierError: if a mailbox with `uid` does not exist.
+        BadEntityIdError: if a mailbox with `uid` does not exist.
     """
 
     def __init__(
         self,
-        uid: Identifier,
+        uid: EntityId,
         exchange: HttpExchange,
     ) -> None:
         self._uid = uid
@@ -195,7 +276,7 @@ class HttpMailbox:
         response.raise_for_status()
         data = response.json()
         if not data['exists']:
-            raise BadIdentifierError(uid)
+            raise BadEntityIdError(uid)
 
     @property
     def exchange(self) -> HttpExchange:
@@ -203,7 +284,7 @@ class HttpMailbox:
         return self._exchange
 
     @property
-    def mailbox_id(self) -> Identifier:
+    def mailbox_id(self) -> EntityId:
         """Mailbox address/identifier."""
         return self._uid
 
@@ -257,27 +338,49 @@ class HttpMailbox:
 
 class _MailboxManager:
     def __init__(self) -> None:
-        self._mailboxes: dict[Identifier, AsyncQueue[Message]] = {}
+        self._mailboxes: dict[EntityId, AsyncQueue[Message]] = {}
+        self._behaviors: dict[AgentId[Any], tuple[str, ...]] = {}
 
-    def check_mailbox(self, uid: Identifier) -> bool:
+    def check_mailbox(self, uid: EntityId) -> bool:
         return uid in self._mailboxes
 
-    def create_mailbox(self, uid: Identifier) -> None:
+    def create_mailbox(
+        self,
+        uid: EntityId,
+        behavior: tuple[str, ...] | None = None,
+    ) -> None:
         if uid not in self._mailboxes or self._mailboxes[uid].closed():
             self._mailboxes[uid] = AsyncQueue()
+            if behavior is not None and isinstance(uid, AgentId):
+                self._behaviors[uid] = behavior
             logger.info('Created mailbox for %s', uid)
 
-    async def close_mailbox(self, uid: Identifier) -> None:
+    async def terminate(self, uid: EntityId) -> None:
         mailbox = self._mailboxes.get(uid, None)
         if mailbox is not None:
             await mailbox.close()
             logger.info('Closed mailbox for %s', uid)
 
-    async def get(self, uid: Identifier) -> Message:
+    async def discover(
+        self,
+        behavior: str,
+        allow_subclasses: bool,
+    ) -> list[AgentId[Any]]:
+        found: list[AgentId[Any]] = []
+        for aid, behaviors in self._behaviors.items():
+            if self._mailboxes[aid].closed():
+                continue
+            if behavior == behaviors[0] or (
+                allow_subclasses and behavior in behaviors
+            ):
+                found.append(aid)
+        return found
+
+    async def get(self, uid: EntityId) -> Message:
         try:
             return await self._mailboxes[uid].get()
         except KeyError as e:
-            raise BadIdentifierError(uid) from e
+            raise BadEntityIdError(uid) from e
         except QueueClosedError as e:
             raise MailboxClosedError(uid) from e
 
@@ -285,7 +388,7 @@ class _MailboxManager:
         try:
             await self._mailboxes[message.dest].put(message)
         except KeyError as e:
-            raise BadIdentifierError(message.dest) from e
+            raise BadEntityIdError(message.dest) from e
         except QueueClosedError as e:
             raise MailboxClosedError(message.dest) from e
 
@@ -299,32 +402,59 @@ async def _create_mailbox_route(request: Request) -> Response:
 
     try:
         raw_mailbox_id = data['mailbox']
-        mailbox_id = BaseIdentifier.model_from_json(raw_mailbox_id)
+        mailbox_id: EntityId = TypeAdapter(EntityId).validate_json(
+            raw_mailbox_id,
+        )
+        behavior_raw = data.get('behavior', None)
+        behavior = (
+            behavior_raw.split(',') if behavior_raw is not None else None
+        )
     except (KeyError, ValidationError):
         return Response(
             status=_BAD_REQUEST_CODE,
             text='Missing or invalid mailbox ID',
         )
 
-    manager.create_mailbox(mailbox_id)
+    manager.create_mailbox(mailbox_id, behavior)
     return Response(status=_OKAY_CODE)
 
 
-async def _close_mailbox_route(request: Request) -> Response:
+async def _terminate_route(request: Request) -> Response:
     data = await request.json()
     manager: _MailboxManager = request.app[MANAGER_KEY]
 
     try:
         raw_mailbox_id = data['mailbox']
-        mailbox_id = BaseIdentifier.model_from_json(raw_mailbox_id)
+        mailbox_id: EntityId = TypeAdapter(EntityId).validate_json(
+            raw_mailbox_id,
+        )
     except (KeyError, ValidationError):
         return Response(
             status=_BAD_REQUEST_CODE,
             text='Missing or invalid mailbox ID',
         )
 
-    await manager.close_mailbox(mailbox_id)
+    await manager.terminate(mailbox_id)
     return Response(status=_OKAY_CODE)
+
+
+async def _discover_route(request: Request) -> Response:
+    data = await request.json()
+    manager: _MailboxManager = request.app[MANAGER_KEY]
+
+    try:
+        behavior = data['behavior']
+        allow_subclasses = data['allow_subclasses']
+    except (KeyError, ValidationError):
+        return Response(
+            status=_BAD_REQUEST_CODE,
+            text='Missing or invalid arguments',
+        )
+
+    agent_ids = await manager.discover(behavior, allow_subclasses)
+    return json_response(
+        {'agent_ids': ','.join(str(aid.uid) for aid in agent_ids)},
+    )
 
 
 async def _check_mailbox_route(request: Request) -> Response:
@@ -333,7 +463,9 @@ async def _check_mailbox_route(request: Request) -> Response:
 
     try:
         raw_mailbox_id = data['mailbox']
-        mailbox_id = BaseIdentifier.model_from_json(raw_mailbox_id)
+        mailbox_id: EntityId = TypeAdapter(EntityId).validate_json(
+            raw_mailbox_id,
+        )
     except (KeyError, ValidationError):
         return Response(
             status=_BAD_REQUEST_CODE,
@@ -359,7 +491,7 @@ async def _send_message_route(request: Request) -> Response:
 
     try:
         await manager.put(message)
-    except BadIdentifierError:
+    except BadEntityIdError:
         return Response(status=_NOT_FOUND_CODE, text='Unknown mailbox ID')
     except MailboxClosedError:
         return Response(status=_FORBIDDEN_CODE, text='Mailbox was closed')
@@ -373,7 +505,9 @@ async def _recv_message_route(request: Request) -> Response:
 
     try:
         raw_mailbox_id = data['mailbox']
-        mailbox_id = BaseIdentifier.model_from_json(raw_mailbox_id)
+        mailbox_id: EntityId = TypeAdapter(EntityId).validate_json(
+            raw_mailbox_id,
+        )
     except (KeyError, ValidationError):
         return Response(
             status=_BAD_REQUEST_CODE,
@@ -382,7 +516,7 @@ async def _recv_message_route(request: Request) -> Response:
 
     try:
         message = await manager.get(mailbox_id)
-    except BadIdentifierError:
+    except BadEntityIdError:
         return Response(status=_NOT_FOUND_CODE, text='Unknown mailbox ID')
     except MailboxClosedError:
         return Response(status=_FORBIDDEN_CODE, text='Mailbox was closed')
@@ -397,10 +531,11 @@ def create_app() -> Application:
     app[MANAGER_KEY] = manager
 
     app.router.add_post('/mailbox', _create_mailbox_route)
-    app.router.add_delete('/mailbox', _close_mailbox_route)
+    app.router.add_delete('/mailbox', _terminate_route)
     app.router.add_get('/mailbox', _check_mailbox_route)
     app.router.add_put('/message', _send_message_route)
     app.router.add_get('/message', _recv_message_route)
+    app.router.add_get('/discover', _discover_route)
 
     return app
 

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import pickle
+from typing import Any
 from typing import get_args
 
 import pytest
 
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import ClientIdentifier
+from aeris.identifier import AgentId
+from aeris.identifier import ClientId
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
 from aeris.message import BaseMessage
@@ -24,11 +25,11 @@ def test_shutdown_dest_type() -> None:
         ValueError,
         match='Destination identifier has the client role.',
     ):
-        ShutdownRequest(src=AgentIdentifier.new(), dest=ClientIdentifier.new())
+        ShutdownRequest(src=AgentId.new(), dest=ClientId.new())
 
 
-_src = AgentIdentifier.new()
-_dest = AgentIdentifier.new()
+_src: AgentId[Any] = AgentId.new()
+_dest: AgentId[Any] = AgentId.new()
 
 
 @pytest.mark.parametrize(

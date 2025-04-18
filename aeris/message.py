@@ -16,8 +16,8 @@ from pydantic import field_serializer
 from pydantic import field_validator
 from pydantic import TypeAdapter
 
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import Identifier
+from aeris.identifier import AgentId
+from aeris.identifier import EntityId
 
 NO_RESULT = object()
 
@@ -48,8 +48,8 @@ class BaseMessage(BaseModel):
     )
 
     tag: uuid.UUID = Field(default_factory=uuid.uuid4)
-    src: Identifier
-    dest: Identifier
+    src: EntityId
+    dest: EntityId
     label: Optional[uuid.UUID] = Field(None)  # noqa: UP007
 
     def __hash__(self) -> int:
@@ -282,8 +282,8 @@ class ShutdownRequest(BaseMessage):
 
     @field_validator('dest', mode='after')
     @classmethod
-    def _validate_agent(cls, dest: Identifier) -> Identifier:
-        if not isinstance(dest, AgentIdentifier):
+    def _validate_agent(cls, dest: EntityId) -> EntityId:
+        if not isinstance(dest, AgentId):
             raise ValueError(
                 'Shutdown requests can only be send to an agent. '
                 f'Destination identifier has the {dest.role} role.',

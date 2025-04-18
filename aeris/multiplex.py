@@ -19,7 +19,7 @@ from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
 from aeris.handle import BoundRemoteHandle
 from aeris.handle import RemoteHandle
-from aeris.identifier import Identifier
+from aeris.identifier import EntityId
 from aeris.message import Message
 from aeris.message import RequestMessage
 from aeris.message import ResponseMessage
@@ -50,7 +50,7 @@ class MailboxMultiplexer(NoPickleMixin):
         which use multiple handles concurrently.
 
     Args:
-        mailbox_id: Identifier of the mailbox to multiplex. For example, the
+        mailbox_id: EntityId of the mailbox to multiplex. For example, the
             identifier of an agent.
         exchange: The exchange interface managing the mailbox.
         request_handler: A callable invoked when the request message is
@@ -59,7 +59,7 @@ class MailboxMultiplexer(NoPickleMixin):
 
     def __init__(
         self,
-        mailbox_id: Identifier,
+        mailbox_id: EntityId,
         exchange: Exchange,
         request_handler: Callable[[RequestMessage], None],
     ) -> None:
@@ -134,7 +134,7 @@ class MailboxMultiplexer(NoPickleMixin):
         Closes all handles bound to this mailbox and then closes the mailbox.
         """
         # This will cause listen() to return
-        self.close_mailbox()
+        self.terminate()
         self.close_bound_handles()
 
     def close_bound_handles(self) -> None:
@@ -144,9 +144,9 @@ class MailboxMultiplexer(NoPickleMixin):
             handle.close(wait_futures=False)
         logger.debug('Closed all handles bound to multiplexer (%s)', self)
 
-    def close_mailbox(self) -> None:
+    def terminate(self) -> None:
         """Close the mailbox."""
-        self.exchange.close_mailbox(self.mailbox_id)
+        self.exchange.terminate(self.mailbox_id)
         logger.debug('Closed mailbox of multiplexer (%s)', self)
 
     def listen(self) -> None:

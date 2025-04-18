@@ -15,10 +15,9 @@ from aeris.handle import BoundRemoteHandle
 from aeris.handle import ClientRemoteHandle
 from aeris.handle import Handle
 from aeris.handle import ProxyHandle
-from aeris.handle import RemoteHandle
 from aeris.handle import UnboundRemoteHandle
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import ClientIdentifier
+from aeris.identifier import AgentId
+from aeris.identifier import ClientId
 from aeris.launcher.thread import ThreadLauncher
 from aeris.message import PingRequest
 from testing.behavior import CounterBehavior
@@ -89,8 +88,7 @@ def test_proxy_handle_agent_shutdown_errors() -> None:
 
 
 def test_unbound_remote_handle_serialize(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    handle: UnboundRemoteHandle[Any]
+    agent_id = exchange.register_agent(EmptyBehavior)
     with UnboundRemoteHandle(exchange, agent_id) as handle:
         # Note: don't call pickle.dumps here because ThreadExchange
         # is not pickleable so we test __reduce__ directly.
@@ -102,22 +100,20 @@ def test_unbound_remote_handle_serialize(exchange: Exchange) -> None:
 
 
 def test_unbound_remote_handle_bind(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    handle: UnboundRemoteHandle[Any]
+    agent_id = exchange.register_agent(EmptyBehavior)
     with UnboundRemoteHandle(exchange, agent_id) as handle:
         client_bound: ClientRemoteHandle[Any]
         with handle.bind_as_client() as client_bound:
             assert isinstance(client_bound, ClientRemoteHandle)
         agent_bound: BoundRemoteHandle[Any]
-        with handle.bind_to_mailbox(AgentIdentifier.new()) as agent_bound:
+        with handle.bind_to_mailbox(AgentId.new()) as agent_bound:
             assert isinstance(agent_bound, BoundRemoteHandle)
 
 
 def test_unbound_remote_handle_errors(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    handle: UnboundRemoteHandle[Any]
+    agent_id = exchange.register_agent(EmptyBehavior)
     with UnboundRemoteHandle(exchange, agent_id) as handle:
-        request = PingRequest(src=ClientIdentifier.new(), dest=agent_id)
+        request = PingRequest(src=ClientId.new(), dest=agent_id)
         with pytest.raises(HandleNotBoundError):
             handle._send_request(request)
         with pytest.raises(HandleNotBoundError):
@@ -129,10 +125,14 @@ def test_unbound_remote_handle_errors(exchange: Exchange) -> None:
 
 
 def test_remote_handle_closed_error(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    handles: list[RemoteHandle[Any]] = [
-        BoundRemoteHandle(exchange, agent_id, exchange.create_agent()),
-        ClientRemoteHandle(exchange, agent_id, exchange.create_client()),
+    agent_id = exchange.register_agent(EmptyBehavior)
+    handles = [
+        BoundRemoteHandle(
+            exchange,
+            agent_id,
+            exchange.register_agent(EmptyBehavior),
+        ),
+        ClientRemoteHandle(exchange, agent_id, exchange.register_client()),
     ]
     for handle in handles:
         handle.close()
@@ -146,9 +146,8 @@ def test_remote_handle_closed_error(exchange: Exchange) -> None:
 
 
 def test_agent_remote_handle_serialize(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    mailbox_id = exchange.create_agent()
-    handle: BoundRemoteHandle[Any]
+    agent_id = exchange.register_agent(EmptyBehavior)
+    mailbox_id = exchange.register_agent(EmptyBehavior)
     with BoundRemoteHandle(exchange, agent_id, mailbox_id) as handle:
         # Note: don't call pickle.dumps here because ThreadExchange
         # is not pickleable so we test __reduce__ directly.
@@ -161,12 +160,10 @@ def test_agent_remote_handle_serialize(exchange: Exchange) -> None:
 
 
 def test_agent_remote_handle_bind(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    mailbox_id = exchange.create_agent()
-    handle: BoundRemoteHandle[Any]
+    agent_id = exchange.register_agent(EmptyBehavior)
+    mailbox_id = exchange.register_agent(EmptyBehavior)
     with BoundRemoteHandle(exchange, agent_id, mailbox_id) as handle:
-        assert isinstance(handle.mailbox_id, AgentIdentifier)
-        client_bound: ClientRemoteHandle[Any]
+        assert isinstance(handle.mailbox_id, AgentId)
         with handle.bind_as_client() as client_bound:
             assert isinstance(client_bound, ClientRemoteHandle)
         with pytest.raises(
@@ -174,18 +171,16 @@ def test_agent_remote_handle_bind(exchange: Exchange) -> None:
             match=f'Cannot create handle to {handle.agent_id}',
         ):
             handle.bind_to_mailbox(handle.agent_id)
-        agent_bound: BoundRemoteHandle[Any]
         with handle.bind_to_mailbox(handle.mailbox_id) as agent_bound:
             assert agent_bound is handle
-        with handle.bind_to_mailbox(AgentIdentifier.new()) as agent_bound:
+        with handle.bind_to_mailbox(AgentId.new()) as agent_bound:
             assert agent_bound is not handle
             assert isinstance(agent_bound, BoundRemoteHandle)
 
 
 def test_client_remote_handle_serialize(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    mailbox_id = exchange.create_client()
-    handle: ClientRemoteHandle[Any]
+    agent_id = exchange.register_agent(EmptyBehavior)
+    mailbox_id = exchange.register_client()
     with ClientRemoteHandle(exchange, agent_id, mailbox_id) as handle:
         # Note: don't call pickle.dumps here because ThreadExchange
         # is not pickleable so we test __reduce__ directly.
@@ -198,17 +193,14 @@ def test_client_remote_handle_serialize(exchange: Exchange) -> None:
 
 
 def test_client_remote_handle_bind(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
-    mailbox_id = exchange.create_client()
-    handle: ClientRemoteHandle[Any]
+    agent_id = exchange.register_agent(EmptyBehavior)
+    mailbox_id = exchange.register_client()
     with ClientRemoteHandle(exchange, agent_id, mailbox_id) as handle:
         assert handle.bind_as_client() is handle
-        client_bound: ClientRemoteHandle[Any]
-        with handle.bind_as_client(exchange.create_client()) as client_bound:
+        with handle.bind_as_client(exchange.register_client()) as client_bound:
             assert client_bound is not handle
             assert isinstance(client_bound, ClientRemoteHandle)
-        agent_bound: BoundRemoteHandle[Any]
-        with handle.bind_to_mailbox(AgentIdentifier.new()) as agent_bound:
+        with handle.bind_to_mailbox(AgentId.new()) as agent_bound:
             assert isinstance(agent_bound, BoundRemoteHandle)
 
 
@@ -217,7 +209,6 @@ def test_client_remote_handle_log_bad_response(
     launcher: ThreadLauncher,
 ) -> None:
     behavior = EmptyBehavior()
-    handle: RemoteHandle[Any]
     with launcher.launch(behavior, exchange) as handle:
         client = handle.bind_as_client()
         assert client.mailbox_id is not None
@@ -233,16 +224,13 @@ def test_client_remote_handle_log_bad_response(
     'ignore:.*:pytest.PytestUnhandledThreadExceptionWarning',
 )
 def test_client_remote_handle_recv_thread_crash(exchange: Exchange) -> None:
-    agent_id = exchange.create_agent()
+    agent_id = exchange.register_agent(EmptyBehavior)
 
     with mock.patch(
         'aeris.handle.ClientRemoteHandle._recv_responses',
         side_effect=Exception(),
     ):
-        handle: ClientRemoteHandle[Any] = ClientRemoteHandle(
-            exchange,
-            agent_id,
-        )
+        handle = ClientRemoteHandle(exchange, agent_id)
 
     with pytest.raises(
         RuntimeError,
