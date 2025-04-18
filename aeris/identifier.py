@@ -23,7 +23,7 @@ from pydantic import Field
 BehaviorT = TypeVar('BehaviorT')
 
 
-class AgentIdentifier(BaseModel, Generic[BehaviorT]):
+class AgentId(BaseModel, Generic[BehaviorT]):
     """Unique identifier of an agent in a multi-agent system."""
 
     uid: uuid.UUID = Field()
@@ -37,7 +37,7 @@ class AgentIdentifier(BaseModel, Generic[BehaviorT]):
     )
 
     def __eq__(self, other: object, /) -> bool:
-        return isinstance(other, AgentIdentifier) and self.uid == other.uid
+        return isinstance(other, AgentId) and self.uid == other.uid
 
     def __hash__(self) -> int:
         return hash(self.role) + hash(self.uid)
@@ -56,7 +56,7 @@ class AgentIdentifier(BaseModel, Generic[BehaviorT]):
         return cls(uid=uuid.uuid4(), name=name)
 
 
-class ClientIdentifier(BaseModel):
+class ClientId(BaseModel):
     """Unique identifier of a client in a multi-agent system."""
 
     uid: uuid.UUID = Field()
@@ -70,7 +70,7 @@ class ClientIdentifier(BaseModel):
     )
 
     def __eq__(self, other: object, /) -> bool:
-        return isinstance(other, ClientIdentifier) and self.uid == other.uid
+        return isinstance(other, ClientId) and self.uid == other.uid
 
     def __hash__(self) -> int:
         return hash(self.role) + hash(self.uid)
@@ -89,5 +89,5 @@ class ClientIdentifier(BaseModel):
         return cls(uid=uuid.uuid4(), name=name)
 
 
-Identifier = Union[AgentIdentifier[Any], ClientIdentifier]
-"""Identifier union type for type annotations."""
+EntityId = Union[AgentId[Any], ClientId]
+"""EntityId union type for type annotations."""

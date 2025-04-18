@@ -16,8 +16,8 @@ from aeris.behavior import Behavior
 from aeris.exchange import Exchange
 from aeris.exchange import ExchangeMixin
 from aeris.exchange import Mailbox
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import Identifier
+from aeris.identifier import AgentId
+from aeris.identifier import EntityId
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
 from aeris.message import Message
@@ -115,7 +115,7 @@ class ProxyStoreExchange(ExchangeMixin):
         """
         self.exchange.close()
 
-    def create_mailbox(self, uid: Identifier) -> None:
+    def create_mailbox(self, uid: EntityId) -> None:
         """Create the mailbox in the exchange for a new entity.
 
         Note:
@@ -126,7 +126,7 @@ class ProxyStoreExchange(ExchangeMixin):
         """
         self.exchange.create_mailbox(uid)
 
-    def close_mailbox(self, uid: Identifier) -> None:
+    def close_mailbox(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         Note:
@@ -142,7 +142,7 @@ class ProxyStoreExchange(ExchangeMixin):
         behavior: type[Behavior],
         *,
         allow_subclasses: bool = True,
-    ) -> tuple[AgentIdentifier[Any], ...]:
+    ) -> tuple[AgentId[Any], ...]:
         """Discover peer agents with a given behavior.
 
         Args:
@@ -158,22 +158,22 @@ class ProxyStoreExchange(ExchangeMixin):
             allow_subclasses=allow_subclasses,
         )
 
-    def get_mailbox(self, uid: Identifier) -> Mailbox:
+    def get_mailbox(self, uid: EntityId) -> Mailbox:
         """Get a client to a specific mailbox.
 
         Args:
-            uid: Identifier of the mailbox.
+            uid: EntityId of the mailbox.
 
         Returns:
             Mailbox client.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
         """
         base_mailbox = self.exchange.get_mailbox(uid)
         return ProxyStoreMailbox(base_mailbox, self, self.resolve_async)
 
-    def send(self, uid: Identifier, message: Message) -> None:
+    def send(self, uid: EntityId, message: Message) -> None:
         """Send a message to a mailbox.
 
         Args:
@@ -181,7 +181,7 @@ class ProxyStoreExchange(ExchangeMixin):
             message: Message to send.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
             MailboxClosedError: if the mailbox was closed.
         """
         if isinstance(message, ActionRequest):
@@ -231,7 +231,7 @@ class ProxyStoreMailbox(NoPickleMixin):
         return self._exchange
 
     @property
-    def mailbox_id(self) -> Identifier:
+    def mailbox_id(self) -> EntityId:
         """Mailbox address/identifier."""
         return self._mailbox.mailbox_id
 

@@ -47,13 +47,13 @@ from pydantic import TypeAdapter
 from pydantic import ValidationError
 
 from aeris.behavior import Behavior
-from aeris.exception import BadIdentifierError
+from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import AsyncQueue
 from aeris.exchange.queue import QueueClosedError
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import Identifier
+from aeris.identifier import AgentId
+from aeris.identifier import EntityId
 from aeris.logging import init_logging
 from aeris.message import BaseMessage
 from aeris.message import Message
@@ -103,7 +103,7 @@ class HttpExchange(ExchangeMixin):
         self._session.close()
         logger.debug('Closed exchange (%s)', self)
 
-    def create_mailbox(self, uid: Identifier) -> None:
+    def create_mailbox(self, uid: EntityId) -> None:
         """Create the mailbox in the exchange for a new entity.
 
         Note:
@@ -119,7 +119,7 @@ class HttpExchange(ExchangeMixin):
         response.raise_for_status()
         logger.debug('Created mailbox for %s (%s)', uid, self)
 
-    def close_mailbox(self, uid: Identifier) -> None:
+    def close_mailbox(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         Note:
@@ -140,7 +140,7 @@ class HttpExchange(ExchangeMixin):
         behavior: type[Behavior],
         *,
         allow_subclasses: bool = True,
-    ) -> tuple[AgentIdentifier[Any], ...]:
+    ) -> tuple[AgentId[Any], ...]:
         """Discover peer agents with a given behavior.
 
         Args:
@@ -153,21 +153,21 @@ class HttpExchange(ExchangeMixin):
         """
         ...
 
-    def get_mailbox(self, uid: Identifier) -> HttpMailbox:
+    def get_mailbox(self, uid: EntityId) -> HttpMailbox:
         """Get a client to a specific mailbox.
 
         Args:
-            uid: Identifier of the mailbox.
+            uid: EntityId of the mailbox.
 
         Returns:
             Mailbox client.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
         """
         return HttpMailbox(uid, self)
 
-    def send(self, uid: Identifier, message: Message) -> None:
+    def send(self, uid: EntityId, message: Message) -> None:
         """Send a message to a mailbox.
 
         Args:
@@ -175,7 +175,7 @@ class HttpExchange(ExchangeMixin):
             message: Message to send.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
             MailboxClosedError: if the mailbox was closed.
         """
         response = self._session.put(
@@ -183,7 +183,7 @@ class HttpExchange(ExchangeMixin):
             json={'message': message.model_dump_json()},
         )
         if response.status_code == _NOT_FOUND_CODE:
-            raise BadIdentifierError(uid)
+            raise BadEntityIdError(uid)
         elif response.status_code == _FORBIDDEN_CODE:
             raise MailboxClosedError(uid)
         response.raise_for_status()
@@ -194,16 +194,16 @@ class HttpMailbox:
     """Client interface to a mailbox hosted in an HTTP exchange.
 
     Args:
-        uid: Identifier of the mailbox.
+        uid: EntityId of the mailbox.
         exchange: Exchange client.
 
     Raises:
-        BadIdentifierError: if a mailbox with `uid` does not exist.
+        BadEntityIdError: if a mailbox with `uid` does not exist.
     """
 
     def __init__(
         self,
-        uid: Identifier,
+        uid: EntityId,
         exchange: HttpExchange,
     ) -> None:
         self._uid = uid
@@ -216,7 +216,7 @@ class HttpMailbox:
         response.raise_for_status()
         data = response.json()
         if not data['exists']:
-            raise BadIdentifierError(uid)
+            raise BadEntityIdError(uid)
 
     @property
     def exchange(self) -> HttpExchange:
@@ -224,7 +224,7 @@ class HttpMailbox:
         return self._exchange
 
     @property
-    def mailbox_id(self) -> Identifier:
+    def mailbox_id(self) -> EntityId:
         """Mailbox address/identifier."""
         return self._uid
 
@@ -278,27 +278,27 @@ class HttpMailbox:
 
 class _MailboxManager:
     def __init__(self) -> None:
-        self._mailboxes: dict[Identifier, AsyncQueue[Message]] = {}
+        self._mailboxes: dict[EntityId, AsyncQueue[Message]] = {}
 
-    def check_mailbox(self, uid: Identifier) -> bool:
+    def check_mailbox(self, uid: EntityId) -> bool:
         return uid in self._mailboxes
 
-    def create_mailbox(self, uid: Identifier) -> None:
+    def create_mailbox(self, uid: EntityId) -> None:
         if uid not in self._mailboxes or self._mailboxes[uid].closed():
             self._mailboxes[uid] = AsyncQueue()
             logger.info('Created mailbox for %s', uid)
 
-    async def close_mailbox(self, uid: Identifier) -> None:
+    async def close_mailbox(self, uid: EntityId) -> None:
         mailbox = self._mailboxes.get(uid, None)
         if mailbox is not None:
             await mailbox.close()
             logger.info('Closed mailbox for %s', uid)
 
-    async def get(self, uid: Identifier) -> Message:
+    async def get(self, uid: EntityId) -> Message:
         try:
             return await self._mailboxes[uid].get()
         except KeyError as e:
-            raise BadIdentifierError(uid) from e
+            raise BadEntityIdError(uid) from e
         except QueueClosedError as e:
             raise MailboxClosedError(uid) from e
 
@@ -306,7 +306,7 @@ class _MailboxManager:
         try:
             await self._mailboxes[message.dest].put(message)
         except KeyError as e:
-            raise BadIdentifierError(message.dest) from e
+            raise BadEntityIdError(message.dest) from e
         except QueueClosedError as e:
             raise MailboxClosedError(message.dest) from e
 
@@ -320,7 +320,7 @@ async def _create_mailbox_route(request: Request) -> Response:
 
     try:
         raw_mailbox_id = data['mailbox']
-        mailbox_id: Identifier = TypeAdapter(Identifier).validate_json(
+        mailbox_id: EntityId = TypeAdapter(EntityId).validate_json(
             raw_mailbox_id,
         )
     except (KeyError, ValidationError):
@@ -339,7 +339,7 @@ async def _close_mailbox_route(request: Request) -> Response:
 
     try:
         raw_mailbox_id = data['mailbox']
-        mailbox_id: Identifier = TypeAdapter(Identifier).validate_json(
+        mailbox_id: EntityId = TypeAdapter(EntityId).validate_json(
             raw_mailbox_id,
         )
     except (KeyError, ValidationError):
@@ -358,7 +358,7 @@ async def _check_mailbox_route(request: Request) -> Response:
 
     try:
         raw_mailbox_id = data['mailbox']
-        mailbox_id: Identifier = TypeAdapter(Identifier).validate_json(
+        mailbox_id: EntityId = TypeAdapter(EntityId).validate_json(
             raw_mailbox_id,
         )
     except (KeyError, ValidationError):
@@ -386,7 +386,7 @@ async def _send_message_route(request: Request) -> Response:
 
     try:
         await manager.put(message)
-    except BadIdentifierError:
+    except BadEntityIdError:
         return Response(status=_NOT_FOUND_CODE, text='Unknown mailbox ID')
     except MailboxClosedError:
         return Response(status=_FORBIDDEN_CODE, text='Mailbox was closed')
@@ -400,7 +400,7 @@ async def _recv_message_route(request: Request) -> Response:
 
     try:
         raw_mailbox_id = data['mailbox']
-        mailbox_id: Identifier = TypeAdapter(Identifier).validate_json(
+        mailbox_id: EntityId = TypeAdapter(EntityId).validate_json(
             raw_mailbox_id,
         )
     except (KeyError, ValidationError):
@@ -411,7 +411,7 @@ async def _recv_message_route(request: Request) -> Response:
 
     try:
         message = await manager.get(mailbox_id)
-    except BadIdentifierError:
+    except BadEntityIdError:
         return Response(status=_NOT_FOUND_CODE, text='Unknown mailbox ID')
     except MailboxClosedError:
         return Response(status=_FORBIDDEN_CODE, text='Mailbox was closed')

@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from aeris.exception import BadIdentifierError
+from aeris.exception import BadEntityIdError
 from aeris.exchange.thread import ThreadExchange
 from aeris.launcher.thread import ThreadLauncher
 from aeris.manager import Manager
@@ -59,7 +59,7 @@ def test_wait_bad_identifier(exchange: ThreadExchange) -> None:
     ) as manager:
         agent_id = manager.exchange.create_agent(EmptyBehavior)
 
-        with pytest.raises(BadIdentifierError):
+        with pytest.raises(BadEntityIdError):
             manager.wait(agent_id)
 
 
@@ -82,7 +82,7 @@ def test_shutdown_bad_identifier(exchange: ThreadExchange) -> None:
     ) as manager:
         agent_id = manager.exchange.create_agent(EmptyBehavior)
 
-        with pytest.raises(BadIdentifierError):
+        with pytest.raises(BadEntityIdError):
             manager.shutdown(agent_id)
 
 

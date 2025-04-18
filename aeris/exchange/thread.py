@@ -5,13 +5,13 @@ import pickle
 from typing import Any
 
 from aeris.behavior import Behavior
-from aeris.exception import BadIdentifierError
+from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import Queue
 from aeris.exchange.queue import QueueClosedError
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import Identifier
+from aeris.identifier import AgentId
+from aeris.identifier import EntityId
 from aeris.message import Message
 
 logger = logging.getLogger(__name__)
@@ -26,8 +26,8 @@ class ThreadExchange(ExchangeMixin):
     """
 
     def __init__(self) -> None:
-        self._queues: dict[Identifier, Queue[Message]] = {}
-        self._behaviors: dict[Identifier, Behavior] = {}
+        self._queues: dict[EntityId, Queue[Message]] = {}
+        self._behaviors: dict[EntityId, Behavior] = {}
 
     def __getstate__(self) -> None:
         raise pickle.PicklingError(
@@ -43,7 +43,7 @@ class ThreadExchange(ExchangeMixin):
             queue.close()
         logger.debug('Closed exchange (%s)', self)
 
-    def create_mailbox(self, uid: Identifier) -> None:
+    def create_mailbox(self, uid: EntityId) -> None:
         """Create the mailbox in the exchange for a new entity.
 
         Note:
@@ -56,7 +56,7 @@ class ThreadExchange(ExchangeMixin):
             self._queues[uid] = Queue()
             logger.debug('Created mailbox for %s (%s)', uid, self)
 
-    def close_mailbox(self, uid: Identifier) -> None:
+    def close_mailbox(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         Note:
@@ -75,7 +75,7 @@ class ThreadExchange(ExchangeMixin):
         behavior: type[Behavior],
         *,
         allow_subclasses: bool = True,
-    ) -> tuple[AgentIdentifier[Any], ...]:
+    ) -> tuple[AgentId[Any], ...]:
         """Discover peer agents with a given behavior.
 
         Args:
@@ -88,24 +88,24 @@ class ThreadExchange(ExchangeMixin):
         """
         ...
 
-    def get_mailbox(self, uid: Identifier) -> ThreadMailbox:
+    def get_mailbox(self, uid: EntityId) -> ThreadMailbox:
         """Get a client to a specific mailbox.
 
         Args:
-            uid: Identifier of the mailbox.
+            uid: EntityId of the mailbox.
 
         Returns:
             Mailbox client.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
         """
         queue = self._queues.get(uid, None)
         if queue is None:
-            raise BadIdentifierError(uid)
+            raise BadEntityIdError(uid)
         return ThreadMailbox(uid, self, queue)
 
-    def send(self, uid: Identifier, message: Message) -> None:
+    def send(self, uid: EntityId, message: Message) -> None:
         """Send a message to a mailbox.
 
         Args:
@@ -113,12 +113,12 @@ class ThreadExchange(ExchangeMixin):
             message: Message to send.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
             MailboxClosedError: if the mailbox was closed.
         """
         queue = self._queues.get(uid, None)
         if queue is None:
-            raise BadIdentifierError(uid)
+            raise BadEntityIdError(uid)
         try:
             queue.put(message)
             logger.debug('Sent %s to %s', type(message).__name__, uid)
@@ -131,7 +131,7 @@ class ThreadMailbox:
 
     def __init__(
         self,
-        uid: Identifier,
+        uid: EntityId,
         exchange: ThreadExchange,
         queue: Queue[Message],
     ) -> None:
@@ -145,7 +145,7 @@ class ThreadMailbox:
         return self._exchange
 
     @property
-    def mailbox_id(self) -> Identifier:
+    def mailbox_id(self) -> EntityId:
         """Mailbox address/identifier."""
         return self._uid
 

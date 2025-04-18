@@ -6,11 +6,11 @@ from unittest import mock
 
 import pytest
 
-from aeris.exception import BadIdentifierError
+from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange.hybrid import HybridExchange
 from aeris.exchange.hybrid import HybridMailbox
-from aeris.identifier import ClientIdentifier
+from aeris.identifier import ClientId
 from aeris.message import PingRequest
 from aeris.socket import open_port
 from testing.behavior import EmptyBehavior
@@ -38,7 +38,7 @@ def test_serialize_exchange(mock_redis) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_key_namespaces(mock_redis) -> None:
     namespace = 'foo'
-    uid = ClientIdentifier.new()
+    uid = ClientId.new()
     with HybridExchange(
         redis_host='localhost',
         redis_port=0,
@@ -51,10 +51,10 @@ def test_key_namespaces(mock_redis) -> None:
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_send_bad_identifier(mock_redis) -> None:
-    uid = ClientIdentifier.new()
+    uid = ClientId.new()
     message = PingRequest(src=uid, dest=uid)
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        with pytest.raises(BadIdentifierError):
+        with pytest.raises(BadEntityIdError):
             exchange.send(uid, message)
 
 
@@ -79,9 +79,9 @@ def test_create_close_mailbox(mock_redis) -> None:
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_create_mailbox_bad_identifier(mock_redis) -> None:
-    uid = ClientIdentifier.new()
+    uid = ClientId.new()
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        with pytest.raises(BadIdentifierError):
+        with pytest.raises(BadEntityIdError):
             exchange.get_mailbox(uid)
 
 

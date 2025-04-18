@@ -14,12 +14,12 @@ else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
 from aeris.behavior import Behavior
-from aeris.exception import BadIdentifierError
+from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
 from aeris.handle import BoundRemoteHandle
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import ClientIdentifier
+from aeris.identifier import AgentId
+from aeris.identifier import ClientId
 from aeris.launcher import Launcher
 from aeris.message import RequestMessage
 from aeris.multiplex import MailboxMultiplexer
@@ -63,7 +63,7 @@ class Manager(NoPickleMixin):
             self._exchange,
             self._handle_request,
         )
-        self._handles: dict[AgentIdentifier[Any], BoundRemoteHandle[Any]] = {}
+        self._handles: dict[AgentId[Any], BoundRemoteHandle[Any]] = {}
         self._listener_thread = threading.Thread(
             target=self._multiplexer.listen,
             name=f'multiplexer-{self.mailbox_id.uid}-listener',
@@ -110,8 +110,8 @@ class Manager(NoPickleMixin):
         return self._launcher
 
     @property
-    def mailbox_id(self) -> ClientIdentifier:
-        """Identifier of the mailbox used by this manager."""
+    def mailbox_id(self) -> ClientId:
+        """EntityId of the mailbox used by this manager."""
         return self._mailbox_id
 
     def _handle_request(self, request: RequestMessage) -> None:
@@ -147,7 +147,7 @@ class Manager(NoPickleMixin):
         self,
         behavior: BehaviorT,
         *,
-        agent_id: AgentIdentifier[BehaviorT] | None = None,
+        agent_id: AgentId[BehaviorT] | None = None,
     ) -> BoundRemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
@@ -176,7 +176,7 @@ class Manager(NoPickleMixin):
 
     def shutdown(
         self,
-        agent_id: AgentIdentifier[Any],
+        agent_id: AgentId[Any],
         *,
         blocking: bool = True,
         timeout: float | None = None,
@@ -189,14 +189,14 @@ class Manager(NoPickleMixin):
             timeout: Optional timeout is seconds when `blocking=True`.
 
         Raises:
-            BadIdentifierError: If an agent with `agent_id` was not
+            BadEntityIdError: If an agent with `agent_id` was not
                 launched by this launcher.
             TimeoutError: If `timeout` was exceeded while blocking for agent.
         """
         try:
             handle = self._handles[agent_id]
         except KeyError:
-            raise BadIdentifierError(agent_id) from None
+            raise BadEntityIdError(agent_id) from None
 
         with contextlib.suppress(MailboxClosedError):
             handle.shutdown()
@@ -206,7 +206,7 @@ class Manager(NoPickleMixin):
 
     def wait(
         self,
-        agent_id: AgentIdentifier[Any],
+        agent_id: AgentId[Any],
         *,
         timeout: float | None = None,
     ) -> None:
@@ -217,7 +217,7 @@ class Manager(NoPickleMixin):
             timeout: Optional timeout in seconds to wait for agent.
 
         Raises:
-            BadIdentifierError: If an agent with `agent_id` was not
+            BadEntityIdError: If an agent with `agent_id` was not
                 launched by this launcher.
             TimeoutError: If `timeout` was exceeded while waiting for agent.
         """

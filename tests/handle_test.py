@@ -16,8 +16,8 @@ from aeris.handle import ClientRemoteHandle
 from aeris.handle import Handle
 from aeris.handle import ProxyHandle
 from aeris.handle import UnboundRemoteHandle
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import ClientIdentifier
+from aeris.identifier import AgentId
+from aeris.identifier import ClientId
 from aeris.launcher.thread import ThreadLauncher
 from aeris.message import PingRequest
 from testing.behavior import CounterBehavior
@@ -106,14 +106,14 @@ def test_unbound_remote_handle_bind(exchange: Exchange) -> None:
         with handle.bind_as_client() as client_bound:
             assert isinstance(client_bound, ClientRemoteHandle)
         agent_bound: BoundRemoteHandle[Any]
-        with handle.bind_to_mailbox(AgentIdentifier.new()) as agent_bound:
+        with handle.bind_to_mailbox(AgentId.new()) as agent_bound:
             assert isinstance(agent_bound, BoundRemoteHandle)
 
 
 def test_unbound_remote_handle_errors(exchange: Exchange) -> None:
     agent_id = exchange.create_agent(EmptyBehavior)
     with UnboundRemoteHandle(exchange, agent_id) as handle:
-        request = PingRequest(src=ClientIdentifier.new(), dest=agent_id)
+        request = PingRequest(src=ClientId.new(), dest=agent_id)
         with pytest.raises(HandleNotBoundError):
             handle._send_request(request)
         with pytest.raises(HandleNotBoundError):
@@ -163,7 +163,7 @@ def test_agent_remote_handle_bind(exchange: Exchange) -> None:
     agent_id = exchange.create_agent(EmptyBehavior)
     mailbox_id = exchange.create_agent(EmptyBehavior)
     with BoundRemoteHandle(exchange, agent_id, mailbox_id) as handle:
-        assert isinstance(handle.mailbox_id, AgentIdentifier)
+        assert isinstance(handle.mailbox_id, AgentId)
         with handle.bind_as_client() as client_bound:
             assert isinstance(client_bound, ClientRemoteHandle)
         with pytest.raises(
@@ -173,7 +173,7 @@ def test_agent_remote_handle_bind(exchange: Exchange) -> None:
             handle.bind_to_mailbox(handle.agent_id)
         with handle.bind_to_mailbox(handle.mailbox_id) as agent_bound:
             assert agent_bound is handle
-        with handle.bind_to_mailbox(AgentIdentifier.new()) as agent_bound:
+        with handle.bind_to_mailbox(AgentId.new()) as agent_bound:
             assert agent_bound is not handle
             assert isinstance(agent_bound, BoundRemoteHandle)
 
@@ -200,7 +200,7 @@ def test_client_remote_handle_bind(exchange: Exchange) -> None:
         with handle.bind_as_client(exchange.create_client()) as client_bound:
             assert client_bound is not handle
             assert isinstance(client_bound, ClientRemoteHandle)
-        with handle.bind_to_mailbox(AgentIdentifier.new()) as agent_bound:
+        with handle.bind_to_mailbox(AgentId.new()) as agent_bound:
             assert isinstance(agent_bound, BoundRemoteHandle)
 
 

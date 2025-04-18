@@ -13,7 +13,7 @@ from typing import Generic
 from typing import TypeVar
 
 from aeris.behavior import Behavior
-from aeris.exception import BadIdentifierError
+from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
 from aeris.handle import BoundRemoteHandle
@@ -21,7 +21,7 @@ from aeris.handle import ClientRemoteHandle
 from aeris.handle import Handle
 from aeris.handle import ProxyHandle
 from aeris.handle import RemoteHandle
-from aeris.identifier import AgentIdentifier
+from aeris.identifier import AgentId
 from aeris.message import ActionRequest
 from aeris.message import PingRequest
 from aeris.message import RequestMessage
@@ -57,7 +57,7 @@ class AgentRunConfig:
 # of the Agent constructor.
 def _agent_trampoline(
     behavior: BehaviorT,
-    agent_id: AgentIdentifier[BehaviorT],
+    agent_id: AgentId[BehaviorT],
     exchange: Exchange,
     config: AgentRunConfig,
 ) -> Agent[BehaviorT]:
@@ -86,7 +86,7 @@ class Agent(Generic[BehaviorT]):
 
     Args:
         behavior: Behavior that the agent will exhibit.
-        agent_id: Identifier of this agent in a multi-agent system.
+        agent_id: EntityId of this agent in a multi-agent system.
         exchange: Message exchange of multi-agent system. The agent will close
             the exchange when it finished running.
         config: Agent execution parameters.
@@ -96,7 +96,7 @@ class Agent(Generic[BehaviorT]):
         self,
         behavior: BehaviorT,
         *,
-        agent_id: AgentIdentifier[BehaviorT],
+        agent_id: AgentId[BehaviorT],
         exchange: Exchange,
         config: AgentRunConfig | None = None,
     ) -> None:
@@ -174,7 +174,7 @@ class Agent(Generic[BehaviorT]):
     def _send_response(self, response: ResponseMessage) -> None:
         try:
             self.exchange.send(response.dest, response)
-        except (BadIdentifierError, MailboxClosedError):
+        except (BadEntityIdError, MailboxClosedError):
             logger.warning(
                 'Failed to send response from %s to %s. '
                 'This likely means the destination mailbox was '

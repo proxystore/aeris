@@ -8,11 +8,11 @@ from typing import get_args
 import redis
 
 from aeris.behavior import Behavior
-from aeris.exception import BadIdentifierError
+from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import ExchangeMixin
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import Identifier
+from aeris.identifier import AgentId
+from aeris.identifier import EntityId
 from aeris.message import BaseMessage
 from aeris.message import Message
 from aeris.serialize import NoPickleMixin
@@ -87,10 +87,10 @@ class RedisExchange(ExchangeMixin):
     def __str__(self) -> str:
         return f'{type(self).__name__}<{self.hostname}:{self.port}>'
 
-    def _active_key(self, uid: Identifier) -> str:
+    def _active_key(self, uid: EntityId) -> str:
         return f'{uid.uid}-active'
 
-    def _queue_key(self, uid: Identifier) -> str:
+    def _queue_key(self, uid: EntityId) -> str:
         return f'{uid.uid}-queue'
 
     def close(self) -> None:
@@ -98,7 +98,7 @@ class RedisExchange(ExchangeMixin):
         self._client.close()
         logger.debug('Closed exchange (%s)', self)
 
-    def create_mailbox(self, uid: Identifier) -> None:
+    def create_mailbox(self, uid: EntityId) -> None:
         """Create the mailbox in the exchange for a new entity.
 
         Note:
@@ -110,7 +110,7 @@ class RedisExchange(ExchangeMixin):
         self._client.set(self._active_key(uid), _MailboxState.ACTIVE.value)
         logger.debug('Created mailbox for %s (%s)', uid, self)
 
-    def close_mailbox(self, uid: Identifier) -> None:
+    def close_mailbox(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         Note:
@@ -130,7 +130,7 @@ class RedisExchange(ExchangeMixin):
         self,
         behavior: type[Behavior],
         allow_subclasses: bool = True,
-    ) -> tuple[AgentIdentifier[Any], ...]:
+    ) -> tuple[AgentId[Any], ...]:
         """Discover peer agents with a given behavior.
 
         Args:
@@ -143,21 +143,21 @@ class RedisExchange(ExchangeMixin):
         """
         ...
 
-    def get_mailbox(self, uid: Identifier) -> RedisMailbox:
+    def get_mailbox(self, uid: EntityId) -> RedisMailbox:
         """Get a client to a specific mailbox.
 
         Args:
-            uid: Identifier of the mailbox.
+            uid: EntityId of the mailbox.
 
         Returns:
             Mailbox client.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
         """
         return RedisMailbox(uid, self)
 
-    def send(self, uid: Identifier, message: Message) -> None:
+    def send(self, uid: EntityId, message: Message) -> None:
         """Send a message to a mailbox.
 
         Args:
@@ -165,12 +165,12 @@ class RedisExchange(ExchangeMixin):
             message: Message to send.
 
         Raises:
-            BadIdentifierError: if a mailbox for `uid` does not exist.
+            BadEntityIdError: if a mailbox for `uid` does not exist.
             MailboxClosedError: if the mailbox was closed.
         """
         status = self._client.get(self._active_key(uid))
         if status is None:
-            raise BadIdentifierError(uid)
+            raise BadEntityIdError(uid)
         elif status == _MailboxState.INACTIVE.value:
             raise MailboxClosedError(uid)
         else:
@@ -182,20 +182,20 @@ class RedisMailbox(NoPickleMixin):
     """Client protocol that listens to incoming messages to a mailbox.
 
     Args:
-        uid: Identifier of the mailbox.
+        uid: EntityId of the mailbox.
         exchange: Exchange client.
 
     Raises:
-        BadIdentifierError: if a mailbox with `uid` does not exist.
+        BadEntityIdError: if a mailbox with `uid` does not exist.
     """
 
-    def __init__(self, uid: Identifier, exchange: RedisExchange) -> None:
+    def __init__(self, uid: EntityId, exchange: RedisExchange) -> None:
         self._uid = uid
         self._exchange = exchange
 
         status = self.exchange._client.get(self.exchange._active_key(uid))
         if status is None:
-            raise BadIdentifierError(uid)
+            raise BadEntityIdError(uid)
 
     @property
     def exchange(self) -> RedisExchange:
@@ -203,7 +203,7 @@ class RedisMailbox(NoPickleMixin):
         return self._exchange
 
     @property
-    def mailbox_id(self) -> Identifier:
+    def mailbox_id(self) -> EntityId:
         """Mailbox address/identifier."""
         return self._uid
 

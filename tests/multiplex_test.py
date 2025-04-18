@@ -9,7 +9,7 @@ from aeris.exception import MailboxClosedError
 from aeris.exchange.thread import ThreadExchange
 from aeris.handle import BoundRemoteHandle
 from aeris.handle import UnboundRemoteHandle
-from aeris.identifier import ClientIdentifier
+from aeris.identifier import ClientId
 from aeris.message import PingRequest
 from aeris.message import PingResponse
 from aeris.multiplex import MailboxMultiplexer
@@ -71,7 +71,7 @@ def test_bind_duplicate_handle(exchange: ThreadExchange) -> None:
 def test_request_message_handler(exchange: ThreadExchange) -> None:
     uid = exchange.create_client()
     handler = mock.MagicMock()
-    request = PingRequest(src=ClientIdentifier.new(), dest=uid)
+    request = PingRequest(src=ClientId.new(), dest=uid)
 
     with MailboxMultiplexer(
         uid,
@@ -112,7 +112,7 @@ def test_response_message_handler_bad_src(exchange: ThreadExchange) -> None:
     uid = exchange.create_client()
     aid = exchange.create_agent(EmptyBehavior)
     unbound = UnboundRemoteHandle(exchange, aid)
-    response = PingResponse(src=ClientIdentifier.new(), dest=uid)
+    response = PingResponse(src=ClientId.new(), dest=uid)
 
     with MailboxMultiplexer(
         uid,

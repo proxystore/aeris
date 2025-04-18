@@ -6,13 +6,13 @@ from unittest import mock
 
 import pytest
 
-from aeris.exception import BadIdentifierError
+from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
 from aeris.exchange.redis import RedisExchange
 from aeris.handle import RemoteHandle
-from aeris.identifier import AgentIdentifier
-from aeris.identifier import ClientIdentifier
+from aeris.identifier import AgentId
+from aeris.identifier import ClientId
 from aeris.message import PingRequest
 from testing.behavior import EmptyBehavior
 from testing.constant import TEST_CONNECTION_TIMEOUT
@@ -30,8 +30,8 @@ def test_basic_usage(mock_redis) -> None:
         cid = exchange.create_client()
         exchange.create_mailbox(cid)  # Idempotency check
 
-        assert isinstance(aid, AgentIdentifier)
-        assert isinstance(cid, ClientIdentifier)
+        assert isinstance(aid, AgentId)
+        assert isinstance(cid, ClientId)
 
         mailbox = exchange.get_mailbox(aid)
 
@@ -51,10 +51,10 @@ def test_basic_usage(mock_redis) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_bad_identifier_error(mock_redis) -> None:
     with RedisExchange('localhost', port=0) as exchange:
-        uid = ClientIdentifier.new()
-        with pytest.raises(BadIdentifierError):
+        uid = ClientId.new()
+        with pytest.raises(BadEntityIdError):
             exchange.send(uid, PingRequest(src=uid, dest=uid))
-        with pytest.raises(BadIdentifierError):
+        with pytest.raises(BadEntityIdError):
             exchange.get_mailbox(uid)
 
 
@@ -79,7 +79,7 @@ def test_create_handle_to_client(mock_redis) -> None:
         handle.close()
 
         with pytest.raises(TypeError, match='Handle must be created from an'):
-            exchange.create_handle(ClientIdentifier.new())  # type: ignore[arg-type]
+            exchange.create_handle(ClientId.new())  # type: ignore[arg-type]
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
