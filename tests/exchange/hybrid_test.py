@@ -13,6 +13,7 @@ from aeris.exchange.hybrid import HybridMailbox
 from aeris.identifier import ClientIdentifier
 from aeris.message import PingRequest
 from aeris.socket import open_port
+from testing.behavior import EmptyBehavior
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_SLEEP
 from testing.constant import TEST_THREAD_JOIN_TIMEOUT
@@ -87,7 +88,7 @@ def test_create_mailbox_bad_identifier(mock_redis) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_send_to_mailbox_direct(mock_redis) -> None:
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         cid = exchange.create_client()
         with exchange.get_mailbox(aid) as mailbox:
             message = PingRequest(src=cid, dest=aid)
@@ -100,7 +101,7 @@ def test_send_to_mailbox_direct(mock_redis) -> None:
 def test_send_to_mailbox_indirect(mock_redis) -> None:
     messages = 3
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         cid = exchange.create_client()
         message = PingRequest(src=cid, dest=aid)
         for _ in range(messages):
@@ -113,7 +114,7 @@ def test_send_to_mailbox_indirect(mock_redis) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_mailbox_recv_closed(mock_redis) -> None:
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         with exchange.get_mailbox(aid) as mailbox:
             exchange.close_mailbox(aid)
             with pytest.raises(MailboxClosedError):
@@ -124,7 +125,7 @@ def test_mailbox_recv_closed(mock_redis) -> None:
 def test_mailbox_redis_error_logging(mock_redis, caplog) -> None:
     caplog.set_level(logging.ERROR)
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         with mock.patch(
             'aeris.exchange.hybrid.HybridMailbox._pull_messages_from_redis',
             side_effect=RuntimeError('Mock thread error.'),
@@ -143,7 +144,7 @@ def test_mailbox_redis_error_logging(mock_redis, caplog) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_send_to_mailbox_bad_cached_address(mock_redis) -> None:
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         cid = exchange.create_client()
         message = PingRequest(src=cid, dest=aid)
         # Ensure mailboxes listen on different ports so addresses are different

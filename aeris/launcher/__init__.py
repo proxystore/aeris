@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from typing import Protocol
 from typing import runtime_checkable
 from typing import TypeVar
@@ -30,7 +31,7 @@ class Launcher(Protocol):
         behavior: BehaviorT,
         exchange: Exchange,
         *,
-        agent_id: AgentIdentifier | None = None,
+        agent_id: AgentIdentifier[BehaviorT] | None = None,
     ) -> RemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
@@ -45,7 +46,7 @@ class Launcher(Protocol):
         """
         ...
 
-    def running(self) -> set[AgentIdentifier]:
+    def running(self) -> set[AgentIdentifier[Any]]:
         """Get a set of IDs for all running agents.
 
         Returns:
@@ -56,7 +57,7 @@ class Launcher(Protocol):
 
     def wait(
         self,
-        agent_id: AgentIdentifier,
+        agent_id: AgentIdentifier[Any],
         *,
         timeout: float | None = None,
     ) -> None:

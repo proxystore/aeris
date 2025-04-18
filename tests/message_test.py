@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pickle
+from typing import Any
 from typing import get_args
 
 import pytest
@@ -27,8 +28,8 @@ def test_shutdown_dest_type() -> None:
         ShutdownRequest(src=AgentIdentifier.new(), dest=ClientIdentifier.new())
 
 
-_src = AgentIdentifier.new()
-_dest = AgentIdentifier.new()
+_src: AgentIdentifier[Any] = AgentIdentifier.new()
+_dest: AgentIdentifier[Any] = AgentIdentifier.new()
 
 
 @pytest.mark.parametrize(

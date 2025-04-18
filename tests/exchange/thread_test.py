@@ -9,10 +9,10 @@ from aeris.exception import BadIdentifierError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
 from aeris.exchange.thread import ThreadExchange
-from aeris.handle import RemoteHandle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.message import PingRequest
+from testing.behavior import EmptyBehavior
 
 
 def test_basic_usage() -> None:
@@ -21,7 +21,7 @@ def test_basic_usage() -> None:
         assert isinstance(repr(exchange), str)
         assert isinstance(str(exchange), str)
 
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         cid = exchange.create_client()
         exchange.create_mailbox(cid)  # Idempotency check
 
@@ -44,7 +44,7 @@ def test_basic_usage() -> None:
 
 def test_bad_identifier_error() -> None:
     with ThreadExchange() as exchange:
-        uid = AgentIdentifier.new()
+        uid: AgentIdentifier[Any] = AgentIdentifier.new()
         with pytest.raises(BadIdentifierError):
             exchange.send(uid, PingRequest(src=uid, dest=uid))
         with pytest.raises(BadIdentifierError):
@@ -53,7 +53,7 @@ def test_bad_identifier_error() -> None:
 
 def test_mailbox_closed_error() -> None:
     with ThreadExchange() as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         mailbox = exchange.get_mailbox(aid)
         exchange.close_mailbox(aid)
         with pytest.raises(MailboxClosedError):
@@ -65,8 +65,8 @@ def test_mailbox_closed_error() -> None:
 
 def test_create_handle_to_client() -> None:
     with ThreadExchange() as exchange:
-        aid = exchange.create_agent()
-        handle: RemoteHandle[Any] = exchange.create_handle(aid)
+        aid = exchange.create_agent(EmptyBehavior)
+        handle = exchange.create_handle(aid)
         handle.close()
 
         with pytest.raises(TypeError, match='Handle must be created from an'):

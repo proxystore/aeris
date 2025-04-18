@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import pickle
+from typing import Any
 
 from aeris.behavior import Behavior
 from aeris.exception import BadIdentifierError
@@ -74,7 +75,7 @@ class ThreadExchange(ExchangeMixin):
         behavior: type[Behavior],
         *,
         allow_subclasses: bool = True,
-    ) -> tuple[AgentIdentifier, ...]:
+    ) -> tuple[AgentIdentifier[Any], ...]:
         """Discover peer agents with a given behavior.
 
         Args:

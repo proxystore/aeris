@@ -142,7 +142,7 @@ class ProxyStoreExchange(ExchangeMixin):
         behavior: type[Behavior],
         *,
         allow_subclasses: bool = True,
-    ) -> tuple[AgentIdentifier, ...]:
+    ) -> tuple[AgentIdentifier[Any], ...]:
         """Discover peer agents with a given behavior.
 
         Args:

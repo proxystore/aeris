@@ -57,7 +57,7 @@ class AgentRunConfig:
 # of the Agent constructor.
 def _agent_trampoline(
     behavior: BehaviorT,
-    agent_id: AgentIdentifier,
+    agent_id: AgentIdentifier[BehaviorT],
     exchange: Exchange,
     config: AgentRunConfig,
 ) -> Agent[BehaviorT]:
@@ -96,7 +96,7 @@ class Agent(Generic[BehaviorT]):
         self,
         behavior: BehaviorT,
         *,
-        agent_id: AgentIdentifier,
+        agent_id: AgentIdentifier[BehaviorT],
         exchange: Exchange,
         config: AgentRunConfig | None = None,
     ) -> None:

@@ -42,7 +42,7 @@ class ThreadLauncher:
     """
 
     def __init__(self) -> None:
-        self._agents: dict[AgentIdentifier, _RunningAgent[Any]] = {}
+        self._agents: dict[AgentIdentifier[Any], _RunningAgent[Any]] = {}
 
     def __enter__(self) -> Self:
         return self
@@ -75,7 +75,7 @@ class ThreadLauncher:
         behavior: BehaviorT,
         exchange: Exchange,
         *,
-        agent_id: AgentIdentifier | None = None,
+        agent_id: AgentIdentifier[BehaviorT] | None = None,
     ) -> RemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
@@ -88,7 +88,11 @@ class ThreadLauncher:
         Returns:
             Mailbox used to communicate with agent.
         """
-        agent_id = exchange.create_agent() if agent_id is None else agent_id
+        agent_id = (
+            exchange.create_agent(type(behavior))
+            if agent_id is None
+            else agent_id
+        )
 
         agent = Agent(
             behavior,
@@ -103,14 +107,14 @@ class ThreadLauncher:
 
         return exchange.create_handle(agent_id)
 
-    def running(self) -> set[AgentIdentifier]:
+    def running(self) -> set[AgentIdentifier[Any]]:
         """Get a set of IDs for all running agents.
 
         Returns:
             Set of agent IDs corresponding to all agents launched by this \
             launcher that have not completed yet.
         """
-        running: set[AgentIdentifier] = set()
+        running: set[AgentIdentifier[Any]] = set()
         for agent_id, agent in self._agents.items():
             if agent.thread.is_alive():
                 running.add(agent_id)
@@ -118,7 +122,7 @@ class ThreadLauncher:
 
     def wait(
         self,
-        agent_id: AgentIdentifier,
+        agent_id: AgentIdentifier[Any],
         *,
         timeout: float | None = None,
     ) -> None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import Identifier
 
@@ -16,7 +18,7 @@ class HandleClosedError(Exception):
 
     def __init__(
         self,
-        agent_id: AgentIdentifier,
+        agent_id: AgentIdentifier[Any],
         mailbox_id: Identifier | None,
     ) -> None:
         message = (
@@ -45,7 +47,7 @@ class HandleNotBoundError(Exception):
     running.
     """
 
-    def __init__(self, aid: AgentIdentifier) -> None:
+    def __init__(self, aid: AgentIdentifier[Any]) -> None:
         super().__init__(
             f'Handle to {aid} is not bound as a client nor to a running '
             'agent. See the exception docstring for troubleshooting.',

@@ -8,6 +8,7 @@ from aeris.exception import BadIdentifierError
 from aeris.exchange import Exchange
 from aeris.launcher import Launcher
 from aeris.launcher.thread import ThreadLauncher
+from testing.behavior import EmptyBehavior
 from testing.behavior import SleepBehavior
 from testing.constant import TEST_LOOP_SLEEP
 
@@ -43,7 +44,7 @@ def test_launch_agents(exchange: Exchange) -> None:
 
 def test_wait_bad_identifier(exchange: Exchange) -> None:
     with ThreadLauncher() as launcher:
-        agent_id = exchange.create_agent()
+        agent_id = exchange.create_agent(EmptyBehavior)
 
         with pytest.raises(BadIdentifierError):
             launcher.wait(agent_id)

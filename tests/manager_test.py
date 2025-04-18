@@ -10,6 +10,7 @@ from aeris.launcher.thread import ThreadLauncher
 from aeris.manager import Manager
 from aeris.message import PingRequest
 from aeris.message import PingResponse
+from testing.behavior import EmptyBehavior
 from testing.behavior import SleepBehavior
 from testing.constant import TEST_LOOP_SLEEP
 from testing.constant import TEST_THREAD_JOIN_TIMEOUT
@@ -56,7 +57,7 @@ def test_wait_bad_identifier(exchange: ThreadExchange) -> None:
         exchange=ThreadExchange(),
         launcher=ThreadLauncher(),
     ) as manager:
-        agent_id = manager.exchange.create_agent()
+        agent_id = manager.exchange.create_agent(EmptyBehavior)
 
         with pytest.raises(BadIdentifierError):
             manager.wait(agent_id)
@@ -79,7 +80,7 @@ def test_shutdown_bad_identifier(exchange: ThreadExchange) -> None:
         exchange=ThreadExchange(),
         launcher=ThreadLauncher(),
     ) as manager:
-        agent_id = manager.exchange.create_agent()
+        agent_id = manager.exchange.create_agent(EmptyBehavior)
 
         with pytest.raises(BadIdentifierError):
             manager.shutdown(agent_id)

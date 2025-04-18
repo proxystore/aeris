@@ -27,6 +27,7 @@ import sys
 from collections.abc import AsyncGenerator
 from collections.abc import Generator
 from collections.abc import Sequence
+from typing import Any
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
     from typing import Self
@@ -139,7 +140,7 @@ class HttpExchange(ExchangeMixin):
         behavior: type[Behavior],
         *,
         allow_subclasses: bool = True,
-    ) -> tuple[AgentIdentifier, ...]:
+    ) -> tuple[AgentIdentifier[Any], ...]:
         """Discover peer agents with a given behavior.
 
         Args:

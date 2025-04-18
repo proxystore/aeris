@@ -21,10 +21,10 @@ from aeris.exchange.http import _NOT_FOUND_CODE
 from aeris.exchange.http import create_app
 from aeris.exchange.http import HttpExchange
 from aeris.exchange.http import spawn_http_exchange
-from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.message import PingRequest
 from aeris.socket import open_port
+from testing.behavior import EmptyBehavior
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_SLEEP
 
@@ -59,7 +59,7 @@ def test_send_and_recv(http_exchange_server: tuple[str, int]) -> None:
     host, port = http_exchange_server
     with HttpExchange(host, port) as exchange:
         cid = exchange.create_client()
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
 
         message = PingRequest(src=cid, dest=aid)
         exchange.send(aid, message)
@@ -81,7 +81,7 @@ def test_send_bad_identifer(http_exchange_server: tuple[str, int]) -> None:
 def test_send_mailbox_closed(http_exchange_server: tuple[str, int]) -> None:
     host, port = http_exchange_server
     with HttpExchange(host, port) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         exchange.close_mailbox(aid)
         message = PingRequest(src=aid, dest=aid)
         with pytest.raises(MailboxClosedError):
@@ -91,7 +91,7 @@ def test_send_mailbox_closed(http_exchange_server: tuple[str, int]) -> None:
 def test_recv_timeout(http_exchange_server: tuple[str, int]) -> None:
     host, port = http_exchange_server
     with HttpExchange(host, port) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         mailbox = exchange.get_mailbox(aid)
         with mock.patch.object(
             exchange._session,
@@ -105,7 +105,7 @@ def test_recv_timeout(http_exchange_server: tuple[str, int]) -> None:
 def test_recv_mailbox_closed(http_exchange_server: tuple[str, int]) -> None:
     host, port = http_exchange_server
     with HttpExchange(host, port) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         exchange.close_mailbox(aid)
         mailbox = exchange.get_mailbox(aid)
         with pytest.raises(MailboxClosedError):
@@ -130,7 +130,7 @@ def test_spawn_http_exchange() -> None:
 @pytest.mark.asyncio
 async def test_mailbox_manager_create_close() -> None:
     manager = _MailboxManager()
-    uid = AgentIdentifier.new()
+    uid = ClientIdentifier.new()
     # Should do nothing since mailbox doesn't exist
     await manager.close_mailbox(uid)
     assert not manager.check_mailbox(uid)
@@ -144,7 +144,7 @@ async def test_mailbox_manager_create_close() -> None:
 @pytest.mark.asyncio
 async def test_mailbox_manager_send_recv() -> None:
     manager = _MailboxManager()
-    uid = AgentIdentifier.new()
+    uid = ClientIdentifier.new()
     manager.create_mailbox(uid)
 
     message = PingRequest(src=uid, dest=uid)
@@ -157,7 +157,7 @@ async def test_mailbox_manager_send_recv() -> None:
 @pytest.mark.asyncio
 async def test_mailbox_manager_bad_identifier() -> None:
     manager = _MailboxManager()
-    uid = AgentIdentifier.new()
+    uid = ClientIdentifier.new()
     message = PingRequest(src=uid, dest=uid)
 
     with pytest.raises(BadIdentifierError):
@@ -170,7 +170,7 @@ async def test_mailbox_manager_bad_identifier() -> None:
 @pytest.mark.asyncio
 async def test_mailbox_manager_mailbox_closed() -> None:
     manager = _MailboxManager()
-    uid = AgentIdentifier.new()
+    uid = ClientIdentifier.new()
     manager.create_mailbox(uid)
     await manager.close_mailbox(uid)
     message = PingRequest(src=uid, dest=uid)

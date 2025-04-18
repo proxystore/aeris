@@ -62,13 +62,13 @@ BehaviorT_co = TypeVar('BehaviorT_co', bound=Behavior, covariant=True)
 
 
 @runtime_checkable
-class Handle(Protocol[BehaviorT_co]):
+class Handle(Protocol[BehaviorT]):
     """Agent handle protocol.
 
     A handle enables a client or agent to invoke actions on another agent.
     """
 
-    agent_id: AgentIdentifier
+    agent_id: AgentIdentifier[BehaviorT]
     mailbox_id: Identifier | None
 
     def action(
@@ -194,7 +194,7 @@ class ProxyHandle(Generic[BehaviorT_co]):
 
     def __init__(self, behavior: BehaviorT_co) -> None:
         self.behavior = behavior
-        self.agent_id = AgentIdentifier.new()
+        self.agent_id: AgentIdentifier[BehaviorT_co] = AgentIdentifier.new()
         self.mailbox_id: Identifier | None = None
         self._agent_closed = False
         self._handle_closed = False
@@ -353,7 +353,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
     def __init__(
         self,
         exchange: Exchange,
-        agent_id: AgentIdentifier,
+        agent_id: AgentIdentifier[BehaviorT_co],
         mailbox_id: Identifier | None = None,
     ) -> None:
         self.exchange = exchange
@@ -381,7 +381,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
         self,
     ) -> tuple[
         type[UnboundRemoteHandle[Any]],
-        tuple[Exchange, AgentIdentifier],
+        tuple[Exchange, AgentIdentifier[BehaviorT_co]],
     ]:
         return (UnboundRemoteHandle, (self.exchange, self.agent_id))
 
@@ -627,7 +627,11 @@ class UnboundRemoteHandle(RemoteHandle[BehaviorT_co]):
         agent_id: Identifier of the agent.
     """
 
-    def __init__(self, exchange: Exchange, agent_id: AgentIdentifier) -> None:
+    def __init__(
+        self,
+        exchange: Exchange,
+        agent_id: AgentIdentifier[BehaviorT_co],
+    ) -> None:
         super().__init__(exchange, agent_id=agent_id)
 
     def __repr__(self) -> str:
@@ -702,7 +706,7 @@ class BoundRemoteHandle(RemoteHandle[BehaviorT_co]):
     def __init__(
         self,
         exchange: Exchange,
-        agent_id: AgentIdentifier,
+        agent_id: AgentIdentifier[BehaviorT_co],
         mailbox_id: Identifier,
     ) -> None:
         if agent_id == mailbox_id:
@@ -776,7 +780,7 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
     def __init__(
         self,
         exchange: Exchange,
-        agent_id: AgentIdentifier,
+        agent_id: AgentIdentifier[BehaviorT_co],
         client_id: ClientIdentifier | None = None,
     ) -> None:
         if client_id is None:

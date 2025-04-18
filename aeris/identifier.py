@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import sys
 import uuid
+from typing import Any
+from typing import Generic
 from typing import Literal
 from typing import Optional
+from typing import TypeVar
 from typing import Union
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
@@ -15,6 +18,10 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import TypeAdapter
+
+# Normally this would be bound=Behavior, but Pydantic's mypy plugin crashes
+# here. See https://github.com/pydantic/pydantic/issues/11454
+BehaviorT = TypeVar('BehaviorT')
 
 
 class BaseIdentifier(BaseModel):
@@ -35,6 +42,7 @@ class BaseIdentifier(BaseModel):
     )
 
     uid: uuid.UUID = Field()
+    role: Literal['agent', 'client'] | None = Field(None)
     name: Optional[str] = Field(None)  # noqa: UP007
 
     @classmethod
@@ -52,13 +60,15 @@ class BaseIdentifier(BaseModel):
         return TypeAdapter(Identifier).validate_json(data)
 
     def __eq__(self, other: object, /) -> bool:
-        return isinstance(other, type(self)) and self.uid == other.uid
+        if not isinstance(other, BaseIdentifier):
+            return False
+        return self.role == other.role and self.uid == other.uid
 
     def __hash__(self) -> int:
-        return hash(type(self).__name__) + hash(self.uid)
+        return hash(self.role) + hash(self.uid)
 
 
-class AgentIdentifier(BaseIdentifier):
+class AgentIdentifier(BaseIdentifier, Generic[BehaviorT]):
     """Unique identifier of an agent in a multi-agent system."""
 
     role: Literal['agent'] = Field('agent', repr=False)
@@ -78,5 +88,5 @@ class ClientIdentifier(BaseIdentifier):
         return f'ClientID<{name}>'
 
 
-Identifier = Union[AgentIdentifier, ClientIdentifier]
+Identifier = Union[AgentIdentifier[Any], ClientIdentifier]
 """Identifier union type for type annotations."""

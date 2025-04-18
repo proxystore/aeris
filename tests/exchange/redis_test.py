@@ -14,6 +14,7 @@ from aeris.handle import RemoteHandle
 from aeris.identifier import AgentIdentifier
 from aeris.identifier import ClientIdentifier
 from aeris.message import PingRequest
+from testing.behavior import EmptyBehavior
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.redis import MockRedis
 
@@ -25,7 +26,7 @@ def test_basic_usage(mock_redis) -> None:
         assert isinstance(repr(exchange), str)
         assert isinstance(str(exchange), str)
 
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         cid = exchange.create_client()
         exchange.create_mailbox(cid)  # Idempotency check
 
@@ -50,7 +51,7 @@ def test_basic_usage(mock_redis) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_bad_identifier_error(mock_redis) -> None:
     with RedisExchange('localhost', port=0) as exchange:
-        uid = AgentIdentifier.new()
+        uid = ClientIdentifier.new()
         with pytest.raises(BadIdentifierError):
             exchange.send(uid, PingRequest(src=uid, dest=uid))
         with pytest.raises(BadIdentifierError):
@@ -60,7 +61,7 @@ def test_bad_identifier_error(mock_redis) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_mailbox_closed_error(mock_redis) -> None:
     with RedisExchange('localhost', port=0) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         mailbox = exchange.get_mailbox(aid)
         exchange.close_mailbox(aid)
         with pytest.raises(MailboxClosedError):
@@ -73,7 +74,7 @@ def test_mailbox_closed_error(mock_redis) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_create_handle_to_client(mock_redis) -> None:
     with RedisExchange('localhost', port=0) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         handle: RemoteHandle[Any] = exchange.create_handle(aid)
         handle.close()
 
@@ -88,7 +89,7 @@ def test_mailbox_timeout(mock_redis) -> None:
         port=0,
         timeout=TEST_CONNECTION_TIMEOUT,
     ) as exchange:
-        aid = exchange.create_agent()
+        aid = exchange.create_agent(EmptyBehavior)
         mailbox = exchange.get_mailbox(aid)
         with pytest.raises(TimeoutError):
             mailbox.recv(timeout=0.001)

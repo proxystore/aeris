@@ -63,7 +63,7 @@ class Manager(NoPickleMixin):
             self._exchange,
             self._handle_request,
         )
-        self._handles: dict[AgentIdentifier, BoundRemoteHandle[Any]] = {}
+        self._handles: dict[AgentIdentifier[Any], BoundRemoteHandle[Any]] = {}
         self._listener_thread = threading.Thread(
             target=self._multiplexer.listen,
             name=f'multiplexer-{self.mailbox_id.uid}-listener',
@@ -147,7 +147,7 @@ class Manager(NoPickleMixin):
         self,
         behavior: BehaviorT,
         *,
-        agent_id: AgentIdentifier | None = None,
+        agent_id: AgentIdentifier[BehaviorT] | None = None,
     ) -> BoundRemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
@@ -176,7 +176,7 @@ class Manager(NoPickleMixin):
 
     def shutdown(
         self,
-        agent_id: AgentIdentifier,
+        agent_id: AgentIdentifier[Any],
         *,
         blocking: bool = True,
         timeout: float | None = None,
@@ -206,7 +206,7 @@ class Manager(NoPickleMixin):
 
     def wait(
         self,
-        agent_id: AgentIdentifier,
+        agent_id: AgentIdentifier[Any],
         *,
         timeout: float | None = None,
     ) -> None:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from types import TracebackType
+from typing import Any
 from typing import Protocol
 from typing import runtime_checkable
 from typing import TypeVar
@@ -67,10 +68,16 @@ class Exchange(Protocol):
         """
         ...
 
-    def create_agent(self, name: str | None = None) -> AgentIdentifier:
+    def create_agent(
+        self,
+        behavior: type[BehaviorT],
+        *,
+        name: str | None = None,
+    ) -> AgentIdentifier[BehaviorT]:
         """Create a new agent identifier and associated mailbox.
 
         Args:
+            behavior: Behavior type of the agent.
             name: Optional human-readable name for the agent.
 
         Returns:
@@ -91,7 +98,7 @@ class Exchange(Protocol):
 
     def create_handle(
         self,
-        aid: AgentIdentifier,
+        aid: AgentIdentifier[BehaviorT],
     ) -> UnboundRemoteHandle[BehaviorT]:
         """Create a new handle to an agent.
 
@@ -119,7 +126,7 @@ class Exchange(Protocol):
         behavior: type[Behavior],
         *,
         allow_subclasses: bool = True,
-    ) -> tuple[AgentIdentifier, ...]:
+    ) -> tuple[AgentIdentifier[Any], ...]:
         """Discover peer agents with a given behavior.
 
         Args:
@@ -186,17 +193,20 @@ class ExchangeMixin:
 
     def create_agent(
         self: Exchange,
+        behavior: type[BehaviorT],
+        *,
         name: str | None = None,
-    ) -> AgentIdentifier:
+    ) -> AgentIdentifier[BehaviorT]:
         """Create a new agent identifier and associated mailbox.
 
         Args:
+            behavior: Type of the behavior this agent will implement.
             name: Optional human-readable name for the agent.
 
         Returns:
             Unique identifier for the agent's mailbox.
         """
-        aid = AgentIdentifier.new(name=name)
+        aid: AgentIdentifier[BehaviorT] = AgentIdentifier.new(name=name)
         self.create_mailbox(aid)
         return aid
 
@@ -218,7 +228,7 @@ class ExchangeMixin:
 
     def create_handle(
         self: Exchange,
-        aid: AgentIdentifier,
+        aid: AgentIdentifier[BehaviorT],
     ) -> UnboundRemoteHandle[BehaviorT]:
         """Create a new handle to an agent.
 

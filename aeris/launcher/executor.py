@@ -9,6 +9,7 @@ from concurrent.futures import Executor
 from concurrent.futures import Future
 from types import TracebackType
 from typing import Any
+from typing import Generic
 from typing import TypeVar
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
@@ -38,10 +39,10 @@ def _run_agent_on_worker(agent: Agent[Any]) -> None:
 
 
 @dataclasses.dataclass
-class _ACB:
+class _ACB(Generic[BehaviorT]):
     # Agent Control Block
-    agent_id: AgentIdentifier
-    behavior: Behavior
+    agent_id: AgentIdentifier[BehaviorT]
+    behavior: BehaviorT
     exchange: Exchange
     done: threading.Event
     future: Future[None] | None = None
@@ -73,8 +74,8 @@ class ExecutorLauncher:
         self._executor = executor
         self._close_exchange = close_exchange
         self._max_restarts = max_restarts
-        self._acbs: dict[AgentIdentifier, _ACB] = {}
-        self._future_to_acb: dict[Future[None], _ACB] = {}
+        self._acbs: dict[AgentIdentifier[Any], _ACB[Any]] = {}
+        self._future_to_acb: dict[Future[None], _ACB[Any]] = {}
 
     def __enter__(self) -> Self:
         return self
@@ -122,7 +123,7 @@ class ExecutorLauncher:
         self._executor.shutdown(wait=True, cancel_futures=True)
         logger.debug('Closed launcher (%s)', self)
 
-    def _launch(self, agent_id: AgentIdentifier) -> None:
+    def _launch(self, agent_id: AgentIdentifier[Any]) -> None:
         acb = self._acbs[agent_id]
 
         agent = Agent(
@@ -161,7 +162,7 @@ class ExecutorLauncher:
         behavior: BehaviorT,
         exchange: Exchange,
         *,
-        agent_id: AgentIdentifier | None = None,
+        agent_id: AgentIdentifier[BehaviorT] | None = None,
     ) -> RemoteHandle[BehaviorT]:
         """Launch a new agent with a specified behavior.
 
@@ -174,7 +175,11 @@ class ExecutorLauncher:
         Returns:
             Handle (unbound) used to interact with the agent.
         """
-        agent_id = exchange.create_agent() if agent_id is None else agent_id
+        agent_id = (
+            exchange.create_agent(type(behavior))
+            if agent_id is None
+            else agent_id
+        )
 
         acb = _ACB(agent_id, behavior, exchange, done=threading.Event())
         self._acbs[agent_id] = acb
@@ -182,14 +187,14 @@ class ExecutorLauncher:
 
         return exchange.create_handle(agent_id)
 
-    def running(self) -> set[AgentIdentifier]:
+    def running(self) -> set[AgentIdentifier[Any]]:
         """Get a set of IDs for all running agents.
 
         Returns:
             Set of agent IDs corresponding to all agents launched by this \
             launcher that have not completed yet.
         """
-        running: set[AgentIdentifier] = set()
+        running: set[AgentIdentifier[Any]] = set()
         for acb in self._acbs.values():
             if not acb.done.is_set():
                 running.add(acb.agent_id)
@@ -197,7 +202,7 @@ class ExecutorLauncher:
 
     def wait(
         self,
-        agent_id: AgentIdentifier,
+        agent_id: AgentIdentifier[Any],
         *,
         ignore_error: bool = False,
         timeout: float | None = None,
