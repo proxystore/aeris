@@ -24,6 +24,7 @@ import contextlib
 import logging
 import multiprocessing
 import sys
+import uuid
 from collections.abc import AsyncGenerator
 from collections.abc import Generator
 from collections.abc import Sequence
@@ -90,6 +91,7 @@ class HttpExchange(ExchangeMixin):
         self._session = requests.Session()
         self._mailbox_url = f'http://{self.host}:{self.port}/mailbox'
         self._message_url = f'http://{self.host}:{self.port}/message'
+        self._discover_url = f'http://{self.host}:{self.port}/discover'
 
     def __reduce__(
         self,
@@ -129,7 +131,10 @@ class HttpExchange(ExchangeMixin):
         aid = AgentId.new(name=name) if agent_id is None else agent_id
         response = self._session.post(
             self._mailbox_url,
-            json={'mailbox': aid.model_dump_json()},
+            json={
+                'mailbox': aid.model_dump_json(),
+                'behavior': ','.join(behavior.behavior_mro()),
+            },
         )
         response.raise_for_status()
         logger.debug('Registered %s in %s', aid, self)
@@ -181,6 +186,9 @@ class HttpExchange(ExchangeMixin):
     ) -> tuple[AgentId[Any], ...]:
         """Discover peer agents with a given behavior.
 
+        Warning:
+            Discoverability is not implemented on the HTTP exchange.
+
         Args:
             behavior: Behavior type of interest.
             allow_subclasses: Return agents implementing subclasses of the
@@ -189,7 +197,21 @@ class HttpExchange(ExchangeMixin):
         Returns:
             Tuple of agent IDs implementing the behavior.
         """
-        ...
+        behavior_str = f'{behavior.__module__}.{behavior.__name__}'
+        response = self._session.get(
+            self._discover_url,
+            json={
+                'behavior': behavior_str,
+                'allow_subclasses': allow_subclasses,
+            },
+        )
+        response.raise_for_status()
+        agent_ids = [
+            aid
+            for aid in response.json()['agent_ids'].split(',')
+            if len(aid) > 0
+        ]
+        return tuple(AgentId(uid=uuid.UUID(aid)) for aid in agent_ids)
 
     def get_mailbox(self, uid: EntityId) -> HttpMailbox:
         """Get a client to a specific mailbox.
@@ -317,13 +339,20 @@ class HttpMailbox:
 class _MailboxManager:
     def __init__(self) -> None:
         self._mailboxes: dict[EntityId, AsyncQueue[Message]] = {}
+        self._behaviors: dict[AgentId[Any], tuple[str, ...]] = {}
 
     def check_mailbox(self, uid: EntityId) -> bool:
         return uid in self._mailboxes
 
-    def create_mailbox(self, uid: EntityId) -> None:
+    def create_mailbox(
+        self,
+        uid: EntityId,
+        behavior: tuple[str, ...] | None = None,
+    ) -> None:
         if uid not in self._mailboxes or self._mailboxes[uid].closed():
             self._mailboxes[uid] = AsyncQueue()
+            if behavior is not None and isinstance(uid, AgentId):
+                self._behaviors[uid] = behavior
             logger.info('Created mailbox for %s', uid)
 
     async def terminate(self, uid: EntityId) -> None:
@@ -331,6 +360,21 @@ class _MailboxManager:
         if mailbox is not None:
             await mailbox.close()
             logger.info('Closed mailbox for %s', uid)
+
+    async def discover(
+        self,
+        behavior: str,
+        allow_subclasses: bool,
+    ) -> list[AgentId[Any]]:
+        found: list[AgentId[Any]] = []
+        for aid, behaviors in self._behaviors.items():
+            if self._mailboxes[aid].closed():
+                continue
+            if behavior == behaviors[0] or (
+                allow_subclasses and behavior in behaviors
+            ):
+                found.append(aid)
+        return found
 
     async def get(self, uid: EntityId) -> Message:
         try:
@@ -361,13 +405,17 @@ async def _create_mailbox_route(request: Request) -> Response:
         mailbox_id: EntityId = TypeAdapter(EntityId).validate_json(
             raw_mailbox_id,
         )
+        behavior_raw = data.get('behavior', None)
+        behavior = (
+            behavior_raw.split(',') if behavior_raw is not None else None
+        )
     except (KeyError, ValidationError):
         return Response(
             status=_BAD_REQUEST_CODE,
             text='Missing or invalid mailbox ID',
         )
 
-    manager.create_mailbox(mailbox_id)
+    manager.create_mailbox(mailbox_id, behavior)
     return Response(status=_OKAY_CODE)
 
 
@@ -388,6 +436,25 @@ async def _terminate_route(request: Request) -> Response:
 
     await manager.terminate(mailbox_id)
     return Response(status=_OKAY_CODE)
+
+
+async def _discover_route(request: Request) -> Response:
+    data = await request.json()
+    manager: _MailboxManager = request.app[MANAGER_KEY]
+
+    try:
+        behavior = data['behavior']
+        allow_subclasses = data['allow_subclasses']
+    except (KeyError, ValidationError):
+        return Response(
+            status=_BAD_REQUEST_CODE,
+            text='Missing or invalid arguments',
+        )
+
+    agent_ids = await manager.discover(behavior, allow_subclasses)
+    return json_response(
+        {'agent_ids': ','.join(str(aid.uid) for aid in agent_ids)},
+    )
 
 
 async def _check_mailbox_route(request: Request) -> Response:
@@ -468,6 +535,7 @@ def create_app() -> Application:
     app.router.add_get('/mailbox', _check_mailbox_route)
     app.router.add_put('/message', _send_message_route)
     app.router.add_get('/message', _recv_message_route)
+    app.router.add_get('/discover', _discover_route)
 
     return app
 

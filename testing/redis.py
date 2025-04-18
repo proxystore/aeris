@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import fnmatch
+from collections.abc import Generator
 from typing import Any
 
 
@@ -46,6 +48,11 @@ class MockRedis:
         if key not in self.lists:
             self.lists[key] = []
         self.lists[key].extend(values)
+
+    def scan_iter(self, pattern: str) -> Generator[str, None, None]:
+        for key in self.values:
+            if fnmatch.fnmatch(key, pattern):
+                yield key
 
     def set(self, key: str, value: str) -> None:
         self.values[key] = value

@@ -18,6 +18,7 @@ from aeris.exchange.thread import ThreadExchange
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
 from aeris.message import PingRequest
+from testing.behavior import EmptyBehavior
 
 
 @pytest.fixture
@@ -53,7 +54,7 @@ def test_basic_usage(
         resolve_async=resolve_async,
     ) as wrapped_exchange:
         src = wrapped_exchange.register_client()
-        dest = wrapped_exchange.register_client()
+        dest = wrapped_exchange.register_agent(EmptyBehavior)
         mailbox = wrapped_exchange.get_mailbox(dest)
         assert mailbox.exchange is wrapped_exchange
         assert mailbox.mailbox_id == dest
@@ -95,6 +96,8 @@ def test_basic_usage(
             response.result,
         )
         assert response.result == received.result
+
+        assert wrapped_exchange.discover(EmptyBehavior) == (dest,)
 
         mailbox.close()
         wrapped_exchange.terminate(src)

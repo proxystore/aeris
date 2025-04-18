@@ -31,7 +31,7 @@ class ThreadExchange(ExchangeMixin):
 
     def __init__(self) -> None:
         self._queues: dict[EntityId, Queue[Message]] = {}
-        self._behaviors: dict[EntityId, Behavior] = {}
+        self._behaviors: dict[AgentId[Any], type[Behavior]] = {}
 
     def __getstate__(self) -> None:
         raise pickle.PicklingError(
@@ -69,6 +69,7 @@ class ThreadExchange(ExchangeMixin):
         aid = AgentId.new(name=name) if agent_id is None else agent_id
         if aid not in self._queues or self._queues[aid].closed():
             self._queues[aid] = Queue()
+            self._behaviors[aid] = behavior
             logger.debug('Registered %s in %s', aid, self)
         return aid
 
@@ -85,9 +86,8 @@ class ThreadExchange(ExchangeMixin):
             Unique identifier for the client's mailbox.
         """
         cid = ClientId.new(name=name)
-        if cid not in self._queues or self._queues[cid].closed():
-            self._queues[cid] = Queue()
-            logger.debug('Registered %s in %s', cid, self)
+        self._queues[cid] = Queue()
+        logger.debug('Registered %s in %s', cid, self)
         return cid
 
     def terminate(self, uid: EntityId) -> None:
@@ -102,6 +102,8 @@ class ThreadExchange(ExchangeMixin):
         queue = self._queues.get(uid, None)
         if queue is not None and not queue.closed():
             queue.close()
+            if isinstance(uid, AgentId):
+                self._behaviors.pop(uid, None)
             logger.debug('Closed mailbox for %s (%s)', uid, self)
 
     def discover(
@@ -120,7 +122,14 @@ class ThreadExchange(ExchangeMixin):
         Returns:
             Tuple of agent IDs implementing the behavior.
         """
-        ...
+        found: list[AgentId[Any]] = []
+        for aid, type_ in self._behaviors.items():
+            if behavior is type_ or (
+                allow_subclasses and issubclass(type_, behavior)
+            ):
+                found.append(aid)
+        alive = tuple(aid for aid in found if not self._queues[aid].closed())
+        return alive
 
     def get_mailbox(self, uid: EntityId) -> ThreadMailbox:
         """Get a client to a specific mailbox.

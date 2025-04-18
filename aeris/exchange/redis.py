@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import enum
 import logging
+import uuid
 from typing import Any
 from typing import get_args
 from typing import TypeVar
@@ -93,10 +94,13 @@ class RedisExchange(ExchangeMixin):
         return f'{type(self).__name__}<{self.hostname}:{self.port}>'
 
     def _active_key(self, uid: EntityId) -> str:
-        return f'{uid.uid}-active'
+        return f'active:{uid.uid}'
+
+    def _behavior_key(self, uid: AgentId[Any]) -> str:
+        return f'behavior:{uid.uid}'
 
     def _queue_key(self, uid: EntityId) -> str:
-        return f'{uid.uid}-queue'
+        return f'queue:{uid.uid}'
 
     def close(self) -> None:
         """Close the exchange interface."""
@@ -124,6 +128,10 @@ class RedisExchange(ExchangeMixin):
         """
         aid = AgentId.new(name=name) if agent_id is None else agent_id
         self._client.set(self._active_key(aid), _MailboxState.ACTIVE.value)
+        self._client.set(
+            self._behavior_key(aid),
+            ','.join(behavior.behavior_mro()),
+        )
         logger.debug('Registered %s in %s', aid, self)
         return aid
 
@@ -159,6 +167,8 @@ class RedisExchange(ExchangeMixin):
         # the entity waiting on messages to the mailbox to stop blocking.
         # This assumes that only one entity is reading from the mailbox.
         self._client.rpush(self._queue_key(uid), _CLOSE_SENTINEL)
+        if isinstance(uid, AgentId):
+            self._client.delete(self._behavior_key(uid))
         logger.debug('Closed mailbox for %s (%s)', uid, self)
 
     def discover(
@@ -168,6 +178,9 @@ class RedisExchange(ExchangeMixin):
     ) -> tuple[AgentId[Any], ...]:
         """Discover peer agents with a given behavior.
 
+        Warning:
+            This method is O(n) and scans all keys in the Redis server.
+
         Args:
             behavior: Behavior type of interest.
             allow_subclasses: Return agents implementing subclasses of the
@@ -176,7 +189,21 @@ class RedisExchange(ExchangeMixin):
         Returns:
             Tuple of agent IDs implementing the behavior.
         """
-        ...
+        found: list[AgentId[Any]] = []
+        fqp = f'{behavior.__module__}.{behavior.__name__}'
+        for key in self._client.scan_iter('behavior:*'):
+            mro_str = self._client.get(key)
+            assert isinstance(mro_str, str)
+            mro = mro_str.split(',')
+            if fqp == mro[0] or (allow_subclasses and fqp in mro):
+                aid: AgentId[Any] = AgentId(uid=uuid.UUID(key.split(':')[-1]))
+                found.append(aid)
+        active: list[AgentId[Any]] = []
+        for aid in found:
+            status = self._client.get(self._active_key(aid))
+            if status == _MailboxState.ACTIVE.value:  # pragma: no branch
+                active.append(aid)
+        return tuple(active)
 
     def get_mailbox(self, uid: EntityId) -> RedisMailbox:
         """Get a client to a specific mailbox.

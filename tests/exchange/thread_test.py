@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+from aeris.behavior import Behavior
 from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
@@ -77,3 +78,21 @@ def test_non_pickleable() -> None:
     with ThreadExchange() as exchange:
         with pytest.raises(pickle.PicklingError):
             pickle.dumps(exchange)
+
+
+def test_discover() -> None:
+    class A(Behavior): ...
+
+    class B(Behavior): ...
+
+    class C(B): ...
+
+    with ThreadExchange() as exchange:
+        bid = exchange.register_agent(B)
+        cid = exchange.register_agent(C)
+        did = exchange.register_agent(C)
+        exchange.terminate(did)
+
+        assert len(exchange.discover(A)) == 0
+        assert exchange.discover(B, allow_subclasses=False) == (bid,)
+        assert exchange.discover(B, allow_subclasses=True) == (bid, cid)

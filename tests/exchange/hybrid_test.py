@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import logging
 import pickle
+import uuid
 from unittest import mock
 
 import pytest
 
+from aeris.behavior import Behavior
 from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
+from aeris.exchange.hybrid import base32_to_uuid
 from aeris.exchange.hybrid import HybridExchange
 from aeris.exchange.hybrid import HybridMailbox
+from aeris.exchange.hybrid import uuid_to_base32
 from aeris.identifier import ClientId
 from aeris.message import PingRequest
 from aeris.socket import open_port
@@ -165,3 +169,32 @@ def test_send_to_mailbox_bad_cached_address(mock_redis) -> None:
         exchange.send(aid, message)
         with HybridMailbox(aid, exchange, port=port2) as mailbox:
             assert mailbox.recv(timeout=TEST_CONNECTION_TIMEOUT) == message
+
+
+class A(Behavior): ...
+
+
+class B(Behavior): ...
+
+
+class C(B): ...
+
+
+@mock.patch('redis.Redis', side_effect=MockRedis)
+def test_exchange_discover(mock_redis) -> None:
+    with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
+        bid = exchange.register_agent(B)
+        cid = exchange.register_agent(C)
+        did = exchange.register_agent(C)
+        exchange.terminate(did)
+
+        assert len(exchange.discover(A)) == 0
+        assert exchange.discover(B, allow_subclasses=False) == (bid,)
+        assert exchange.discover(B, allow_subclasses=True) == (bid, cid)
+
+
+def test_uuid_encoding() -> None:
+    for _ in range(3):
+        uid = uuid.uuid4()
+        encoded = uuid_to_base32(uid)
+        assert base32_to_uuid(encoded) == uid

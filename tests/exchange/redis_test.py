@@ -6,6 +6,7 @@ from unittest import mock
 
 import pytest
 
+from aeris.behavior import Behavior
 from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import Exchange
@@ -106,3 +107,25 @@ def test_exchange_serialization(mock_redis) -> None:
         reconstructed = pickle.loads(pickled)
         assert isinstance(reconstructed, RedisExchange)
         reconstructed.close()
+
+
+class A(Behavior): ...
+
+
+class B(Behavior): ...
+
+
+class C(B): ...
+
+
+@mock.patch('redis.Redis', side_effect=MockRedis)
+def test_exchange_discover(mock_redis) -> None:
+    with RedisExchange('localhost', port=0) as exchange:
+        bid = exchange.register_agent(B)
+        cid = exchange.register_agent(C)
+        did = exchange.register_agent(C)
+        exchange.terminate(did)
+
+        assert len(exchange.discover(A)) == 0
+        assert exchange.discover(B, allow_subclasses=False) == (bid,)
+        assert exchange.discover(B, allow_subclasses=True) == (bid, cid)

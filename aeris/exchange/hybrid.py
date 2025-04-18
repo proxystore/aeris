@@ -134,13 +134,16 @@ class HybridExchange(ExchangeMixin):
         return f'{type(self).__name__}<{redis_addr}; {self._namespace}>'
 
     def _address_key(self, uid: EntityId) -> str:
-        return f'{self._namespace}:{uuid_to_base32(uid.uid)}:address'
+        return f'{self._namespace}:address:{uuid_to_base32(uid.uid)}'
+
+    def _behavior_key(self, aid: AgentId[Any]) -> str:
+        return f'{self._namespace}:behavior:{uuid_to_base32(aid.uid)}'
 
     def _status_key(self, uid: EntityId) -> str:
-        return f'{self._namespace}:{uuid_to_base32(uid.uid)}:status'
+        return f'{self._namespace}:status:{uuid_to_base32(uid.uid)}'
 
     def _queue_key(self, uid: EntityId) -> str:
-        return f'{self._namespace}:{uuid_to_base32(uid.uid)}:queue'
+        return f'{self._namespace}:queue:{uuid_to_base32(uid.uid)}'
 
     def close(self) -> None:
         """Close the exchange interface."""
@@ -171,6 +174,10 @@ class HybridExchange(ExchangeMixin):
         self._redis_client.set(
             self._status_key(aid),
             _MailboxState.ACTIVE.value,
+        )
+        self._redis_client.set(
+            self._behavior_key(aid),
+            ','.join(behavior.behavior_mro()),
         )
         logger.debug('Registered %s in %s', aid, self)
         return aid
@@ -213,14 +220,20 @@ class HybridExchange(ExchangeMixin):
         # the entity waiting on messages to the mailbox to stop blocking.
         # This assumes that only one entity is reading from the mailbox.
         self._redis_client.rpush(self._queue_key(uid), _CLOSE_SENTINEL)
+        if isinstance(uid, AgentId):
+            self._redis_client.delete(self._behavior_key(uid))
         logger.debug('Closed mailbox for %s (%s)', uid, self)
 
     def discover(
         self,
         behavior: type[Behavior],
+        *,
         allow_subclasses: bool = True,
     ) -> tuple[AgentId[Any], ...]:
         """Discover peer agents with a given behavior.
+
+        Warning:
+            This method is O(n) and scans all keys in the Redis server.
 
         Args:
             behavior: Behavior type of interest.
@@ -230,7 +243,25 @@ class HybridExchange(ExchangeMixin):
         Returns:
             Tuple of agent IDs implementing the behavior.
         """
-        ...
+        found: list[AgentId[Any]] = []
+        fqp = f'{behavior.__module__}.{behavior.__name__}'
+        for key in self._redis_client.scan_iter(
+            f'{self._namespace}:behavior:*',
+        ):
+            mro_str = self._redis_client.get(key)
+            assert isinstance(mro_str, str)
+            mro = mro_str.split(',')
+            if fqp == mro[0] or (allow_subclasses and fqp in mro):
+                aid: AgentId[Any] = AgentId(
+                    uid=base32_to_uuid(key.split(':')[-1]),
+                )
+                found.append(aid)
+        active: list[AgentId[Any]] = []
+        for aid in found:
+            status = self._redis_client.get(self._status_key(aid))
+            if status == _MailboxState.ACTIVE.value:  # pragma: no branch
+                active.append(aid)
+        return tuple(active)
 
     def get_mailbox(self, uid: EntityId) -> HybridMailbox:
         """Get a client to a specific mailbox.
@@ -550,6 +581,14 @@ class HybridMailbox(NoPickleMixin):
             return self._messages.get(timeout=timeout)
         except QueueClosedError:
             raise MailboxClosedError(self.mailbox_id) from None
+
+
+def base32_to_uuid(uid: str) -> uuid.UUID:
+    """Parse a base32 string as a UUID."""
+    padding = '=' * ((8 - len(uid) % 8) % 8)
+    padded = uid + padding
+    uid_bytes = base64.b32decode(padded)
+    return uuid.UUID(bytes=uid_bytes)
 
 
 def uuid_to_base32(uid: uuid.UUID) -> str:
