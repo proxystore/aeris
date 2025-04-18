@@ -43,6 +43,7 @@ from aiohttp.web import Request
 from aiohttp.web import Response
 from aiohttp.web import run_app
 from aiohttp.web import TCPSite
+from pydantic import TypeAdapter
 from pydantic import ValidationError
 
 from aeris.behavior import Behavior
@@ -52,7 +53,6 @@ from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import AsyncQueue
 from aeris.exchange.queue import QueueClosedError
 from aeris.identifier import AgentIdentifier
-from aeris.identifier import BaseIdentifier
 from aeris.identifier import Identifier
 from aeris.logging import init_logging
 from aeris.message import BaseMessage
@@ -320,7 +320,9 @@ async def _create_mailbox_route(request: Request) -> Response:
 
     try:
         raw_mailbox_id = data['mailbox']
-        mailbox_id = BaseIdentifier.model_from_json(raw_mailbox_id)
+        mailbox_id: Identifier = TypeAdapter(Identifier).validate_json(
+            raw_mailbox_id,
+        )
     except (KeyError, ValidationError):
         return Response(
             status=_BAD_REQUEST_CODE,
@@ -337,7 +339,9 @@ async def _close_mailbox_route(request: Request) -> Response:
 
     try:
         raw_mailbox_id = data['mailbox']
-        mailbox_id = BaseIdentifier.model_from_json(raw_mailbox_id)
+        mailbox_id: Identifier = TypeAdapter(Identifier).validate_json(
+            raw_mailbox_id,
+        )
     except (KeyError, ValidationError):
         return Response(
             status=_BAD_REQUEST_CODE,
@@ -354,7 +358,9 @@ async def _check_mailbox_route(request: Request) -> Response:
 
     try:
         raw_mailbox_id = data['mailbox']
-        mailbox_id = BaseIdentifier.model_from_json(raw_mailbox_id)
+        mailbox_id: Identifier = TypeAdapter(Identifier).validate_json(
+            raw_mailbox_id,
+        )
     except (KeyError, ValidationError):
         return Response(
             status=_BAD_REQUEST_CODE,
@@ -394,7 +400,9 @@ async def _recv_message_route(request: Request) -> Response:
 
     try:
         raw_mailbox_id = data['mailbox']
-        mailbox_id = BaseIdentifier.model_from_json(raw_mailbox_id)
+        mailbox_id: Identifier = TypeAdapter(Identifier).validate_json(
+            raw_mailbox_id,
+        )
     except (KeyError, ValidationError):
         return Response(
             status=_BAD_REQUEST_CODE,

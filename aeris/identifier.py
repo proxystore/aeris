@@ -17,23 +17,18 @@ else:  # pragma: <3.11 cover
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
-from pydantic import TypeAdapter
 
 # Normally this would be bound=Behavior, but Pydantic's mypy plugin crashes
 # here. See https://github.com/pydantic/pydantic/issues/11454
 BehaviorT = TypeVar('BehaviorT')
 
 
-class BaseIdentifier(BaseModel):
-    """Unique identifier of an entity in a multi-agent system.
+class AgentIdentifier(BaseModel, Generic[BehaviorT]):
+    """Unique identifier of an agent in a multi-agent system."""
 
-    Internally an entity is represented by a UUID. An identify can also
-    have an optional name which is only used for human-readability in logging.
-
-    Args:
-        uid: Unique identifier for the entity.
-        name: Optional human-readable name for the entity.
-    """
+    uid: uuid.UUID = Field()
+    name: Optional[str] = Field(None)  # noqa: UP007
+    role: Literal['agent'] = Field('agent', repr=False)
 
     model_config = ConfigDict(
         extra='forbid',
@@ -41,51 +36,57 @@ class BaseIdentifier(BaseModel):
         validate_default=True,
     )
 
-    uid: uuid.UUID = Field()
-    role: Literal['agent', 'client'] | None = Field(None)
-    name: Optional[str] = Field(None)  # noqa: UP007
+    def __eq__(self, other: object, /) -> bool:
+        return isinstance(other, AgentIdentifier) and self.uid == other.uid
+
+    def __hash__(self) -> int:
+        return hash(self.role) + hash(self.uid)
+
+    def __str__(self) -> str:
+        name = self.name if self.name is not None else str(self.uid)[:8]
+        return f'AgentID<{name}>'
 
     @classmethod
     def new(cls, name: str | None = None) -> Self:
-        """Create a new entity identifier.
+        """Create a new identifier.
 
         Args:
             name: Optional human-readable name for the entity.
         """
         return cls(uid=uuid.uuid4(), name=name)
 
-    @classmethod
-    def model_from_json(cls, data: str) -> Identifier:
-        """Reconstruct an identifier from a JSON dump."""
-        return TypeAdapter(Identifier).validate_json(data)
+
+class ClientIdentifier(BaseModel):
+    """Unique identifier of a client in a multi-agent system."""
+
+    uid: uuid.UUID = Field()
+    name: Optional[str] = Field(None)  # noqa: UP007
+    role: Literal['client'] = Field('client', repr=False)
+
+    model_config = ConfigDict(
+        extra='forbid',
+        frozen=True,
+        validate_default=True,
+    )
 
     def __eq__(self, other: object, /) -> bool:
-        if not isinstance(other, BaseIdentifier):
-            return False
-        return self.role == other.role and self.uid == other.uid
+        return isinstance(other, ClientIdentifier) and self.uid == other.uid
 
     def __hash__(self) -> int:
         return hash(self.role) + hash(self.uid)
 
-
-class AgentIdentifier(BaseIdentifier, Generic[BehaviorT]):
-    """Unique identifier of an agent in a multi-agent system."""
-
-    role: Literal['agent'] = Field('agent', repr=False)
-
-    def __str__(self) -> str:
-        name = self.name if self.name is not None else str(self.uid)[:8]
-        return f'AgentID<{name}>'
-
-
-class ClientIdentifier(BaseIdentifier):
-    """Unique identifier of a client in a multi-agent system."""
-
-    role: Literal['client'] = Field('client', repr=False)
-
     def __str__(self) -> str:
         name = self.name if self.name is not None else str(self.uid)[:8]
         return f'ClientID<{name}>'
+
+    @classmethod
+    def new(cls, name: str | None = None) -> Self:
+        """Create a new identifier.
+
+        Args:
+            name: Optional human-readable name for the entity.
+        """
+        return cls(uid=uuid.uuid4(), name=name)
 
 
 Identifier = Union[AgentIdentifier[Any], ClientIdentifier]
