@@ -370,7 +370,10 @@ class Agent(Generic[BehaviorT]):
                 # cases we don't actually want to close it permanently. This
                 # means there is a race where the mailbox is temporarily
                 # closed.
-                self.exchange.create_mailbox(self.agent_id)
+                self.exchange.register_agent(
+                    type(self.behavior),
+                    agent_id=self.agent_id,
+                )
 
             self.behavior.on_shutdown()
 

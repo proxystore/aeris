@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from collections.abc import Mapping
 from typing import Any
 from typing import Callable
+from typing import TypeVar
 
 from proxystore.proxy import Proxy
 from proxystore.store import get_or_create_store
@@ -17,11 +18,14 @@ from aeris.exchange import Exchange
 from aeris.exchange import ExchangeMixin
 from aeris.exchange import Mailbox
 from aeris.identifier import AgentId
+from aeris.identifier import ClientId
 from aeris.identifier import EntityId
 from aeris.message import ActionRequest
 from aeris.message import ActionResponse
 from aeris.message import Message
 from aeris.serialize import NoPickleMixin
+
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
 def _proxy_item(
@@ -115,16 +119,45 @@ class ProxyStoreExchange(ExchangeMixin):
         """
         self.exchange.close()
 
-    def create_mailbox(self, uid: EntityId) -> None:
-        """Create the mailbox in the exchange for a new entity.
-
-        Note:
-            This method is a no-op if the mailbox already exists.
+    def register_agent(
+        self,
+        behavior: type[BehaviorT],
+        *,
+        agent_id: AgentId[BehaviorT] | None = None,
+        name: str | None = None,
+    ) -> AgentId[BehaviorT]:
+        """Create a new agent identifier and associated mailbox.
 
         Args:
-            uid: Entity identifier used as the mailbox address.
+            behavior: Type of the behavior this agent will implement.
+            agent_id: Specify the ID of the agent. Randomly generated
+                default.
+            name: Optional human-readable name for the agent. Ignored if
+                `agent_id` is provided.
+
+        Returns:
+            Unique identifier for the agent's mailbox.
         """
-        self.exchange.create_mailbox(uid)
+        return self.exchange.register_agent(
+            behavior,
+            agent_id=agent_id,
+            name=name,
+        )
+
+    def register_client(
+        self,
+        *,
+        name: str | None = None,
+    ) -> ClientId:
+        """Create a new client identifier and associated mailbox.
+
+        Args:
+            name: Optional human-readable name for the client.
+
+        Returns:
+            Unique identifier for the client's mailbox.
+        """
+        return self.exchange.register_client(name=name)
 
     def terminate(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.

@@ -37,12 +37,14 @@ def test_simple_exchange_repr() -> None:
 
 def test_create_terminate(http_exchange_server: tuple[str, int]) -> None:
     host, port = http_exchange_server
-    cid = ClientId.new()
     with HttpExchange(host, port) as exchange:
-        exchange.create_mailbox(cid)
-        exchange.create_mailbox(cid)  # Idempotency check
-        exchange.terminate(cid)
-        exchange.terminate(cid)  # Idempotency check
+        aid = exchange.register_agent(EmptyBehavior)
+        exchange.register_agent(
+            EmptyBehavior,
+            agent_id=aid,
+        )  # Idempotency check
+        exchange.terminate(aid)
+        exchange.terminate(aid)  # Idempotency check
 
 
 def test_create_mailbox_bad_identifier(

@@ -22,8 +22,8 @@ def test_basic_usage() -> None:
         assert isinstance(str(exchange), str)
 
         aid = exchange.register_agent(EmptyBehavior)
+        exchange.register_agent(EmptyBehavior, agent_id=aid)
         cid = exchange.register_client()
-        exchange.create_mailbox(cid)  # Idempotency check
 
         assert isinstance(aid, AgentId)
         assert isinstance(cid, ClientId)

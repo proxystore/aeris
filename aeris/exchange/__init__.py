@@ -46,14 +46,35 @@ class Exchange(Protocol):
         """
         ...
 
-    def create_mailbox(self, uid: EntityId) -> None:
-        """Create the mailbox in the exchange for a new entity.
-
-        Note:
-            This method is a no-op if the mailbox already exists.
+    def register_agent(
+        self,
+        behavior: type[BehaviorT],
+        *,
+        agent_id: AgentId[BehaviorT] | None = None,
+        name: str | None = None,
+    ) -> AgentId[BehaviorT]:
+        """Create a new agent identifier and associated mailbox.
 
         Args:
-            uid: Entity identifier used as the mailbox address.
+            behavior: Behavior type of the agent.
+            agent_id: Specify the ID of the agent. Randomly generated
+                default.
+            name: Optional human-readable name for the agent. Ignored if
+                `agent_id` is provided.
+
+        Returns:
+            Unique identifier for the agent's mailbox.
+        """
+        ...
+
+    def register_client(self, *, name: str | None = None) -> ClientId:
+        """Create a new client identifier and associated mailbox.
+
+        Args:
+            name: Optional human-readable name for the client.
+
+        Returns:
+            Unique identifier for the client's mailbox.
         """
         ...
 
@@ -68,31 +89,21 @@ class Exchange(Protocol):
         """
         ...
 
-    def register_agent(
+    def discover(
         self,
-        behavior: type[BehaviorT],
+        behavior: type[Behavior],
         *,
-        name: str | None = None,
-    ) -> AgentId[BehaviorT]:
-        """Create a new agent identifier and associated mailbox.
+        allow_subclasses: bool = True,
+    ) -> tuple[AgentId[Any], ...]:
+        """Discover peer agents with a given behavior.
 
         Args:
-            behavior: Behavior type of the agent.
-            name: Optional human-readable name for the agent.
+            behavior: Behavior type of interest.
+            allow_subclasses: Return agents implementing subclasses of the
+                behavior.
 
         Returns:
-            Unique identifier for the agent's mailbox.
-        """
-        ...
-
-    def register_client(self, name: str | None = None) -> ClientId:
-        """Create a new client identifier and associated mailbox.
-
-        Args:
-            name: Optional human-readable name for the client.
-
-        Returns:
-            Unique identifier for the client's mailbox.
+            Tuple of agent IDs implementing the behavior.
         """
         ...
 
@@ -118,24 +129,6 @@ class Exchange(Protocol):
             BadEntityIdError: if a mailbox for `aid` does not exist.
             TypeError: if `aid` is not an instance of
                 [`AgentId`][aeris.identifier.AgentId].
-        """
-        ...
-
-    def discover(
-        self,
-        behavior: type[Behavior],
-        *,
-        allow_subclasses: bool = True,
-    ) -> tuple[AgentId[Any], ...]:
-        """Discover peer agents with a given behavior.
-
-        Args:
-            behavior: Behavior type of interest.
-            allow_subclasses: Return agents implementing subclasses of the
-                behavior.
-
-        Returns:
-            Tuple of agent IDs implementing the behavior.
         """
         ...
 
@@ -190,41 +183,6 @@ class ExchangeMixin:
 
     def __str__(self) -> str:
         return f'{type(self).__name__}<{id(self)}>'
-
-    def register_agent(
-        self: Exchange,
-        behavior: type[BehaviorT],
-        *,
-        name: str | None = None,
-    ) -> AgentId[BehaviorT]:
-        """Create a new agent identifier and associated mailbox.
-
-        Args:
-            behavior: Type of the behavior this agent will implement.
-            name: Optional human-readable name for the agent.
-
-        Returns:
-            Unique identifier for the agent's mailbox.
-        """
-        aid: AgentId[BehaviorT] = AgentId.new(name=name)
-        self.create_mailbox(aid)
-        return aid
-
-    def register_client(
-        self: Exchange,
-        name: str | None = None,
-    ) -> ClientId:
-        """Create a new client identifier and associated mailbox.
-
-        Args:
-            name: Optional human-readable name for the client.
-
-        Returns:
-            Unique identifier for the client's mailbox.
-        """
-        cid = ClientId.new(name=name)
-        self.create_mailbox(cid)
-        return cid
 
     def get_handle(
         self: Exchange,

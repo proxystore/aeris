@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import pickle
 from typing import Any
+from typing import TypeVar
 
 from aeris.behavior import Behavior
 from aeris.exception import BadEntityIdError
@@ -11,10 +12,13 @@ from aeris.exchange import ExchangeMixin
 from aeris.exchange.queue import Queue
 from aeris.exchange.queue import QueueClosedError
 from aeris.identifier import AgentId
+from aeris.identifier import ClientId
 from aeris.identifier import EntityId
 from aeris.message import Message
 
 logger = logging.getLogger(__name__)
+
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
 class ThreadExchange(ExchangeMixin):
@@ -43,18 +47,48 @@ class ThreadExchange(ExchangeMixin):
             queue.close()
         logger.debug('Closed exchange (%s)', self)
 
-    def create_mailbox(self, uid: EntityId) -> None:
-        """Create the mailbox in the exchange for a new entity.
-
-        Note:
-            This method is a no-op if the mailbox already exists.
+    def register_agent(
+        self,
+        behavior: type[BehaviorT],
+        *,
+        agent_id: AgentId[BehaviorT] | None = None,
+        name: str | None = None,
+    ) -> AgentId[BehaviorT]:
+        """Create a new agent identifier and associated mailbox.
 
         Args:
-            uid: Entity identifier used as the mailbox address.
+            behavior: Type of the behavior this agent will implement.
+            agent_id: Specify the ID of the agent. Randomly generated
+                default.
+            name: Optional human-readable name for the agent. Ignored if
+                `agent_id` is provided.
+
+        Returns:
+            Unique identifier for the agent's mailbox.
         """
-        if uid not in self._queues or self._queues[uid].closed():
-            self._queues[uid] = Queue()
-            logger.debug('Created mailbox for %s (%s)', uid, self)
+        aid = AgentId.new(name=name) if agent_id is None else agent_id
+        if aid not in self._queues or self._queues[aid].closed():
+            self._queues[aid] = Queue()
+            logger.debug('Registered %s in %s', aid, self)
+        return aid
+
+    def register_client(
+        self,
+        name: str | None = None,
+    ) -> ClientId:
+        """Create a new client identifier and associated mailbox.
+
+        Args:
+            name: Optional human-readable name for the client.
+
+        Returns:
+            Unique identifier for the client's mailbox.
+        """
+        cid = ClientId.new(name=name)
+        if cid not in self._queues or self._queues[cid].closed():
+            self._queues[cid] = Queue()
+            logger.debug('Registered %s in %s', cid, self)
+        return cid
 
     def terminate(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.

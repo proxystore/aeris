@@ -4,6 +4,7 @@ import enum
 import logging
 from typing import Any
 from typing import get_args
+from typing import TypeVar
 
 import redis
 
@@ -12,12 +13,16 @@ from aeris.exception import BadEntityIdError
 from aeris.exception import MailboxClosedError
 from aeris.exchange import ExchangeMixin
 from aeris.identifier import AgentId
+from aeris.identifier import ClientId
 from aeris.identifier import EntityId
 from aeris.message import BaseMessage
 from aeris.message import Message
 from aeris.serialize import NoPickleMixin
 
 logger = logging.getLogger(__name__)
+
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
+
 _CLOSE_SENTINEL = b'<CLOSED>'
 
 
@@ -98,17 +103,47 @@ class RedisExchange(ExchangeMixin):
         self._client.close()
         logger.debug('Closed exchange (%s)', self)
 
-    def create_mailbox(self, uid: EntityId) -> None:
-        """Create the mailbox in the exchange for a new entity.
-
-        Note:
-            This method is a no-op if the mailbox already exists.
+    def register_agent(
+        self,
+        behavior: type[BehaviorT],
+        *,
+        agent_id: AgentId[BehaviorT] | None = None,
+        name: str | None = None,
+    ) -> AgentId[BehaviorT]:
+        """Create a new agent identifier and associated mailbox.
 
         Args:
-            uid: Entity identifier used as the mailbox address.
+            behavior: Type of the behavior this agent will implement.
+            agent_id: Specify the ID of the agent. Randomly generated
+                default.
+            name: Optional human-readable name for the agent. Ignored if
+                `agent_id` is provided.
+
+        Returns:
+            Unique identifier for the agent's mailbox.
         """
-        self._client.set(self._active_key(uid), _MailboxState.ACTIVE.value)
-        logger.debug('Created mailbox for %s (%s)', uid, self)
+        aid = AgentId.new(name=name) if agent_id is None else agent_id
+        self._client.set(self._active_key(aid), _MailboxState.ACTIVE.value)
+        logger.debug('Registered %s in %s', aid, self)
+        return aid
+
+    def register_client(
+        self,
+        *,
+        name: str | None = None,
+    ) -> ClientId:
+        """Create a new client identifier and associated mailbox.
+
+        Args:
+            name: Optional human-readable name for the client.
+
+        Returns:
+            Unique identifier for the client's mailbox.
+        """
+        cid = ClientId.new(name=name)
+        self._client.set(self._active_key(cid), _MailboxState.ACTIVE.value)
+        logger.debug('Registered %s in %s', cid, self)
+        return cid
 
     def terminate(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
