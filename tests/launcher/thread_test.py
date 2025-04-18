@@ -44,7 +44,7 @@ def test_launch_agents(exchange: Exchange) -> None:
 
 def test_wait_bad_identifier(exchange: Exchange) -> None:
     with ThreadLauncher() as launcher:
-        agent_id = exchange.create_agent(EmptyBehavior)
+        agent_id = exchange.register_agent(EmptyBehavior)
 
         with pytest.raises(BadEntityIdError):
             launcher.wait(agent_id)

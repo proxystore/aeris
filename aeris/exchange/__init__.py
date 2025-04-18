@@ -57,7 +57,7 @@ class Exchange(Protocol):
         """
         ...
 
-    def close_mailbox(self, uid: EntityId) -> None:
+    def terminate(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         Note:
@@ -68,7 +68,7 @@ class Exchange(Protocol):
         """
         ...
 
-    def create_agent(
+    def register_agent(
         self,
         behavior: type[BehaviorT],
         *,
@@ -85,7 +85,7 @@ class Exchange(Protocol):
         """
         ...
 
-    def create_client(self, name: str | None = None) -> ClientId:
+    def register_client(self, name: str | None = None) -> ClientId:
         """Create a new client identifier and associated mailbox.
 
         Args:
@@ -96,7 +96,7 @@ class Exchange(Protocol):
         """
         ...
 
-    def create_handle(
+    def get_handle(
         self,
         aid: AgentId[BehaviorT],
     ) -> UnboundRemoteHandle[BehaviorT]:
@@ -171,7 +171,7 @@ class ExchangeMixin:
     """Mixin class that adds basic methods to an exchange implementation.
 
     This adds a simple `repr`/`str`, context manager support, and the
-    `create_agent`, `create_client`, and `create_handle` methods.
+    `register_agent`, `register_client`, and `get_handle` methods.
     """
 
     def __enter__(self) -> Self:
@@ -191,7 +191,7 @@ class ExchangeMixin:
     def __str__(self) -> str:
         return f'{type(self).__name__}<{id(self)}>'
 
-    def create_agent(
+    def register_agent(
         self: Exchange,
         behavior: type[BehaviorT],
         *,
@@ -210,7 +210,7 @@ class ExchangeMixin:
         self.create_mailbox(aid)
         return aid
 
-    def create_client(
+    def register_client(
         self: Exchange,
         name: str | None = None,
     ) -> ClientId:
@@ -226,7 +226,7 @@ class ExchangeMixin:
         self.create_mailbox(cid)
         return cid
 
-    def create_handle(
+    def get_handle(
         self: Exchange,
         aid: AgentId[BehaviorT],
     ) -> UnboundRemoteHandle[BehaviorT]:

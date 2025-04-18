@@ -52,8 +52,8 @@ def test_basic_usage(
         should_proxy,
         resolve_async=resolve_async,
     ) as wrapped_exchange:
-        src = wrapped_exchange.create_client()
-        dest = wrapped_exchange.create_client()
+        src = wrapped_exchange.register_client()
+        dest = wrapped_exchange.register_client()
         mailbox = wrapped_exchange.get_mailbox(dest)
         assert mailbox.exchange is wrapped_exchange
         assert mailbox.mailbox_id == dest
@@ -97,8 +97,8 @@ def test_basic_usage(
         assert response.result == received.result
 
         mailbox.close()
-        wrapped_exchange.close_mailbox(src)
-        wrapped_exchange.close_mailbox(dest)
+        wrapped_exchange.terminate(src)
+        wrapped_exchange.terminate(dest)
 
 
 def test_serialize(

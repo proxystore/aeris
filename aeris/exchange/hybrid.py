@@ -158,7 +158,7 @@ class HybridExchange(ExchangeMixin):
         )
         logger.debug('Created mailbox for %s (%s)', uid, self)
 
-    def close_mailbox(self, uid: EntityId) -> None:
+    def terminate(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         This sets the state of the mailbox to inactive in the Redis server,

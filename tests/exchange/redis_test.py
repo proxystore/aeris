@@ -26,8 +26,8 @@ def test_basic_usage(mock_redis) -> None:
         assert isinstance(repr(exchange), str)
         assert isinstance(str(exchange), str)
 
-        aid = exchange.create_agent(EmptyBehavior)
-        cid = exchange.create_client()
+        aid = exchange.register_agent(EmptyBehavior)
+        cid = exchange.register_client()
         exchange.create_mailbox(cid)  # Idempotency check
 
         assert isinstance(aid, AgentId)
@@ -43,9 +43,9 @@ def test_basic_usage(mock_redis) -> None:
         mailbox.close()
         mailbox.close()  # Idempotency check
 
-        exchange.close_mailbox(aid)
-        exchange.close_mailbox(cid)
-        exchange.close_mailbox(cid)  # Idempotency check
+        exchange.terminate(aid)
+        exchange.terminate(cid)
+        exchange.terminate(cid)  # Idempotency check
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
@@ -61,9 +61,9 @@ def test_bad_identifier_error(mock_redis) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_mailbox_closed_error(mock_redis) -> None:
     with RedisExchange('localhost', port=0) as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
+        aid = exchange.register_agent(EmptyBehavior)
         mailbox = exchange.get_mailbox(aid)
-        exchange.close_mailbox(aid)
+        exchange.terminate(aid)
         with pytest.raises(MailboxClosedError):
             exchange.send(aid, PingRequest(src=aid, dest=aid))
         with pytest.raises(MailboxClosedError):
@@ -72,14 +72,14 @@ def test_mailbox_closed_error(mock_redis) -> None:
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
-def test_create_handle_to_client(mock_redis) -> None:
+def test_get_handle_to_client(mock_redis) -> None:
     with RedisExchange('localhost', port=0) as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
-        handle: RemoteHandle[Any] = exchange.create_handle(aid)
+        aid = exchange.register_agent(EmptyBehavior)
+        handle: RemoteHandle[Any] = exchange.get_handle(aid)
         handle.close()
 
         with pytest.raises(TypeError, match='Handle must be created from an'):
-            exchange.create_handle(ClientId.new())  # type: ignore[arg-type]
+            exchange.get_handle(ClientId.new())  # type: ignore[arg-type]
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
@@ -89,7 +89,7 @@ def test_mailbox_timeout(mock_redis) -> None:
         port=0,
         timeout=TEST_CONNECTION_TIMEOUT,
     ) as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
+        aid = exchange.register_agent(EmptyBehavior)
         mailbox = exchange.get_mailbox(aid)
         with pytest.raises(TimeoutError):
             mailbox.recv(timeout=0.001)

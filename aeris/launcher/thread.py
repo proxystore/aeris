@@ -89,7 +89,7 @@ class ThreadLauncher:
             Mailbox used to communicate with agent.
         """
         agent_id = (
-            exchange.create_agent(type(behavior))
+            exchange.register_agent(type(behavior))
             if agent_id is None
             else agent_id
         )
@@ -105,7 +105,7 @@ class ThreadLauncher:
         self._agents[agent_id] = _RunningAgent(agent, thread)
         logger.debug('Launched agent (%s; %s)', agent_id, behavior)
 
-        return exchange.create_handle(agent_id)
+        return exchange.get_handle(agent_id)
 
     def running(self) -> set[AgentId[Any]]:
         """Get a set of IDs for all running agents.

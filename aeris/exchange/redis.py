@@ -110,7 +110,7 @@ class RedisExchange(ExchangeMixin):
         self._client.set(self._active_key(uid), _MailboxState.ACTIVE.value)
         logger.debug('Created mailbox for %s (%s)', uid, self)
 
-    def close_mailbox(self, uid: EntityId) -> None:
+    def terminate(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         Note:

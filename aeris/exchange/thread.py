@@ -56,7 +56,7 @@ class ThreadExchange(ExchangeMixin):
             self._queues[uid] = Queue()
             logger.debug('Created mailbox for %s (%s)', uid, self)
 
-    def close_mailbox(self, uid: EntityId) -> None:
+    def terminate(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         Note:

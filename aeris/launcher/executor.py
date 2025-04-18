@@ -176,7 +176,7 @@ class ExecutorLauncher:
             Handle (unbound) used to interact with the agent.
         """
         agent_id = (
-            exchange.create_agent(type(behavior))
+            exchange.register_agent(type(behavior))
             if agent_id is None
             else agent_id
         )
@@ -185,7 +185,7 @@ class ExecutorLauncher:
         self._acbs[agent_id] = acb
         self._launch(agent_id)
 
-        return exchange.create_handle(agent_id)
+        return exchange.get_handle(agent_id)
 
     def running(self) -> set[AgentId[Any]]:
         """Get a set of IDs for all running agents.

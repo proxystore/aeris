@@ -21,8 +21,8 @@ def test_basic_usage() -> None:
         assert isinstance(repr(exchange), str)
         assert isinstance(str(exchange), str)
 
-        aid = exchange.create_agent(EmptyBehavior)
-        cid = exchange.create_client()
+        aid = exchange.register_agent(EmptyBehavior)
+        cid = exchange.register_client()
         exchange.create_mailbox(cid)  # Idempotency check
 
         assert isinstance(aid, AgentId)
@@ -37,9 +37,9 @@ def test_basic_usage() -> None:
             assert mailbox.recv() == message
 
         mailbox.close()
-        exchange.close_mailbox(aid)
-        exchange.close_mailbox(cid)
-        exchange.close_mailbox(cid)  # Idempotency check
+        exchange.terminate(aid)
+        exchange.terminate(cid)
+        exchange.terminate(cid)  # Idempotency check
 
 
 def test_bad_identifier_error() -> None:
@@ -53,9 +53,9 @@ def test_bad_identifier_error() -> None:
 
 def test_mailbox_closed_error() -> None:
     with ThreadExchange() as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
+        aid = exchange.register_agent(EmptyBehavior)
         mailbox = exchange.get_mailbox(aid)
-        exchange.close_mailbox(aid)
+        exchange.terminate(aid)
         with pytest.raises(MailboxClosedError):
             exchange.send(aid, PingRequest(src=aid, dest=aid))
         with pytest.raises(MailboxClosedError):
@@ -63,14 +63,14 @@ def test_mailbox_closed_error() -> None:
         mailbox.close()
 
 
-def test_create_handle_to_client() -> None:
+def test_get_handle_to_client() -> None:
     with ThreadExchange() as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
-        handle = exchange.create_handle(aid)
+        aid = exchange.register_agent(EmptyBehavior)
+        handle = exchange.get_handle(aid)
         handle.close()
 
         with pytest.raises(TypeError, match='Handle must be created from an'):
-            exchange.create_handle(ClientId.new())  # type: ignore[arg-type]
+            exchange.get_handle(ClientId.new())  # type: ignore[arg-type]
 
 
 def test_non_pickleable() -> None:

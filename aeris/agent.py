@@ -345,7 +345,7 @@ class Agent(Generic[BehaviorT]):
             # Cause the multiplexer message listener thread to exit by closing
             # the mailbox the multiplexer is listening to. This is done
             # first so we stop receiving new requests.
-            self._multiplexer.close_mailbox()
+            self._multiplexer.terminate()
             for future, name in self._loop_futures.items():
                 if name == '_multiplexer.listen':
                     future.result()

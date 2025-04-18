@@ -61,17 +61,17 @@ def test_send_bad_identifier(mock_redis) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_send_mailbox_closed(mock_redis) -> None:
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        uid = exchange.create_client()
-        exchange.close_mailbox(uid)
+        uid = exchange.register_client()
+        exchange.terminate(uid)
         message = PingRequest(src=uid, dest=uid)
         with pytest.raises(MailboxClosedError):
             exchange.send(uid, message)
 
 
 @mock.patch('redis.Redis', side_effect=MockRedis)
-def test_create_close_mailbox(mock_redis) -> None:
+def test_create_terminate(mock_redis) -> None:
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        uid = exchange.create_client()
+        uid = exchange.register_client()
         with exchange.get_mailbox(uid) as mailbox:
             assert mailbox.exchange is exchange
             assert mailbox.mailbox_id == uid
@@ -88,8 +88,8 @@ def test_create_mailbox_bad_identifier(mock_redis) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_send_to_mailbox_direct(mock_redis) -> None:
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
-        cid = exchange.create_client()
+        aid = exchange.register_agent(EmptyBehavior)
+        cid = exchange.register_client()
         with exchange.get_mailbox(aid) as mailbox:
             message = PingRequest(src=cid, dest=aid)
             for _ in range(3):
@@ -101,8 +101,8 @@ def test_send_to_mailbox_direct(mock_redis) -> None:
 def test_send_to_mailbox_indirect(mock_redis) -> None:
     messages = 3
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
-        cid = exchange.create_client()
+        aid = exchange.register_agent(EmptyBehavior)
+        cid = exchange.register_client()
         message = PingRequest(src=cid, dest=aid)
         for _ in range(messages):
             exchange.send(aid, message)
@@ -114,9 +114,9 @@ def test_send_to_mailbox_indirect(mock_redis) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_mailbox_recv_closed(mock_redis) -> None:
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
+        aid = exchange.register_agent(EmptyBehavior)
         with exchange.get_mailbox(aid) as mailbox:
-            exchange.close_mailbox(aid)
+            exchange.terminate(aid)
             with pytest.raises(MailboxClosedError):
                 mailbox.recv(timeout=TEST_SLEEP)
 
@@ -125,7 +125,7 @@ def test_mailbox_recv_closed(mock_redis) -> None:
 def test_mailbox_redis_error_logging(mock_redis, caplog) -> None:
     caplog.set_level(logging.ERROR)
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
+        aid = exchange.register_agent(EmptyBehavior)
         with mock.patch(
             'aeris.exchange.hybrid.HybridMailbox._pull_messages_from_redis',
             side_effect=RuntimeError('Mock thread error.'),
@@ -144,8 +144,8 @@ def test_mailbox_redis_error_logging(mock_redis, caplog) -> None:
 @mock.patch('redis.Redis', side_effect=MockRedis)
 def test_send_to_mailbox_bad_cached_address(mock_redis) -> None:
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
-        cid = exchange.create_client()
+        aid = exchange.register_agent(EmptyBehavior)
+        cid = exchange.register_client()
         message = PingRequest(src=cid, dest=aid)
         # Ensure mailboxes listen on different ports so addresses are different
         port1, port2 = open_port(), open_port()

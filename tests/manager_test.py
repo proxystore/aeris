@@ -42,7 +42,7 @@ def test_reply_to_requests_with_error() -> None:
         exchange=ThreadExchange(),
         launcher=ThreadLauncher(),
     ) as manager:
-        client_id = manager.exchange.create_client()
+        client_id = manager.exchange.register_client()
         request = PingRequest(src=client_id, dest=manager.mailbox_id)
         manager.exchange.send(request.dest, request)
         mailbox = manager.exchange.get_mailbox(client_id)
@@ -57,7 +57,7 @@ def test_wait_bad_identifier(exchange: ThreadExchange) -> None:
         exchange=ThreadExchange(),
         launcher=ThreadLauncher(),
     ) as manager:
-        agent_id = manager.exchange.create_agent(EmptyBehavior)
+        agent_id = manager.exchange.register_agent(EmptyBehavior)
 
         with pytest.raises(BadEntityIdError):
             manager.wait(agent_id)
@@ -80,7 +80,7 @@ def test_shutdown_bad_identifier(exchange: ThreadExchange) -> None:
         exchange=ThreadExchange(),
         launcher=ThreadLauncher(),
     ) as manager:
-        agent_id = manager.exchange.create_agent(EmptyBehavior)
+        agent_id = manager.exchange.register_agent(EmptyBehavior)
 
         with pytest.raises(BadEntityIdError):
             manager.shutdown(agent_id)

@@ -134,7 +134,7 @@ class MailboxMultiplexer(NoPickleMixin):
         Closes all handles bound to this mailbox and then closes the mailbox.
         """
         # This will cause listen() to return
-        self.close_mailbox()
+        self.terminate()
         self.close_bound_handles()
 
     def close_bound_handles(self) -> None:
@@ -144,9 +144,9 @@ class MailboxMultiplexer(NoPickleMixin):
             handle.close(wait_futures=False)
         logger.debug('Closed all handles bound to multiplexer (%s)', self)
 
-    def close_mailbox(self) -> None:
+    def terminate(self) -> None:
         """Close the mailbox."""
-        self.exchange.close_mailbox(self.mailbox_id)
+        self.exchange.terminate(self.mailbox_id)
         logger.debug('Closed mailbox of multiplexer (%s)', self)
 
     def listen(self) -> None:

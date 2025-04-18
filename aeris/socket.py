@@ -286,7 +286,7 @@ class SimpleSocketServer:
             writer.close()
             await writer.wait_closed()
 
-    async def _create_client_task(
+    async def _register_client_task(
         self,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
@@ -304,7 +304,7 @@ class SimpleSocketServer:
         """
         self._signal_stop = stop
         server = await asyncio.start_server(
-            self._create_client_task,
+            self._register_client_task,
             host=self.host,
             port=self.port,
         )

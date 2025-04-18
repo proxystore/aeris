@@ -35,14 +35,14 @@ def test_simple_exchange_repr() -> None:
         assert isinstance(str(exchange), str)
 
 
-def test_create_close_mailbox(http_exchange_server: tuple[str, int]) -> None:
+def test_create_terminate(http_exchange_server: tuple[str, int]) -> None:
     host, port = http_exchange_server
     cid = ClientId.new()
     with HttpExchange(host, port) as exchange:
         exchange.create_mailbox(cid)
         exchange.create_mailbox(cid)  # Idempotency check
-        exchange.close_mailbox(cid)
-        exchange.close_mailbox(cid)  # Idempotency check
+        exchange.terminate(cid)
+        exchange.terminate(cid)  # Idempotency check
 
 
 def test_create_mailbox_bad_identifier(
@@ -58,8 +58,8 @@ def test_create_mailbox_bad_identifier(
 def test_send_and_recv(http_exchange_server: tuple[str, int]) -> None:
     host, port = http_exchange_server
     with HttpExchange(host, port) as exchange:
-        cid = exchange.create_client()
-        aid = exchange.create_agent(EmptyBehavior)
+        cid = exchange.register_client()
+        aid = exchange.register_agent(EmptyBehavior)
 
         message = PingRequest(src=cid, dest=aid)
         exchange.send(aid, message)
@@ -81,8 +81,8 @@ def test_send_bad_identifer(http_exchange_server: tuple[str, int]) -> None:
 def test_send_mailbox_closed(http_exchange_server: tuple[str, int]) -> None:
     host, port = http_exchange_server
     with HttpExchange(host, port) as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
-        exchange.close_mailbox(aid)
+        aid = exchange.register_agent(EmptyBehavior)
+        exchange.terminate(aid)
         message = PingRequest(src=aid, dest=aid)
         with pytest.raises(MailboxClosedError):
             exchange.send(aid, message)
@@ -91,7 +91,7 @@ def test_send_mailbox_closed(http_exchange_server: tuple[str, int]) -> None:
 def test_recv_timeout(http_exchange_server: tuple[str, int]) -> None:
     host, port = http_exchange_server
     with HttpExchange(host, port) as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
+        aid = exchange.register_agent(EmptyBehavior)
         mailbox = exchange.get_mailbox(aid)
         with mock.patch.object(
             exchange._session,
@@ -105,8 +105,8 @@ def test_recv_timeout(http_exchange_server: tuple[str, int]) -> None:
 def test_recv_mailbox_closed(http_exchange_server: tuple[str, int]) -> None:
     host, port = http_exchange_server
     with HttpExchange(host, port) as exchange:
-        aid = exchange.create_agent(EmptyBehavior)
-        exchange.close_mailbox(aid)
+        aid = exchange.register_agent(EmptyBehavior)
+        exchange.terminate(aid)
         mailbox = exchange.get_mailbox(aid)
         with pytest.raises(MailboxClosedError):
             assert mailbox.recv(timeout=TEST_CONNECTION_TIMEOUT)
@@ -132,13 +132,13 @@ async def test_mailbox_manager_create_close() -> None:
     manager = _MailboxManager()
     uid = ClientId.new()
     # Should do nothing since mailbox doesn't exist
-    await manager.close_mailbox(uid)
+    await manager.terminate(uid)
     assert not manager.check_mailbox(uid)
     manager.create_mailbox(uid)
     assert manager.check_mailbox(uid)
     manager.create_mailbox(uid)  # Idempotent check
-    await manager.close_mailbox(uid)
-    await manager.close_mailbox(uid)  # Idempotent check
+    await manager.terminate(uid)
+    await manager.terminate(uid)  # Idempotent check
 
 
 @pytest.mark.asyncio
@@ -151,7 +151,7 @@ async def test_mailbox_manager_send_recv() -> None:
     await manager.put(message)
     assert await manager.get(uid) == message
 
-    await manager.close_mailbox(uid)
+    await manager.terminate(uid)
 
 
 @pytest.mark.asyncio
@@ -172,7 +172,7 @@ async def test_mailbox_manager_mailbox_closed() -> None:
     manager = _MailboxManager()
     uid = ClientId.new()
     manager.create_mailbox(uid)
-    await manager.close_mailbox(uid)
+    await manager.terminate(uid)
     message = PingRequest(src=uid, dest=uid)
 
     with pytest.raises(MailboxClosedError):
@@ -197,7 +197,7 @@ async def test_create_mailbox_validation_error(cli) -> None:
 
 
 @pytest.mark.asyncio
-async def test_close_mailbox_validation_error(cli) -> None:
+async def test_terminate_validation_error(cli) -> None:
     response = await cli.delete('/mailbox', json={'mailbox': 'foo'})
     assert response.status == _BAD_REQUEST_CODE
     assert await response.text() == 'Missing or invalid mailbox ID'

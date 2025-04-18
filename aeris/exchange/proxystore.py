@@ -126,7 +126,7 @@ class ProxyStoreExchange(ExchangeMixin):
         """
         self.exchange.create_mailbox(uid)
 
-    def close_mailbox(self, uid: EntityId) -> None:
+    def terminate(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         Note:
@@ -135,7 +135,7 @@ class ProxyStoreExchange(ExchangeMixin):
         Args:
             uid: Entity identifier of the mailbox to close.
         """
-        self.exchange.close_mailbox(uid)
+        self.exchange.terminate(uid)
 
     def discover(
         self,

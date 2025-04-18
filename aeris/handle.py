@@ -784,7 +784,7 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
         client_id: ClientId | None = None,
     ) -> None:
         if client_id is None:
-            client_id = exchange.create_client()
+            client_id = exchange.register_client()
         super().__init__(exchange, agent_id, client_id)
         assert self.mailbox_id is not None
         self._mailbox = self.exchange.get_mailbox(self.mailbox_id)
@@ -877,7 +877,7 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
                 'This likely means the listener thread crashed.',
             )
 
-        self.exchange.close_mailbox(self.mailbox_id)
+        self.exchange.terminate(self.mailbox_id)
         timeout = 5
         self._recv_thread.join(timeout=timeout)
         if self._recv_thread.is_alive():  # pragma: no cover

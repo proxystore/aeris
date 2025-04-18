@@ -10,7 +10,7 @@ Connect to the exchange through the client.
 from aeris.exchange.http import HttpExchange
 
 with HttpExchange('localhost', 1234) as exchange:
-    aid = exchange.create_agent()
+    aid = exchange.register_agent()
     mailbox = exchange.get_mailbox(aid)
     ...
     mailbox.close()
@@ -119,7 +119,7 @@ class HttpExchange(ExchangeMixin):
         response.raise_for_status()
         logger.debug('Created mailbox for %s (%s)', uid, self)
 
-    def close_mailbox(self, uid: EntityId) -> None:
+    def terminate(self, uid: EntityId) -> None:
         """Close the mailbox for an entity from the exchange.
 
         Note:
@@ -288,7 +288,7 @@ class _MailboxManager:
             self._mailboxes[uid] = AsyncQueue()
             logger.info('Created mailbox for %s', uid)
 
-    async def close_mailbox(self, uid: EntityId) -> None:
+    async def terminate(self, uid: EntityId) -> None:
         mailbox = self._mailboxes.get(uid, None)
         if mailbox is not None:
             await mailbox.close()
@@ -333,7 +333,7 @@ async def _create_mailbox_route(request: Request) -> Response:
     return Response(status=_OKAY_CODE)
 
 
-async def _close_mailbox_route(request: Request) -> Response:
+async def _terminate_route(request: Request) -> Response:
     data = await request.json()
     manager: _MailboxManager = request.app[MANAGER_KEY]
 
@@ -348,7 +348,7 @@ async def _close_mailbox_route(request: Request) -> Response:
             text='Missing or invalid mailbox ID',
         )
 
-    await manager.close_mailbox(mailbox_id)
+    await manager.terminate(mailbox_id)
     return Response(status=_OKAY_CODE)
 
 
@@ -426,7 +426,7 @@ def create_app() -> Application:
     app[MANAGER_KEY] = manager
 
     app.router.add_post('/mailbox', _create_mailbox_route)
-    app.router.add_delete('/mailbox', _close_mailbox_route)
+    app.router.add_delete('/mailbox', _terminate_route)
     app.router.add_get('/mailbox', _check_mailbox_route)
     app.router.add_put('/message', _send_message_route)
     app.router.add_get('/message', _recv_message_route)

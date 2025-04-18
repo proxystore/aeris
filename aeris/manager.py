@@ -57,7 +57,7 @@ class Manager(NoPickleMixin):
         self._exchange = exchange
         self._launcher = launcher
 
-        self._mailbox_id = exchange.create_client()
+        self._mailbox_id = exchange.register_client()
         self._multiplexer = MailboxMultiplexer(
             self.mailbox_id,
             self._exchange,
@@ -137,7 +137,7 @@ class Manager(NoPickleMixin):
                 handle.shutdown()
         logger.debug('Instructed managed agents to shutdown')
         self._multiplexer.close_bound_handles()
-        self._multiplexer.close_mailbox()
+        self._multiplexer.terminate()
         self._listener_thread.join()
         self.exchange.close()
         self.launcher.close()
