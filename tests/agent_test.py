@@ -6,21 +6,21 @@ from concurrent.futures import Future
 
 import pytest
 
-from aeris.agent import Agent
-from aeris.agent import AgentRunConfig
-from aeris.behavior import action
-from aeris.behavior import Behavior
-from aeris.behavior import loop
-from aeris.exchange import Exchange
-from aeris.handle import BoundRemoteHandle
-from aeris.handle import ClientRemoteHandle
-from aeris.handle import Handle
-from aeris.handle import UnboundRemoteHandle
-from aeris.message import ActionRequest
-from aeris.message import ActionResponse
-from aeris.message import PingRequest
-from aeris.message import PingResponse
-from aeris.message import ShutdownRequest
+from academy.agent import Agent
+from academy.agent import AgentRunConfig
+from academy.behavior import action
+from academy.behavior import Behavior
+from academy.behavior import loop
+from academy.exchange import Exchange
+from academy.handle import BoundRemoteHandle
+from academy.handle import ClientRemoteHandle
+from academy.handle import Handle
+from academy.handle import UnboundRemoteHandle
+from academy.message import ActionRequest
+from academy.message import ActionResponse
+from academy.message import PingRequest
+from academy.message import PingResponse
+from academy.message import ShutdownRequest
 from testing.behavior import CounterBehavior
 from testing.behavior import EmptyBehavior
 from testing.behavior import ErrorBehavior

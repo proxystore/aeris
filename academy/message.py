@@ -16,8 +16,8 @@ from pydantic import field_serializer
 from pydantic import field_validator
 from pydantic import TypeAdapter
 
-from aeris.identifier import AgentId
-from aeris.identifier import EntityId
+from academy.identifier import AgentId
+from academy.identifier import EntityId
 
 NO_RESULT = object()
 
@@ -61,7 +61,7 @@ class BaseMessage(BaseModel):
 
         Example:
             ```python
-            from aeris.message import BaseMessage, ActionRequest
+            from academy.message import BaseMessage, ActionRequest
 
             message = ActionRequest(...)
             dump = message.model_dump_json()

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from aeris.identifier import AgentId
-from aeris.identifier import EntityId
+from academy.identifier import AgentId
+from academy.identifier import EntityId
 
 
 class BadEntityIdError(Exception):

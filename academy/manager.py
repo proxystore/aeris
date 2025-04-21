@@ -14,18 +14,18 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-from aeris.behavior import Behavior
-from aeris.exception import BadEntityIdError
-from aeris.exception import MailboxClosedError
-from aeris.exchange import Exchange
-from aeris.handle import BoundRemoteHandle
-from aeris.handle import RemoteHandle
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.launcher import Launcher
-from aeris.message import RequestMessage
-from aeris.multiplex import MailboxMultiplexer
-from aeris.serialize import NoPickleMixin
+from academy.behavior import Behavior
+from academy.exception import BadEntityIdError
+from academy.exception import MailboxClosedError
+from academy.exchange import Exchange
+from academy.handle import BoundRemoteHandle
+from academy.handle import RemoteHandle
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.launcher import Launcher
+from academy.message import RequestMessage
+from academy.multiplex import MailboxMultiplexer
+from academy.serialize import NoPickleMixin
 
 logger = logging.getLogger(__name__)
 

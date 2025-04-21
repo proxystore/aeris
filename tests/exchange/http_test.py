@@ -12,19 +12,19 @@ from aiohttp.test_utils import TestServer
 from aiohttp.web import Application
 from aiohttp.web import Request
 
-from aeris.behavior import Behavior
-from aeris.exception import BadEntityIdError
-from aeris.exception import MailboxClosedError
-from aeris.exchange.http import _BAD_REQUEST_CODE
-from aeris.exchange.http import _MailboxManager
-from aeris.exchange.http import _main
-from aeris.exchange.http import _NOT_FOUND_CODE
-from aeris.exchange.http import create_app
-from aeris.exchange.http import HttpExchange
-from aeris.exchange.http import spawn_http_exchange
-from aeris.identifier import ClientId
-from aeris.message import PingRequest
-from aeris.socket import open_port
+from academy.behavior import Behavior
+from academy.exception import BadEntityIdError
+from academy.exception import MailboxClosedError
+from academy.exchange.http import _BAD_REQUEST_CODE
+from academy.exchange.http import _MailboxManager
+from academy.exchange.http import _main
+from academy.exchange.http import _NOT_FOUND_CODE
+from academy.exchange.http import create_app
+from academy.exchange.http import HttpExchange
+from academy.exchange.http import spawn_http_exchange
+from academy.identifier import ClientId
+from academy.message import PingRequest
+from academy.socket import open_port
 from testing.behavior import EmptyBehavior
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_SLEEP
@@ -138,7 +138,7 @@ def test_exchange_discover(http_exchange_server: tuple[str, int]) -> None:
 
 
 def test_server_cli() -> None:
-    with mock.patch('aeris.exchange.http._run'):
+    with mock.patch('academy.exchange.http._run'):
         assert _main(['--port', '0']) == 0
 
 

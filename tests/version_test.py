@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import aeris
+import academy
 
 
 def test_package_version() -> None:
-    assert isinstance(aeris.__version__, str)
+    assert isinstance(academy.__version__, str)

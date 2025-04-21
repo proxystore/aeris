@@ -5,13 +5,13 @@ import multiprocessing
 from concurrent.futures import Future
 from concurrent.futures import ProcessPoolExecutor
 
-from aeris.behavior import action
-from aeris.behavior import Behavior
-from aeris.exchange.http import spawn_http_exchange
-from aeris.handle import Handle
-from aeris.launcher.executor import ExecutorLauncher
-from aeris.logging import init_logging
-from aeris.manager import Manager
+from academy.behavior import action
+from academy.behavior import Behavior
+from academy.exchange.http import spawn_http_exchange
+from academy.handle import Handle
+from academy.launcher.executor import ExecutorLauncher
+from academy.logging import init_logging
+from academy.manager import Manager
 
 EXCHANGE_PORT = 5346
 logger = logging.getLogger(__name__)

@@ -12,22 +12,22 @@ from typing import Any
 from typing import Generic
 from typing import TypeVar
 
-from aeris.behavior import Behavior
-from aeris.exception import BadEntityIdError
-from aeris.exception import MailboxClosedError
-from aeris.exchange import Exchange
-from aeris.handle import BoundRemoteHandle
-from aeris.handle import ClientRemoteHandle
-from aeris.handle import Handle
-from aeris.handle import ProxyHandle
-from aeris.handle import RemoteHandle
-from aeris.identifier import AgentId
-from aeris.message import ActionRequest
-from aeris.message import PingRequest
-from aeris.message import RequestMessage
-from aeris.message import ResponseMessage
-from aeris.message import ShutdownRequest
-from aeris.multiplex import MailboxMultiplexer
+from academy.behavior import Behavior
+from academy.exception import BadEntityIdError
+from academy.exception import MailboxClosedError
+from academy.exchange import Exchange
+from academy.handle import BoundRemoteHandle
+from academy.handle import ClientRemoteHandle
+from academy.handle import Handle
+from academy.handle import ProxyHandle
+from academy.handle import RemoteHandle
+from academy.identifier import AgentId
+from academy.message import ActionRequest
+from academy.message import PingRequest
+from academy.message import RequestMessage
+from academy.message import ResponseMessage
+from academy.message import ShutdownRequest
+from academy.multiplex import MailboxMultiplexer
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ def _agent_trampoline(
 class Agent(Generic[BehaviorT]):
     """Executable agent.
 
-    An agent executes predefined [`Behavior`][aeris.behavior.Behavior]. An
+    An agent executes predefined [`Behavior`][academy.behavior.Behavior]. An
     agent can operate independently or as part of a broader multi-agent
     system.
 
@@ -125,7 +125,7 @@ class Agent(Generic[BehaviorT]):
         )
 
     def __call__(self) -> None:
-        """Alias for [run()][aeris.agent.Agent.run]."""
+        """Alias for [run()][academy.agent.Agent.run]."""
         self.run()
 
     def __repr__(self) -> str:
@@ -268,11 +268,11 @@ class Agent(Generic[BehaviorT]):
             is shutdown.
 
         1. Binds all unbound handles to remote agents to this agent.
-        1. Calls [`Behavior.on_setup()`][aeris.behavior.Behavior.on_setup].
+        1. Calls [`Behavior.on_setup()`][academy.behavior.Behavior.on_setup].
         1. Starts threads for all control loops defined on the agent's
-           [`Behavior`][aeris.behavior.Behavior].
+           [`Behavior`][academy.behavior.Behavior].
         1. Starts a thread for listening to messages from the
-           [`Exchange`][aeris.exchange.Exchange] (if provided).
+           [`Exchange`][academy.exchange.Exchange] (if provided).
 
         Raises:
             RuntimeError: If the agent has been shutdown.
@@ -324,7 +324,7 @@ class Agent(Generic[BehaviorT]):
         1. Waits for the control loop and message listener threads to exit.
         1. Optionally closes the exchange.
         1. Calls
-           [`Behavior.on_shutdown()`][aeris.behavior.Behavior.on_shutdown].
+           [`Behavior.on_shutdown()`][academy.behavior.Behavior.on_shutdown].
 
         Raises:
             Exception: Any exceptions raised inside threads.

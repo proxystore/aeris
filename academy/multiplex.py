@@ -14,20 +14,20 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-from aeris.behavior import Behavior
-from aeris.exception import MailboxClosedError
-from aeris.exchange import Exchange
-from aeris.handle import BoundRemoteHandle
-from aeris.handle import RemoteHandle
-from aeris.identifier import EntityId
-from aeris.message import Message
-from aeris.message import RequestMessage
-from aeris.message import ResponseMessage
-from aeris.serialize import NoPickleMixin
+from academy.behavior import Behavior
+from academy.exception import MailboxClosedError
+from academy.exchange import Exchange
+from academy.handle import BoundRemoteHandle
+from academy.handle import RemoteHandle
+from academy.identifier import EntityId
+from academy.message import Message
+from academy.message import RequestMessage
+from academy.message import ResponseMessage
+from academy.serialize import NoPickleMixin
 
 logger = logging.getLogger(__name__)
 
-BehaviorT_co = TypeVar('BehaviorT_co', bound=Behavior, covariant=True)
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
 class MailboxMultiplexer(NoPickleMixin):
@@ -46,7 +46,8 @@ class MailboxMultiplexer(NoPickleMixin):
     Note:
         This class should not be considered as a part of the public API. It
         is used internally by other components, such as the
-        [`Agent`][aeris.agent.Agent] and [`Manager`][aeris.manager.Manager],
+        [`Agent`][academy.agent.Agent] and
+        [`Manager`][academy.manager.Manager],
         which use multiple handles concurrently.
 
     Args:
@@ -109,8 +110,8 @@ class MailboxMultiplexer(NoPickleMixin):
 
     def bind(
         self,
-        handle: RemoteHandle[BehaviorT_co],
-    ) -> BoundRemoteHandle[BehaviorT_co]:
+        handle: RemoteHandle[BehaviorT],
+    ) -> BoundRemoteHandle[BehaviorT]:
         """Bind a handle to this mailbox.
 
         Args:

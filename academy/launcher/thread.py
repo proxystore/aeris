@@ -14,13 +14,13 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-from aeris.agent import Agent
-from aeris.agent import AgentRunConfig
-from aeris.behavior import Behavior
-from aeris.exception import BadEntityIdError
-from aeris.exchange import Exchange
-from aeris.handle import RemoteHandle
-from aeris.identifier import AgentId
+from academy.agent import Agent
+from academy.agent import AgentRunConfig
+from academy.behavior import Behavior
+from academy.exception import BadEntityIdError
+from academy.exchange import Exchange
+from academy.handle import RemoteHandle
+from academy.identifier import AgentId
 
 logger = logging.getLogger(__name__)
 

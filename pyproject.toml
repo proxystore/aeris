@@ -3,7 +3,7 @@ requires = ["setuptools>=64.0", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aeris"
+name = "academy-py"
 version = "0.1.0"
 authors = [
     {name = "Greg Pauloski", email = "jgpauloski@uchicago.edu"},
@@ -12,7 +12,7 @@ authors = [
 maintainers = [
     {name = "Greg Pauloski", email = "jgpauloski@uchicago.edu"},
 ]
-description = "Agentic Ecosystem for Resource Integration and Scalability."
+description = "Build and deploy stateful agents across federated resources."
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -33,8 +33,8 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://proxystore.dev"
-Documentation = "https://aeris.proxystore.dev"
-Source = "https://github.com/proxystore/aeris"
+Documentation = "https://academy.proxystore.dev"
+Source = "https://github.com/proxystore/academy"
 
 [project.optional-dependencies]
 dev = [
@@ -70,6 +70,7 @@ parallel = true
 python_version = "3.12"
 plugins = [
     "mypy.plugins.proper_plugin",
+    "proxystore.mypy_plugin",
     "pydantic.mypy",
 ]
 check_untyped_defs = true
@@ -164,7 +165,7 @@ multiline-quotes = "double"
 
 [tool.ruff.lint.isort]
 force-single-line = true
-known-first-party = ["aeris", "test", "testing"]
+known-first-party = ["academy", "test", "testing"]
 order-by-type = false
 required-imports = ["from __future__ import annotations"]
 

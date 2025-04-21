@@ -9,14 +9,14 @@ from typing import Any
 
 import pytest
 
-from aeris.behavior import Behavior
-from aeris.behavior import loop
-from aeris.exception import BadEntityIdError
-from aeris.exchange import Exchange
-from aeris.exchange.http import HttpExchange
-from aeris.identifier import AgentId
-from aeris.launcher import Launcher
-from aeris.launcher.executor import ExecutorLauncher
+from academy.behavior import Behavior
+from academy.behavior import loop
+from academy.exception import BadEntityIdError
+from academy.exchange import Exchange
+from academy.exchange.http import HttpExchange
+from academy.identifier import AgentId
+from academy.launcher import Launcher
+from academy.launcher.executor import ExecutorLauncher
 from testing.behavior import SleepBehavior
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_LOOP_SLEEP

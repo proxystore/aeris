@@ -4,10 +4,10 @@ import threading
 import time
 from typing import TypeVar
 
-from aeris.behavior import action
-from aeris.behavior import Behavior
-from aeris.behavior import loop
-from aeris.handle import Handle
+from academy.behavior import action
+from academy.behavior import Behavior
+from academy.behavior import loop
+from academy.handle import Handle
 
 T = TypeVar('T')
 

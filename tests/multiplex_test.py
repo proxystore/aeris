@@ -4,15 +4,15 @@ from unittest import mock
 
 import pytest
 
-from aeris.exception import HandleClosedError
-from aeris.exception import MailboxClosedError
-from aeris.exchange.thread import ThreadExchange
-from aeris.handle import BoundRemoteHandle
-from aeris.handle import UnboundRemoteHandle
-from aeris.identifier import ClientId
-from aeris.message import PingRequest
-from aeris.message import PingResponse
-from aeris.multiplex import MailboxMultiplexer
+from academy.exception import HandleClosedError
+from academy.exception import MailboxClosedError
+from academy.exchange.thread import ThreadExchange
+from academy.handle import BoundRemoteHandle
+from academy.handle import UnboundRemoteHandle
+from academy.identifier import ClientId
+from academy.message import PingRequest
+from academy.message import PingResponse
+from academy.multiplex import MailboxMultiplexer
 from testing.behavior import EmptyBehavior
 
 
@@ -79,7 +79,7 @@ def test_request_message_handler(exchange: ThreadExchange) -> None:
         request_handler=handler,
     ) as multiplexer:
         with mock.patch(
-            'aeris.exchange.thread.ThreadMailbox.recv',
+            'academy.exchange.thread.ThreadMailbox.recv',
             side_effect=(request, MailboxClosedError(uid)),
         ):
             multiplexer.listen()
@@ -101,7 +101,7 @@ def test_response_message_handler(exchange: ThreadExchange) -> None:
         response = PingResponse(src=aid, dest=uid, label=bound.handle_id)
         with mock.patch.object(bound, '_process_response') as mocked:
             with mock.patch(
-                'aeris.exchange.thread.ThreadMailbox.recv',
+                'academy.exchange.thread.ThreadMailbox.recv',
                 side_effect=(response, MailboxClosedError(uid)),
             ):
                 multiplexer.listen()
@@ -120,7 +120,7 @@ def test_response_message_handler_bad_src(exchange: ThreadExchange) -> None:
         request_handler=lambda _: None,
     ) as multiplexer:
         with mock.patch(
-            'aeris.exchange.thread.ThreadMailbox.recv',
+            'academy.exchange.thread.ThreadMailbox.recv',
             side_effect=(response, MailboxClosedError(uid)),
         ):
             bound = multiplexer.bind(unbound)

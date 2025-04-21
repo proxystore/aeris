@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 
-from aeris.event import or_event
+from academy.event import or_event
 
 
 def test_or_event() -> None:

@@ -4,7 +4,7 @@ import pickle
 
 import pytest
 
-from aeris.serialize import NoPickleMixin
+from academy.serialize import NoPickleMixin
 
 
 class CanItPickle(NoPickleMixin):

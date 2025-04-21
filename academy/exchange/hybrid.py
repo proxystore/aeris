@@ -18,23 +18,23 @@ else:  # pragma: <3.11 cover
 
 import redis
 
-from aeris.behavior import Behavior
-from aeris.exception import BadEntityIdError
-from aeris.exception import MailboxClosedError
-from aeris.exchange import ExchangeMixin
-from aeris.exchange.queue import Queue
-from aeris.exchange.queue import QueueClosedError
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.identifier import EntityId
-from aeris.message import BaseMessage
-from aeris.message import Message
-from aeris.serialize import NoPickleMixin
-from aeris.socket import address_by_hostname
-from aeris.socket import address_by_interface
-from aeris.socket import SimpleSocket
-from aeris.socket import SimpleSocketServer
-from aeris.socket import SocketClosedError
+from academy.behavior import Behavior
+from academy.exception import BadEntityIdError
+from academy.exception import MailboxClosedError
+from academy.exchange import ExchangeMixin
+from academy.exchange.queue import Queue
+from academy.exchange.queue import QueueClosedError
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.identifier import EntityId
+from academy.message import BaseMessage
+from academy.message import Message
+from academy.serialize import NoPickleMixin
+from academy.socket import address_by_hostname
+from academy.socket import address_by_interface
+from academy.socket import SimpleSocket
+from academy.socket import SimpleSocketServer
+from academy.socket import SocketClosedError
 
 logger = logging.getLogger(__name__)
 

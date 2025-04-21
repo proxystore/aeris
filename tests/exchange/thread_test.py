@@ -5,14 +5,14 @@ from typing import Any
 
 import pytest
 
-from aeris.behavior import Behavior
-from aeris.exception import BadEntityIdError
-from aeris.exception import MailboxClosedError
-from aeris.exchange import Exchange
-from aeris.exchange.thread import ThreadExchange
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.message import PingRequest
+from academy.behavior import Behavior
+from academy.exception import BadEntityIdError
+from academy.exception import MailboxClosedError
+from academy.exchange import Exchange
+from academy.exchange.thread import ThreadExchange
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.message import PingRequest
 from testing.behavior import EmptyBehavior
 
 

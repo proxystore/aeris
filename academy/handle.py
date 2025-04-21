@@ -30,24 +30,24 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-from aeris.exception import HandleClosedError
-from aeris.exception import HandleNotBoundError
-from aeris.exception import MailboxClosedError
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.identifier import EntityId
-from aeris.message import ActionRequest
-from aeris.message import ActionResponse
-from aeris.message import PingRequest
-from aeris.message import PingResponse
-from aeris.message import RequestMessage
-from aeris.message import ResponseMessage
-from aeris.message import ShutdownRequest
-from aeris.message import ShutdownResponse
+from academy.exception import HandleClosedError
+from academy.exception import HandleNotBoundError
+from academy.exception import MailboxClosedError
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.identifier import EntityId
+from academy.message import ActionRequest
+from academy.message import ActionResponse
+from academy.message import PingRequest
+from academy.message import PingResponse
+from academy.message import RequestMessage
+from academy.message import ResponseMessage
+from academy.message import ShutdownRequest
+from academy.message import ShutdownResponse
 
 if TYPE_CHECKING:
-    from aeris.behavior import Behavior
-    from aeris.exchange import Exchange
+    from academy.behavior import Behavior
+    from academy.exchange import Exchange
 else:
     # Behavior is only used in the bounding of the BehaviorT TypeVar.
     Behavior = None
@@ -58,7 +58,6 @@ K = TypeVar('K')
 P = ParamSpec('P')
 R = TypeVar('R')
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
-BehaviorT_co = TypeVar('BehaviorT_co', bound=Behavior, covariant=True)
 
 
 @runtime_checkable
@@ -166,7 +165,7 @@ class HandleDict(dict[K, Handle[BehaviorT]]):
         super().__init__(values, **kwargs)
 
 
-class HandleList(list[Handle[BehaviorT_co]]):
+class HandleList(list[Handle[BehaviorT]]):
     """List of handles.
 
     Tip:
@@ -177,24 +176,24 @@ class HandleList(list[Handle[BehaviorT_co]]):
 
     def __init__(
         self,
-        iterable: Iterable[Handle[BehaviorT_co]] = (),
+        iterable: Iterable[Handle[BehaviorT]] = (),
         /,
     ) -> None:
         super().__init__(iterable)
 
 
-class ProxyHandle(Generic[BehaviorT_co]):
+class ProxyHandle(Generic[BehaviorT]):
     """Proxy handle.
 
     A proxy handle is thin wrapper around a
-    [`Behavior`][aeris.behavior.Behavior] instance that is useful for testing
+    [`Behavior`][academy.behavior.Behavior] instance that is useful for testing
     behaviors that are initialized with a handle to another agent without
     needing to spawn agents. This wrapper invokes actions synchronously.
     """
 
-    def __init__(self, behavior: BehaviorT_co) -> None:
+    def __init__(self, behavior: BehaviorT) -> None:
         self.behavior = behavior
-        self.agent_id: AgentId[BehaviorT_co] = AgentId.new()
+        self.agent_id: AgentId[BehaviorT] = AgentId.new()
         self.mailbox_id: EntityId | None = None
         self._agent_closed = False
         self._handle_closed = False
@@ -321,7 +320,7 @@ class ProxyHandle(Generic[BehaviorT_co]):
         self._agent_closed = True
 
 
-class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
+class RemoteHandle(Generic[BehaviorT], abc.ABC):
     """Handle to a remote agent.
 
     This is an abstract base class with three possible concrete types
@@ -353,7 +352,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
     def __init__(
         self,
         exchange: Exchange,
-        agent_id: AgentId[BehaviorT_co],
+        agent_id: AgentId[BehaviorT],
         mailbox_id: EntityId | None = None,
     ) -> None:
         self.exchange = exchange
@@ -381,7 +380,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
         self,
     ) -> tuple[
         type[UnboundRemoteHandle[Any]],
-        tuple[Exchange, AgentId[BehaviorT_co]],
+        tuple[Exchange, AgentId[BehaviorT]],
     ]:
         return (UnboundRemoteHandle, (self.exchange, self.agent_id))
 
@@ -425,7 +424,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
     def bind_as_client(
         self,
         client_id: ClientId | None = None,
-    ) -> ClientRemoteHandle[BehaviorT_co]:
+    ) -> ClientRemoteHandle[BehaviorT]:
         """Bind the handle as a unique client in the exchange.
 
         Note:
@@ -445,7 +444,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
     def bind_to_mailbox(
         self,
         mailbox_id: EntityId,
-    ) -> BoundRemoteHandle[BehaviorT_co]:
+    ) -> BoundRemoteHandle[BehaviorT]:
         """Bind the handle to an existing mailbox.
 
         Args:
@@ -614,7 +613,7 @@ class RemoteHandle(Generic[BehaviorT_co], abc.ABC):
         )
 
 
-class UnboundRemoteHandle(RemoteHandle[BehaviorT_co]):
+class UnboundRemoteHandle(RemoteHandle[BehaviorT]):
     """Handle to a remote agent that is unbound.
 
     Warning:
@@ -630,7 +629,7 @@ class UnboundRemoteHandle(RemoteHandle[BehaviorT_co]):
     def __init__(
         self,
         exchange: Exchange,
-        agent_id: AgentId[BehaviorT_co],
+        agent_id: AgentId[BehaviorT],
     ) -> None:
         super().__init__(exchange, agent_id=agent_id)
 
@@ -649,7 +648,7 @@ class UnboundRemoteHandle(RemoteHandle[BehaviorT_co]):
     def bind_as_client(
         self,
         client_id: ClientId | None = None,
-    ) -> ClientRemoteHandle[BehaviorT_co]:
+    ) -> ClientRemoteHandle[BehaviorT]:
         """Bind the handle as a unique client in the exchange.
 
         Args:
@@ -664,7 +663,7 @@ class UnboundRemoteHandle(RemoteHandle[BehaviorT_co]):
     def bind_to_mailbox(
         self,
         mailbox_id: EntityId,
-    ) -> BoundRemoteHandle[BehaviorT_co]:
+    ) -> BoundRemoteHandle[BehaviorT]:
         """Bind the handle to an existing mailbox.
 
         Args:
@@ -682,19 +681,19 @@ class UnboundRemoteHandle(RemoteHandle[BehaviorT_co]):
         *args: Any,
         **kwargs: Any,
     ) -> Future[R]:
-        """Raises [`HandleNotBoundError`][aeris.exception.HandleNotBoundError]."""  # noqa: E501
+        """Raises [`HandleNotBoundError`][academy.exception.HandleNotBoundError]."""  # noqa: E501
         raise HandleNotBoundError(self.agent_id)
 
     def ping(self, *, timeout: float | None = None) -> float:
-        """Raises [`HandleNotBoundError`][aeris.exception.HandleNotBoundError]."""  # noqa: E501
+        """Raises [`HandleNotBoundError`][academy.exception.HandleNotBoundError]."""  # noqa: E501
         raise HandleNotBoundError(self.agent_id)
 
     def shutdown(self) -> None:
-        """Raises [`HandleNotBoundError`][aeris.exception.HandleNotBoundError]."""  # noqa: E501
+        """Raises [`HandleNotBoundError`][academy.exception.HandleNotBoundError]."""  # noqa: E501
         raise HandleNotBoundError(self.agent_id)
 
 
-class BoundRemoteHandle(RemoteHandle[BehaviorT_co]):
+class BoundRemoteHandle(RemoteHandle[BehaviorT]):
     """Handle to a remote agent bound to an existing mailbox.
 
     Args:
@@ -706,7 +705,7 @@ class BoundRemoteHandle(RemoteHandle[BehaviorT_co]):
     def __init__(
         self,
         exchange: Exchange,
-        agent_id: AgentId[BehaviorT_co],
+        agent_id: AgentId[BehaviorT],
         mailbox_id: EntityId,
     ) -> None:
         if agent_id == mailbox_id:
@@ -720,7 +719,7 @@ class BoundRemoteHandle(RemoteHandle[BehaviorT_co]):
     def bind_as_client(
         self,
         client_id: ClientId | None = None,
-    ) -> ClientRemoteHandle[BehaviorT_co]:
+    ) -> ClientRemoteHandle[BehaviorT]:
         """Bind the handle as a unique client in the exchange.
 
         Args:
@@ -735,7 +734,7 @@ class BoundRemoteHandle(RemoteHandle[BehaviorT_co]):
     def bind_to_mailbox(
         self,
         mailbox_id: EntityId,
-    ) -> BoundRemoteHandle[BehaviorT_co]:
+    ) -> BoundRemoteHandle[BehaviorT]:
         """Bind the handle to an existing mailbox.
 
         Args:
@@ -766,7 +765,7 @@ class BoundRemoteHandle(RemoteHandle[BehaviorT_co]):
         logger.debug('Closed handle (%s)', self)
 
 
-class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
+class ClientRemoteHandle(RemoteHandle[BehaviorT]):
     """Handle to a remote agent bound as a unique client.
 
     Args:
@@ -780,7 +779,7 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
     def __init__(
         self,
         exchange: Exchange,
-        agent_id: AgentId[BehaviorT_co],
+        agent_id: AgentId[BehaviorT],
         client_id: ClientId | None = None,
     ) -> None:
         if client_id is None:
@@ -820,7 +819,7 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
     def bind_as_client(
         self,
         client_id: ClientId | None = None,
-    ) -> ClientRemoteHandle[BehaviorT_co]:
+    ) -> ClientRemoteHandle[BehaviorT]:
         """Bind the handle as a unique client in the exchange.
 
         Args:
@@ -839,7 +838,7 @@ class ClientRemoteHandle(RemoteHandle[BehaviorT_co]):
     def bind_to_mailbox(
         self,
         mailbox_id: EntityId,
-    ) -> BoundRemoteHandle[BehaviorT_co]:
+    ) -> BoundRemoteHandle[BehaviorT]:
         """Bind the handle to an existing mailbox.
 
         Args:

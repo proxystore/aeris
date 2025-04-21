@@ -7,16 +7,16 @@ from unittest import mock
 
 import pytest
 
-from aeris.behavior import Behavior
-from aeris.exception import BadEntityIdError
-from aeris.exception import MailboxClosedError
-from aeris.exchange.hybrid import base32_to_uuid
-from aeris.exchange.hybrid import HybridExchange
-from aeris.exchange.hybrid import HybridMailbox
-from aeris.exchange.hybrid import uuid_to_base32
-from aeris.identifier import ClientId
-from aeris.message import PingRequest
-from aeris.socket import open_port
+from academy.behavior import Behavior
+from academy.exception import BadEntityIdError
+from academy.exception import MailboxClosedError
+from academy.exchange.hybrid import base32_to_uuid
+from academy.exchange.hybrid import HybridExchange
+from academy.exchange.hybrid import HybridMailbox
+from academy.exchange.hybrid import uuid_to_base32
+from academy.identifier import ClientId
+from academy.message import PingRequest
+from academy.socket import open_port
 from testing.behavior import EmptyBehavior
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_SLEEP
@@ -131,7 +131,7 @@ def test_mailbox_redis_error_logging(mock_redis, caplog) -> None:
     with HybridExchange(redis_host='localhost', redis_port=0) as exchange:
         aid = exchange.register_agent(EmptyBehavior)
         with mock.patch(
-            'aeris.exchange.hybrid.HybridMailbox._pull_messages_from_redis',
+            'academy.exchange.hybrid.HybridMailbox._pull_messages_from_redis',
             side_effect=RuntimeError('Mock thread error.'),
         ):
             mailbox = exchange.get_mailbox(aid)
