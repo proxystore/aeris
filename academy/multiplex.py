@@ -27,7 +27,7 @@ from academy.serialize import NoPickleMixin
 
 logger = logging.getLogger(__name__)
 
-BehaviorT_co = TypeVar('BehaviorT_co', bound=Behavior, covariant=True)
+BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 
 
 class MailboxMultiplexer(NoPickleMixin):
@@ -110,8 +110,8 @@ class MailboxMultiplexer(NoPickleMixin):
 
     def bind(
         self,
-        handle: RemoteHandle[BehaviorT_co],
-    ) -> BoundRemoteHandle[BehaviorT_co]:
+        handle: RemoteHandle[BehaviorT],
+    ) -> BoundRemoteHandle[BehaviorT]:
         """Bind a handle to this mailbox.
 
         Args:

@@ -70,6 +70,7 @@ parallel = true
 python_version = "3.12"
 plugins = [
     "mypy.plugins.proper_plugin",
+    "proxystore.mypy_plugin",
     "pydantic.mypy",
 ]
 check_untyped_defs = true
