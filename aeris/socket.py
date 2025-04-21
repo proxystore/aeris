@@ -227,7 +227,7 @@ class SimpleSocketServer:
         reader: asyncio.StreamReader,
     ) -> bytes | bytearray:
         header = await reader.read(MESSAGE_HEADER_SIZE)
-        if len(header) == 0:
+        if len(header) == 0:  # pragma: no cover
             return b''
         message_size = _get_size_from_header(header)
 

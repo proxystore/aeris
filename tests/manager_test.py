@@ -106,3 +106,52 @@ def test_shutdown_blocking(exchange: ThreadExchange) -> None:
         handle = manager.launch(behavior)
         manager.shutdown(handle.agent_id, blocking=True)
         manager.wait(handle.agent_id, timeout=TEST_LOOP_SLEEP)
+
+
+def test_bad_default_launcher() -> None:
+    with pytest.raises(ValueError, match='No launcher named "second"'):
+        Manager(
+            exchange=ThreadExchange(),
+            launcher={'first': ThreadLauncher()},
+            default_launcher='second',
+        )
+
+
+def test_add_and_set_launcher_errors() -> None:
+    launcher = ThreadLauncher()
+    with Manager(
+        exchange=ThreadExchange(),
+        launcher={'first': launcher},
+    ) as manager:
+        with pytest.raises(
+            ValueError,
+            match='Launcher named "first" already exists.',
+        ):
+            manager.add_launcher('first', launcher)
+        with pytest.raises(
+            ValueError,
+            match='A launcher name "second" does not exist.',
+        ):
+            manager.set_default_launcher('second')
+
+
+def test_multiple_launcher() -> None:
+    with Manager(
+        exchange=ThreadExchange(),
+        launcher={'first': ThreadLauncher()},
+    ) as manager:
+        manager.launch(EmptyBehavior(), launcher='first')
+
+        manager.add_launcher('second', ThreadLauncher())
+        manager.set_default_launcher('second')
+        manager.launch(EmptyBehavior())
+        manager.launch(EmptyBehavior(), launcher='first')
+
+
+def test_multiple_launcher_no_default() -> None:
+    with Manager(
+        exchange=ThreadExchange(),
+        launcher={'first': ThreadLauncher()},
+    ) as manager:
+        with pytest.raises(ValueError, match='no default is set.'):
+            manager.launch(EmptyBehavior())
