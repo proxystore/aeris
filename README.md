@@ -1,5 +1,6 @@
 # Academy: Build and Deploy Federated Multi-Agent Systems
 
+![PyPI - Version](https://img.shields.io/pypi/v/academy-py)
 [![tests](https://github.com/proxystore/academy/actions/workflows/tests.yml/badge.svg)](https://github.com/proxystore/academy/actions)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/proxystore/academy/main.svg)](https://results.pre-commit.ci/latest/github/proxystore/academy/main)
 
@@ -14,7 +15,7 @@ In Academy, you can:
 
 ## Installation
 
-Academy is available on [PyPI][https://pypi.org/project/academy-py/].
+Academy is available on [PyPI](https://pypi.org/project/academy-py/).
 
 ```bash
 pip install academy-py
@@ -22,7 +23,7 @@ pip install academy-py
 
 <details>
 <summary>Install from Source</summary>
-<br>
+
 **Clone the source:**
 ```bash
 git clone git@github.com:proxystore/academy
@@ -38,6 +39,7 @@ python -m venv venv
 ```bash
 pip install -e .  # -e for editable mode
 ```
+
 </details>
 
 ## Getting Started
