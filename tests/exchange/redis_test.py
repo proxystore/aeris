@@ -6,15 +6,15 @@ from unittest import mock
 
 import pytest
 
-from aeris.behavior import Behavior
-from aeris.exception import BadEntityIdError
-from aeris.exception import MailboxClosedError
-from aeris.exchange import Exchange
-from aeris.exchange.redis import RedisExchange
-from aeris.handle import RemoteHandle
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.message import PingRequest
+from academy.behavior import Behavior
+from academy.exception import BadEntityIdError
+from academy.exception import MailboxClosedError
+from academy.exchange import Exchange
+from academy.exchange.redis import RedisExchange
+from academy.handle import RemoteHandle
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.message import PingRequest
 from testing.behavior import EmptyBehavior
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.redis import MockRedis

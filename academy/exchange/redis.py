@@ -9,16 +9,16 @@ from typing import TypeVar
 
 import redis
 
-from aeris.behavior import Behavior
-from aeris.exception import BadEntityIdError
-from aeris.exception import MailboxClosedError
-from aeris.exchange import ExchangeMixin
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.identifier import EntityId
-from aeris.message import BaseMessage
-from aeris.message import Message
-from aeris.serialize import NoPickleMixin
+from academy.behavior import Behavior
+from academy.exception import BadEntityIdError
+from academy.exception import MailboxClosedError
+from academy.exchange import ExchangeMixin
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.identifier import EntityId
+from academy.message import BaseMessage
+from academy.message import Message
+from academy.serialize import NoPickleMixin
 
 logger = logging.getLogger(__name__)
 

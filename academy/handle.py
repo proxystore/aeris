@@ -30,24 +30,24 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-from aeris.exception import HandleClosedError
-from aeris.exception import HandleNotBoundError
-from aeris.exception import MailboxClosedError
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.identifier import EntityId
-from aeris.message import ActionRequest
-from aeris.message import ActionResponse
-from aeris.message import PingRequest
-from aeris.message import PingResponse
-from aeris.message import RequestMessage
-from aeris.message import ResponseMessage
-from aeris.message import ShutdownRequest
-from aeris.message import ShutdownResponse
+from academy.exception import HandleClosedError
+from academy.exception import HandleNotBoundError
+from academy.exception import MailboxClosedError
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.identifier import EntityId
+from academy.message import ActionRequest
+from academy.message import ActionResponse
+from academy.message import PingRequest
+from academy.message import PingResponse
+from academy.message import RequestMessage
+from academy.message import ResponseMessage
+from academy.message import ShutdownRequest
+from academy.message import ShutdownResponse
 
 if TYPE_CHECKING:
-    from aeris.behavior import Behavior
-    from aeris.exchange import Exchange
+    from academy.behavior import Behavior
+    from academy.exchange import Exchange
 else:
     # Behavior is only used in the bounding of the BehaviorT TypeVar.
     Behavior = None
@@ -62,13 +62,13 @@ BehaviorT_co = TypeVar('BehaviorT_co', bound=Behavior, covariant=True)
 
 
 @runtime_checkable
-class Handle(Protocol[BehaviorT]):
+class Handle(Protocol[BehaviorT_co]):
     """Agent handle protocol.
 
     A handle enables a client or agent to invoke actions on another agent.
     """
 
-    agent_id: AgentId[BehaviorT]
+    agent_id: AgentId[BehaviorT_co]
     mailbox_id: EntityId | None
 
     def action(
@@ -187,7 +187,7 @@ class ProxyHandle(Generic[BehaviorT_co]):
     """Proxy handle.
 
     A proxy handle is thin wrapper around a
-    [`Behavior`][aeris.behavior.Behavior] instance that is useful for testing
+    [`Behavior`][academy.behavior.Behavior] instance that is useful for testing
     behaviors that are initialized with a handle to another agent without
     needing to spawn agents. This wrapper invokes actions synchronously.
     """
@@ -682,15 +682,15 @@ class UnboundRemoteHandle(RemoteHandle[BehaviorT_co]):
         *args: Any,
         **kwargs: Any,
     ) -> Future[R]:
-        """Raises [`HandleNotBoundError`][aeris.exception.HandleNotBoundError]."""  # noqa: E501
+        """Raises [`HandleNotBoundError`][academy.exception.HandleNotBoundError]."""  # noqa: E501
         raise HandleNotBoundError(self.agent_id)
 
     def ping(self, *, timeout: float | None = None) -> float:
-        """Raises [`HandleNotBoundError`][aeris.exception.HandleNotBoundError]."""  # noqa: E501
+        """Raises [`HandleNotBoundError`][academy.exception.HandleNotBoundError]."""  # noqa: E501
         raise HandleNotBoundError(self.agent_id)
 
     def shutdown(self) -> None:
-        """Raises [`HandleNotBoundError`][aeris.exception.HandleNotBoundError]."""  # noqa: E501
+        """Raises [`HandleNotBoundError`][academy.exception.HandleNotBoundError]."""  # noqa: E501
         raise HandleNotBoundError(self.agent_id)
 
 

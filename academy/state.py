@@ -22,8 +22,8 @@ class FileState(shelve.DbfilenameShelf[ValueT]):
     Example:
         ```python
         from typing import Any
-        from aeris.behavior import Behavior, action
-        from aeris.state import FileState
+        from academy.behavior import Behavior, action
+        from academy.state import FileState
 
         class Example(Behavior):
             def __init__(self) -> None:

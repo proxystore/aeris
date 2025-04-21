@@ -17,13 +17,13 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-from aeris.agent import Agent
-from aeris.agent import AgentRunConfig
-from aeris.behavior import Behavior
-from aeris.exception import BadEntityIdError
-from aeris.exchange import Exchange
-from aeris.handle import RemoteHandle
-from aeris.identifier import AgentId
+from academy.agent import Agent
+from academy.agent import AgentRunConfig
+from academy.behavior import Behavior
+from academy.exception import BadEntityIdError
+from academy.exchange import Exchange
+from academy.handle import RemoteHandle
+from academy.identifier import AgentId
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class ExecutorLauncher:
     Args:
         executor: Executor used for launching agents. Note that this class
             takes ownership of the `executor`.
-        close_exchange: Passed along to the [`Agent`][aeris.agent.Agent]
+        close_exchange: Passed along to the [`Agent`][academy.agent.Agent]
             constructor. This should typically be `True`, the default,
             when the executor runs agents in separate processes, but should
             be `False` for the `ThreadPoolExecutor` to avoid closing

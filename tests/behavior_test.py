@@ -5,14 +5,14 @@ import time
 
 import pytest
 
-from aeris.behavior import Behavior
-from aeris.behavior import event
-from aeris.behavior import loop
-from aeris.behavior import timer
-from aeris.handle import Handle
-from aeris.handle import HandleDict
-from aeris.handle import HandleList
-from aeris.handle import ProxyHandle
+from academy.behavior import Behavior
+from academy.behavior import event
+from academy.behavior import loop
+from academy.behavior import timer
+from academy.handle import Handle
+from academy.handle import HandleDict
+from academy.handle import HandleList
+from academy.handle import ProxyHandle
 from testing.behavior import EmptyBehavior
 from testing.behavior import HandleBehavior
 from testing.behavior import IdentityBehavior

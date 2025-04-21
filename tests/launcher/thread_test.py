@@ -4,10 +4,10 @@ import time
 
 import pytest
 
-from aeris.exception import BadEntityIdError
-from aeris.exchange import Exchange
-from aeris.launcher import Launcher
-from aeris.launcher.thread import ThreadLauncher
+from academy.exception import BadEntityIdError
+from academy.exchange import Exchange
+from academy.launcher import Launcher
+from academy.launcher.thread import ThreadLauncher
 from testing.behavior import EmptyBehavior
 from testing.behavior import SleepBehavior
 from testing.constant import TEST_LOOP_SLEEP

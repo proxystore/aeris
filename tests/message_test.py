@@ -6,18 +6,18 @@ from typing import get_args
 
 import pytest
 
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.message import ActionRequest
-from aeris.message import ActionResponse
-from aeris.message import BaseMessage
-from aeris.message import Message
-from aeris.message import PingRequest
-from aeris.message import PingResponse
-from aeris.message import RequestMessage
-from aeris.message import ResponseMessage
-from aeris.message import ShutdownRequest
-from aeris.message import ShutdownResponse
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.message import ActionRequest
+from academy.message import ActionResponse
+from academy.message import BaseMessage
+from academy.message import Message
+from academy.message import PingRequest
+from academy.message import PingResponse
+from academy.message import RequestMessage
+from academy.message import ResponseMessage
+from academy.message import ShutdownRequest
+from academy.message import ShutdownResponse
 
 
 def test_shutdown_dest_type() -> None:

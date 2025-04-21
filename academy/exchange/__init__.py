@@ -12,12 +12,12 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-from aeris.behavior import Behavior
-from aeris.handle import UnboundRemoteHandle
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.identifier import EntityId
-from aeris.message import Message
+from academy.behavior import Behavior
+from academy.handle import UnboundRemoteHandle
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.identifier import EntityId
+from academy.message import Message
 
 __all__ = ['Exchange', 'ExchangeMixin']
 
@@ -128,7 +128,7 @@ class Exchange(Protocol):
         Raises:
             BadEntityIdError: if a mailbox for `aid` does not exist.
             TypeError: if `aid` is not an instance of
-                [`AgentId`][aeris.identifier.AgentId].
+                [`AgentId`][academy.identifier.AgentId].
         """
         ...
 
@@ -204,7 +204,7 @@ class ExchangeMixin:
 
         Raises:
             TypeError: if `aid` is not an instance of
-                [`AgentId`][aeris.identifier.AgentId].
+                [`AgentId`][academy.identifier.AgentId].
         """
         if not isinstance(aid, AgentId):
             raise TypeError(

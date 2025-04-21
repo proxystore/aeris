@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pathlib
 
-from aeris.behavior import action
-from aeris.behavior import Behavior
-from aeris.state import FileState
+from academy.behavior import action
+from academy.behavior import Behavior
+from academy.state import FileState
 
 
 class _StatefulBehavior(Behavior):

@@ -12,12 +12,12 @@ from proxystore.store import Store
 from proxystore.store.executor import ProxyAlways
 from proxystore.store.executor import ProxyNever
 
-from aeris.exchange.http import HttpExchange
-from aeris.exchange.proxystore import ProxyStoreExchange
-from aeris.exchange.thread import ThreadExchange
-from aeris.message import ActionRequest
-from aeris.message import ActionResponse
-from aeris.message import PingRequest
+from academy.exchange.http import HttpExchange
+from academy.exchange.proxystore import ProxyStoreExchange
+from academy.exchange.thread import ThreadExchange
+from academy.message import ActionRequest
+from academy.message import ActionResponse
+from academy.message import PingRequest
 from testing.behavior import EmptyBehavior
 
 

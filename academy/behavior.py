@@ -25,10 +25,10 @@ if sys.version_info >= (3, 11):  # pragma: >=3.11 cover
 else:  # pragma: <3.11 cover
     from typing_extensions import Self
 
-from aeris.event import or_event
-from aeris.handle import Handle
-from aeris.handle import HandleDict
-from aeris.handle import HandleList
+from academy.event import or_event
+from academy.handle import Handle
+from academy.handle import HandleDict
+from academy.handle import HandleList
 
 P = ParamSpec('P')
 R = TypeVar('R')
@@ -41,19 +41,19 @@ logger = logging.getLogger(__name__)
 class Behavior:
     """Agent behavior base class.
 
-    All [`Agent`][aeris.agent.Agent] instances execute a behavior which is
-    defined by a subclass of the [`Behavior`][aeris.behavior.Behavior]. Each
+    All [`Agent`][academy.agent.Agent] instances execute a behavior which is
+    defined by a subclass of the [`Behavior`][academy.behavior.Behavior]. Each
     behavior is composed of three parts:
-      1. The [`on_startup()`][aeris.behavior.Behavior.setup] and
-         [`on_shutdown()`][aeris.behavior.Behavior.shutdown] methods define
+      1. The [`on_startup()`][academy.behavior.Behavior.setup] and
+         [`on_shutdown()`][academy.behavior.Behavior.shutdown] methods define
          callbacks that are invoked once at the start and end of an agent's
          execution, respectively. The methods should be used to initialize and
          cleanup stateful resources. Resource initialization should not be
          performed in `__init__`.
-      2. Action methods annotated with [`@action`][aeris.behavior.action]
+      2. Action methods annotated with [`@action`][academy.behavior.action]
          are methods that other agents can invoke on this agent. An agent
          may also call it's own action methods as normal methods.
-      3. Control loop methods annotated with [`@loop`][aeris.behavior.loop]
+      3. Control loop methods annotated with [`@loop`][academy.behavior.loop]
          are executed in separate threads when the agent is executed.
 
     Warning:
@@ -112,9 +112,10 @@ class Behavior:
             Dictionary mapping attribute names to agent handles or \
             data structures of handles.
         """
-        from aeris.handle import Handle
+        from academy.handle import Handle
 
-        # This import is deferred to prevent a cyclic import with aeris.handle.
+        # This import is deferred to prevent a cyclic import with
+        # academy.handle.
         handles: dict[
             str,
             Handle[Any] | HandleDict[Any, Any] | HandleList[Any],
@@ -155,7 +156,7 @@ class Behavior:
 
         Example:
             ```python
-            >>> from aeris.behavior import Behavior
+            >>> from academy.behavior import Behavior
             >>>
             >>> class A(Behavior): ...
             >>> class B(Behavior): ...
@@ -175,7 +176,7 @@ class Behavior:
         Returns:
             Tuple of fully-qualified paths of types in the MRO of this \
             behavior type, not including the base \
-            [`Behavior`][aeris.behavior.Behavior] or [`object`][object].
+            [`Behavior`][academy.behavior.Behavior] or [`object`][object].
         """
         mro = cls.mro()
         base_index = mro.index(Behavior)
@@ -238,7 +239,7 @@ def action(method: Callable[P, R]) -> Callable[P, R]:
 
     Example:
         ```python
-        from aeris.behavior import Behavior, action
+        from academy.behavior import Behavior, action
 
         class Example(Behavior):
             @action
@@ -263,7 +264,7 @@ def loop(
     Example:
         ```python
         import threading
-        from aeris.behavior import Behavior, loop
+        from academy.behavior import Behavior, loop
 
         class Example(Behavior):
             @loop
@@ -274,7 +275,7 @@ def loop(
 
     Raises:
         TypeError: if the method signature does not conform to the
-            [`ControlLoop`][aeris.behavior.ControlLoop] protocol.
+            [`ControlLoop`][academy.behavior.ControlLoop] protocol.
     """
     method._agent_method_type = 'loop'  # type: ignore[attr-defined]
 
@@ -319,7 +320,7 @@ def event(
     Example:
         ```python
         import threading
-        from aeris.behavior import Behavior, timer
+        from academy.behavior import Behavior, timer
 
         class Example(Behavior):
             def __init__(self) -> None:
@@ -395,7 +396,7 @@ def timer(
 
     Example:
         ```python
-        from aeris.behavior import Behavior, timer
+        from academy.behavior import Behavior, timer
 
         class Example(Behavior):
             @timer(interval=1)

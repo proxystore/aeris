@@ -2,12 +2,12 @@
 
 To start the exchange:
 ```bash
-python -m aeris.exchange.http --host localhost --port 1234
+python -m academy.exchange.http --host localhost --port 1234
 ```
 
 Connect to the exchange through the client.
 ```python
-from aeris.exchange.http import HttpExchange
+from academy.exchange.http import HttpExchange
 
 with HttpExchange('localhost', 1234) as exchange:
     aid = exchange.register_agent()
@@ -48,19 +48,19 @@ from aiohttp.web import TCPSite
 from pydantic import TypeAdapter
 from pydantic import ValidationError
 
-from aeris.behavior import Behavior
-from aeris.exception import BadEntityIdError
-from aeris.exception import MailboxClosedError
-from aeris.exchange import ExchangeMixin
-from aeris.exchange.queue import AsyncQueue
-from aeris.exchange.queue import QueueClosedError
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.identifier import EntityId
-from aeris.logging import init_logging
-from aeris.message import BaseMessage
-from aeris.message import Message
-from aeris.socket import wait_connection
+from academy.behavior import Behavior
+from academy.exception import BadEntityIdError
+from academy.exception import MailboxClosedError
+from academy.exchange import ExchangeMixin
+from academy.exchange.queue import AsyncQueue
+from academy.exchange.queue import QueueClosedError
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.identifier import EntityId
+from academy.logging import init_logging
+from academy.message import BaseMessage
+from academy.message import Message
+from academy.socket import wait_connection
 
 logger = logging.getLogger(__name__)
 

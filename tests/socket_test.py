@@ -9,17 +9,17 @@ from unittest import mock
 
 import pytest
 
-from aeris.socket import _BAD_FILE_DESCRIPTOR_ERRNO
-from aeris.socket import _make_header
-from aeris.socket import _recv_from_socket
-from aeris.socket import address_by_hostname
-from aeris.socket import address_by_interface
-from aeris.socket import MESSAGE_CHUNK_SIZE
-from aeris.socket import SimpleSocket
-from aeris.socket import SimpleSocketServer
-from aeris.socket import SocketClosedError
-from aeris.socket import SocketOpenError
-from aeris.socket import wait_connection
+from academy.socket import _BAD_FILE_DESCRIPTOR_ERRNO
+from academy.socket import _make_header
+from academy.socket import _recv_from_socket
+from academy.socket import address_by_hostname
+from academy.socket import address_by_interface
+from academy.socket import MESSAGE_CHUNK_SIZE
+from academy.socket import SimpleSocket
+from academy.socket import SimpleSocketServer
+from academy.socket import SocketClosedError
+from academy.socket import SocketOpenError
+from academy.socket import wait_connection
 from testing.constant import TEST_CONNECTION_TIMEOUT
 
 
@@ -82,7 +82,7 @@ def test_simple_socket_send_multipart(mock_create_connection) -> None:
 
 
 @mock.patch('socket.create_connection')
-@mock.patch('aeris.socket._recv_from_socket')
+@mock.patch('academy.socket._recv_from_socket')
 def test_simple_socket_recv_multipart(
     mock_recv,
     mock_create_connection,

@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 from concurrent.futures import Future
 
-from aeris.behavior import action
-from aeris.behavior import Behavior
-from aeris.exchange.thread import ThreadExchange
-from aeris.launcher.thread import ThreadLauncher
-from aeris.logging import init_logging
-from aeris.manager import Manager
+from academy.behavior import action
+from academy.behavior import Behavior
+from academy.exchange.thread import ThreadExchange
+from academy.launcher.thread import ThreadLauncher
+from academy.logging import init_logging
+from academy.manager import Manager
 
 
 class Counter(Behavior):

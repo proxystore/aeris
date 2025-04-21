@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
+from academy.identifier import AgentId
+from academy.identifier import ClientId
 
 
 def tests_identifier_equality() -> None:

@@ -4,12 +4,12 @@ import time
 
 import pytest
 
-from aeris.exception import BadEntityIdError
-from aeris.exchange.thread import ThreadExchange
-from aeris.launcher.thread import ThreadLauncher
-from aeris.manager import Manager
-from aeris.message import PingRequest
-from aeris.message import PingResponse
+from academy.exception import BadEntityIdError
+from academy.exchange.thread import ThreadExchange
+from academy.launcher.thread import ThreadLauncher
+from academy.manager import Manager
+from academy.message import PingRequest
+from academy.message import PingResponse
 from testing.behavior import EmptyBehavior
 from testing.behavior import SleepBehavior
 from testing.constant import TEST_LOOP_SLEEP

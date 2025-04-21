@@ -6,11 +6,11 @@ from collections.abc import Generator
 
 import pytest
 
-from aeris.exchange.http import create_app
-from aeris.exchange.http import serve_app
-from aeris.exchange.thread import ThreadExchange
-from aeris.launcher.thread import ThreadLauncher
-from aeris.socket import open_port
+from academy.exchange.http import create_app
+from academy.exchange.http import serve_app
+from academy.exchange.thread import ThreadExchange
+from academy.launcher.thread import ThreadLauncher
+from academy.socket import open_port
 from testing.constant import TEST_CONNECTION_TIMEOUT
 
 

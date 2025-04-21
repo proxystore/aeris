@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from aeris.exchange.queue import AsyncQueue
-from aeris.exchange.queue import Queue
-from aeris.exchange.queue import QueueClosedError
+from academy.exchange.queue import AsyncQueue
+from academy.exchange.queue import Queue
+from academy.exchange.queue import QueueClosedError
 
 
 @pytest.mark.asyncio

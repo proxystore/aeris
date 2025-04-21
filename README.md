@@ -1,7 +1,7 @@
 # AERIS
 
-[![tests](https://github.com/proxystore/aeris/actions/workflows/tests.yml/badge.svg)](https://github.com/proxystore/aeris/actions)
-[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/proxystore/aeris/main.svg)](https://results.pre-commit.ci/latest/github/proxystore/aeris/main)
+[![tests](https://github.com/proxystore/academy/actions/workflows/tests.yml/badge.svg)](https://github.com/proxystore/academy/actions)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/proxystore/academy/main.svg)](https://results.pre-commit.ci/latest/github/proxystore/academy/main)
 
 > [!WARNING]
 > This project is currently in the prototyping phase and will change rapidly.
@@ -10,7 +10,7 @@
 
 **Clone the source:**
 ```bash
-git clone git@github.com:proxystore/aeris
+git clone git@github.com:proxystore/academy
 ```
 
 **Create a virtual environment of your choosing:**

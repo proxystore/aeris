@@ -6,20 +6,20 @@ from unittest import mock
 
 import pytest
 
-from aeris.exception import HandleClosedError
-from aeris.exception import HandleNotBoundError
-from aeris.exception import MailboxClosedError
-from aeris.exchange import Exchange
-from aeris.exchange.thread import ThreadExchange
-from aeris.handle import BoundRemoteHandle
-from aeris.handle import ClientRemoteHandle
-from aeris.handle import Handle
-from aeris.handle import ProxyHandle
-from aeris.handle import UnboundRemoteHandle
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.launcher.thread import ThreadLauncher
-from aeris.message import PingRequest
+from academy.exception import HandleClosedError
+from academy.exception import HandleNotBoundError
+from academy.exception import MailboxClosedError
+from academy.exchange import Exchange
+from academy.exchange.thread import ThreadExchange
+from academy.handle import BoundRemoteHandle
+from academy.handle import ClientRemoteHandle
+from academy.handle import Handle
+from academy.handle import ProxyHandle
+from academy.handle import UnboundRemoteHandle
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.launcher.thread import ThreadLauncher
+from academy.message import PingRequest
 from testing.behavior import CounterBehavior
 from testing.behavior import EmptyBehavior
 from testing.behavior import ErrorBehavior
@@ -227,7 +227,7 @@ def test_client_remote_handle_recv_thread_crash(exchange: Exchange) -> None:
     agent_id = exchange.register_agent(EmptyBehavior)
 
     with mock.patch(
-        'aeris.handle.ClientRemoteHandle._recv_responses',
+        'academy.handle.ClientRemoteHandle._recv_responses',
         side_effect=Exception(),
     ):
         handle = ClientRemoteHandle(exchange, agent_id)

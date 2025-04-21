@@ -13,17 +13,17 @@ from proxystore.store import register_store
 from proxystore.store import Store
 from proxystore.store.utils import resolve_async
 
-from aeris.behavior import Behavior
-from aeris.exchange import Exchange
-from aeris.exchange import ExchangeMixin
-from aeris.exchange import Mailbox
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.identifier import EntityId
-from aeris.message import ActionRequest
-from aeris.message import ActionResponse
-from aeris.message import Message
-from aeris.serialize import NoPickleMixin
+from academy.behavior import Behavior
+from academy.exchange import Exchange
+from academy.exchange import ExchangeMixin
+from academy.exchange import Mailbox
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.identifier import EntityId
+from academy.message import ActionRequest
+from academy.message import ActionResponse
+from academy.message import Message
+from academy.serialize import NoPickleMixin
 
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 

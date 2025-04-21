@@ -5,16 +5,16 @@ import pickle
 from typing import Any
 from typing import TypeVar
 
-from aeris.behavior import Behavior
-from aeris.exception import BadEntityIdError
-from aeris.exception import MailboxClosedError
-from aeris.exchange import ExchangeMixin
-from aeris.exchange.queue import Queue
-from aeris.exchange.queue import QueueClosedError
-from aeris.identifier import AgentId
-from aeris.identifier import ClientId
-from aeris.identifier import EntityId
-from aeris.message import Message
+from academy.behavior import Behavior
+from academy.exception import BadEntityIdError
+from academy.exception import MailboxClosedError
+from academy.exchange import ExchangeMixin
+from academy.exchange.queue import Queue
+from academy.exchange.queue import QueueClosedError
+from academy.identifier import AgentId
+from academy.identifier import ClientId
+from academy.identifier import EntityId
+from academy.message import Message
 
 logger = logging.getLogger(__name__)
 

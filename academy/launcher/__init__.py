@@ -5,10 +5,10 @@ from typing import Protocol
 from typing import runtime_checkable
 from typing import TypeVar
 
-from aeris.behavior import Behavior
-from aeris.exchange import Exchange
-from aeris.handle import RemoteHandle
-from aeris.identifier import AgentId
+from academy.behavior import Behavior
+from academy.exchange import Exchange
+from academy.handle import RemoteHandle
+from academy.identifier import AgentId
 
 __all__ = ['Launcher']
 
