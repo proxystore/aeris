@@ -185,7 +185,7 @@ class Agent(Generic[BehaviorT]):
 
     def _execute_action(self, request: ActionRequest) -> None:
         try:
-            result = self.action(request.action, request.args, request.kwargs)
+            result = self.action(request.action, request.pargs, request.kargs)
         except Exception as e:
             response = request.error(exception=e)
         else:

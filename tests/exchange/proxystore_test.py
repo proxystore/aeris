@@ -67,8 +67,8 @@ def test_basic_usage(
             src=src,
             dest=dest,
             action='test',
-            args=('value', 123),
-            kwargs={'foo': 'value', 'bar': 123},
+            pargs=('value', 123),
+            kargs={'foo': 'value', 'bar': 123},
         )
         wrapped_exchange.send(dest, request)
 
@@ -76,13 +76,13 @@ def test_basic_usage(
         assert isinstance(received, ActionRequest)
         assert request.tag == received.tag
 
-        for old, new in zip(request.args, received.args):
+        for old, new in zip(request.pargs, received.pargs):
             assert (type(new) is Proxy) == should_proxy(old)
             # will resolve the proxy if it exists
             assert old == new
 
-        for name in request.kwargs:
-            old, new = request.kwargs[name], received.kwargs[name]
+        for name in request.kargs:
+            old, new = request.kargs[name], received.kargs[name]
             assert (type(new) is Proxy) == should_proxy(old)
             assert old == new
 

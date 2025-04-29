@@ -26,17 +26,8 @@ class BaseMessage(BaseModel):
     """Base message type for messages between entities (agents or clients).
 
     Note:
-        The [`hash()`][builtins.hash] is a combination of the message type
-        and message ID.
-
-    Args:
-        tag: Unique message tag. Used to match requests and responses.
-        src: Source mailbox identifier.
-        dest: Destination mailbox identifier.
-        label: Optional label used to disambiguate response messages when
-            multiple objects (i.e., handles) share the same mailbox.
-            Note that is is distinct from the tag which is just for matching
-            requests to responses.
+        The [`hash()`][hash] of this type is a combination of the
+        message type and message ID.
     """
 
     model_config = ConfigDict(
@@ -47,10 +38,20 @@ class BaseMessage(BaseModel):
         validate_default=True,
     )
 
-    tag: uuid.UUID = Field(default_factory=uuid.uuid4)
-    src: EntityId
-    dest: EntityId
-    label: Optional[uuid.UUID] = Field(None)  # noqa: UP007
+    tag: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        description='Unique message tag used to match requests and responses.',
+    )
+    src: EntityId = Field(description='Source mailbox address.')
+    dest: EntityId = Field(description='Destination mailbox address.')
+    label: Optional[uuid.UUID] = Field(  # noqa: UP007
+        None,
+        description=(
+            'Optional label used to disambiguate response messages when '
+            'multiple objects (i.e., handles) share the same mailbox. '
+            'This is a different usage from the `tag`.'
+        ),
+    )
 
     def __hash__(self) -> int:
         return hash(type(self)) + hash(self.tag) + hash(self.label)
@@ -98,27 +99,28 @@ class BaseMessage(BaseModel):
 class ActionRequest(BaseMessage):
     """Agent action request message.
 
-    When this message is dumped to a JSON string, the `args` and `kwargs`
+    When this message is dumped to a JSON string, the `pargs` and `kargs`
     are pickled and then base64 encoded to a string. This can have non-trivial
     time and space overheads for large arguments.
-
-    Args:
-        action: Name of the action requested.
-        args: Positional arguments for the action method.
-        kwargs: Keyword arguments for the action method.
     """
 
-    action: str
-    args: tuple[Any, ...] = Field(default_factory=tuple)
-    kwargs: dict[str, Any] = Field(default_factory=dict)
+    action: str = Field(description='Name of the requested action.')
+    pargs: tuple[Any, ...] = Field(
+        default_factory=tuple,
+        description='Positional arguments to the action method.',
+    )
+    kargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description='Keyword arguments to the action method.',
+    )
     kind: Literal['action-request'] = Field('action-request', repr=False)
 
-    @field_serializer('args', 'kwargs', when_used='json')
+    @field_serializer('pargs', 'kargs', when_used='json')
     def _pickle_and_encode_obj(self, obj: Any) -> str:
         raw = pickle.dumps(obj)
         return base64.b64encode(raw).decode('utf-8')
 
-    @field_validator('args', 'kwargs', mode='before')
+    @field_validator('pargs', 'kargs', mode='before')
     @classmethod
     def _decode_pickled_obj(cls, obj: Any) -> Any:
         if not isinstance(obj, str):
@@ -159,17 +161,17 @@ class ActionRequest(BaseMessage):
 
 
 class ActionResponse(BaseMessage):
-    """Agent action response message.
+    """Agent action response message."""
 
-    Args:
-        action: Name of the action requested.
-        result: Result of the action if successful.
-        exception: Exception of the action if unsuccessful.
-    """
-
-    action: str
-    result: Any = None
-    exception: Optional[Exception] = None  # noqa: UP007
+    action: str = Field(description='Name of the requested action.')
+    result: Any = Field(
+        None,
+        description='Result of the action, if successful.',
+    )
+    exception: Optional[Exception] = Field(  # noqa: UP007
+        None,
+        description='Exception of the action, if unsuccessful.',
+    )
     kind: Literal['action-response'] = Field('action-response', repr=False)
 
     @field_serializer('exception', 'result', when_used='json')
@@ -243,7 +245,10 @@ class PingRequest(BaseMessage):
 class PingResponse(BaseMessage):
     """Ping response message."""
 
-    exception: Optional[Exception] = None  # noqa: UP007
+    exception: Optional[Exception] = Field(  # noqa: UP007
+        None,
+        description='Exception of the ping, if unsuccessful.',
+    )
     kind: Literal['ping-response'] = Field('ping-response', repr=False)
 
     @field_serializer('exception', when_used='json')
@@ -318,7 +323,10 @@ class ShutdownRequest(BaseMessage):
 class ShutdownResponse(BaseMessage):
     """Agent shutdown response message."""
 
-    exception: Optional[Exception] = None  # noqa: UP007
+    exception: Optional[Exception] = Field(  # noqa: UP007
+        None,
+        description='Exception of the request, if unsuccessful.',
+    )
     kind: Literal['shutdown-response'] = Field('shutdown-response', repr=False)
 
     @field_serializer('exception', when_used='json')

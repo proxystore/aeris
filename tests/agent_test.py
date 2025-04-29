@@ -192,7 +192,7 @@ def test_agent_action_message(exchange: Exchange) -> None:
         src=client_id,
         dest=agent_id,
         action='add',
-        args=(value,),
+        pargs=(value,),
     )
     exchange.send(agent_id, request)
     message = mailbox.recv()

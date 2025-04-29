@@ -218,13 +218,13 @@ class ProxyStoreExchange(ExchangeMixin):
             MailboxClosedError: if the mailbox was closed.
         """
         if isinstance(message, ActionRequest):
-            message.args = _proxy_iterable(
-                message.args,
+            message.pargs = _proxy_iterable(
+                message.pargs,
                 self.store,
                 self.should_proxy,
             )
-            message.kwargs = _proxy_mapping(
-                message.kwargs,
+            message.kargs = _proxy_mapping(
+                message.kargs,
                 self.store,
                 self.should_proxy,
             )
@@ -295,7 +295,7 @@ class ProxyStoreMailbox(NoPickleMixin):
         """
         message = self._mailbox.recv(timeout)
         if self._resolve_async and isinstance(message, ActionRequest):
-            for arg in (*message.args, *message.kwargs.values()):
+            for arg in (*message.pargs, *message.kargs.values()):
                 if type(arg) is Proxy:
                     resolve_async(arg)
         elif (

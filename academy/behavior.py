@@ -44,12 +44,12 @@ class Behavior:
     All [`Agent`][academy.agent.Agent] instances execute a behavior which is
     defined by a subclass of the [`Behavior`][academy.behavior.Behavior]. Each
     behavior is composed of three parts:
-      1. The [`on_startup()`][academy.behavior.Behavior.setup] and
-         [`on_shutdown()`][academy.behavior.Behavior.shutdown] methods define
-         callbacks that are invoked once at the start and end of an agent's
-         execution, respectively. The methods should be used to initialize and
-         cleanup stateful resources. Resource initialization should not be
-         performed in `__init__`.
+      1. The [`on_startup()`][academy.behavior.Behavior.on_setup] and
+         [`on_shutdown()`][academy.behavior.Behavior.on_shutdown] methods
+         define callbacks that are invoked once at the start and end of an
+         agent's execution, respectively. The methods should be used to
+         initialize and cleanup stateful resources. Resource initialization
+         should not be performed in `__init__`.
       2. Action methods annotated with [`@action`][academy.behavior.action]
          are methods that other agents can invoke on this agent. An agent
          may also call it's own action methods as normal methods.
@@ -333,7 +333,7 @@ def event(
         ```
 
     Args:
-        name: Attribute name of the [`threading.Event`][theading.Event]
+        name: Attribute name of the [`threading.Event`][threading.Event]
             to wait on.
 
     Raises:

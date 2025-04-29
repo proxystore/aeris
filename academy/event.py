@@ -38,8 +38,8 @@ def or_event(*events: threading.Event) -> threading.Event:
         with custom methods that trigger callbacks.
 
     Note:
-        Based on the
-        [Stack Overflow answer][https://stackoverflow.com/a/12320352].
+        Based on this Stack Overflow
+        [answer](https://stackoverflow.com/a/12320352).
 
     Args:
         events: One or more events to combine.
