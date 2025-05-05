@@ -88,7 +88,7 @@ markdown_extensions:
   - pymdownx.magiclink:
       repo_url_shorthand: true
       user: proxystore
-      repo: taps
+      repo: academy
   - pymdownx.mark
   - pymdownx.smartsymbols
   - pymdownx.snippets:
@@ -103,6 +103,7 @@ nav:
   - Home:
       - Overview: index.md
       - Get Started: get-started.md
+      - Concepts: concepts.md
       - FAQ: faq.md
       - Issues (GitHub): https://github.com/proxystore/academy/issues
       - Changelog (GitHub): https://github.com/proxystore/academy/releases
@@ -149,7 +150,7 @@ plugins:
             docstring_section_style: list
             docstring_style: google
             extensions:
-              - griffe_fieldz: {include_inherited: true}
+              - griffe_pydantic
             inherited_members: yes
             line_length: 60
             members_order: source

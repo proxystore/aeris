@@ -45,7 +45,20 @@ class _AgentState(enum.Enum):
 
 @dataclasses.dataclass(frozen=True)
 class AgentRunConfig:
-    """Agent run configuration."""
+    """Agent run configuration.
+
+    Attributes:
+        close_exchange_on_exit: Close the exchange interface when the agent
+            exits. Typically this should be `True` to clean up resources,
+            except when multiple agents are running in the same process
+            and sharing an exchange.
+        max_action_concurrency: Maximum size of the thread pool used to
+            concurrently execute action requests.
+        terminate_on_error: Terminate the agent by closing its mailbox
+            permanently if the agent fails.
+        terminate_on_exit: Terminate the agent by closing its mailbox
+            permanently after the agent exits.
+    """
 
     close_exchange_on_exit: bool = True
     max_action_concurrency: int | None = None

@@ -52,7 +52,7 @@ dev = [
 docs = [
     "black==25.1.0",
     "griffe==1.7.3",
-    "griffe-fieldz==0.2.1",
+    "griffe-pydantic==1.1.4",
     "mkdocs-autorefs==1.4.1",
     "mkdocs-gen-files==0.5.0",
     "mkdocs-literate-nav==0.6.2",

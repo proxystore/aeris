@@ -4,8 +4,8 @@ We recommend using [Tox](https://tox.wiki/en/latest/index.html){target=_blank} t
 This will create a new virtual environment with all of the required packages installed and TaPS installed in editable mode with the necessary extras options.
 
 ```bash
-$ git clone https://github.com/proxystore/taps
-$ cd taps
+$ git clone https://github.com/proxystore/academy
+$ cd academy
 $ tox --devenv venv -e py311
 $ . venv/bin/activate
 ```
@@ -17,8 +17,8 @@ $ . venv/bin/activate
 
 To install manually:
 ```bash
-$ git clone https://github.com/proxystore/taps
-$ cd taps
+$ git clone https://github.com/proxystore/academy
+$ cd academy
 $ python -m venv venv
 $ . venv/bin/activate
 $ pip install -e .[dev,docs]
@@ -26,7 +26,7 @@ $ pip install -e .[dev,docs]
 
 ## Continuous Integration
 
-TaPS uses [pre-commit](https://pre-commit.com/){target=_blank} and [Tox](https://tox.wiki/en/latest/index.html){target=_blank} for continuous integration (test, linting, etc.).
+Academy uses [pre-commit](https://pre-commit.com/){target=_blank} and [Tox](https://tox.wiki/en/latest/index.html){target=_blank} for continuous integration (test, linting, etc.).
 
 ### Linting and Type Checking (pre-commit)
 
@@ -42,8 +42,8 @@ $ pre-commit run --all-files
 The entire CI workflow can be run with `#!bash $ tox`.
 This will test against multiple versions of Python and can be slow.
 
-Module-level unit-test are located in the `tests/` directory and its structure is intended to match that of `taps/`.
-E.g. the tests for `taps/x/y.py` are located in `tests/x/y_test.py`; however, additional test files can be added as needed.
+Module-level unit-test are located in the `tests/` directory and its structure is intended to match that of `academy/`.
+E.g. the tests for `academy/x/y.py` are located in `tests/x/y_test.py`; however, additional test files can be added as needed.
 Tests should be narrowly focused and target a single aspect of the code's functionality, tests should not test internal implementation details of the code, and tests should not be dependent on the order in which they are run.
 
 Code that is useful for building tests but is not a test itself belongs in the `testing/` directory.
@@ -61,7 +61,7 @@ If code changes require an update to the documentation (e.g., for function signa
 
 ```bash
 # Manually
-$ pip install -e .[docs]
+$ pip install -e .[docs] # If you skipped this step earlier
 $ mkdocs build --strict  # Build only to site/index.html
 $ mkdocs serve           # Serve locally
 
