@@ -6,29 +6,29 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Documentation for FooBar.">
+        <meta name="description" content="Build and Deploy Stateful Agents across Federated Resources">
       
       
-        <meta name="author" content="FooBar Author">
+        <meta name="author" content="Globus Labs">
       
       
-        <link rel="canonical" href="https://gpauloski.github.io/python-template/latest/">
+        <link rel="canonical" href="https://academy.proxystore.dev/latest/">
       
       
       
-        <link rel="next" href="installation/">
+        <link rel="next" href="get-started/">
       
       
-      <link rel="icon" href="assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.32">
+      <link rel="icon" href="static/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.12">
     
     
       
-        <title>Overview - Python Template</title>
+        <title>Overview - Academy</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.3cba04c6.min.css">
+      <link rel="stylesheet" href="assets/stylesheets/main.2afb09e1.min.css">
       
         
         <link rel="stylesheet" href="assets/stylesheets/palette.06af60db.min.css">
@@ -52,9 +52,11 @@
     
       <link rel="stylesheet" href="assets/_mkdocstrings.css">
     
+      <link rel="stylesheet" href="css/extra.css">
+    
       <link rel="stylesheet" href="css/mkdocstrings.css">
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -71,7 +73,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="blue">
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -80,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#python-package-template-repo" class="md-skip">
+        <a href="#academy-federated-actors-and-agents" class="md-skip">
           Skip to content
         </a>
       
@@ -98,21 +100,20 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="Python Template" class="md-header__button md-logo" aria-label="Python Template" data-md-component="logo">
+    <a href="." title="Academy" class="md-header__button md-logo" aria-label="Academy" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+  <img src="static/favicon.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
       
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
     </label>
     <div class="md-header__title" data-md-component="header-title">
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Python Template
+            Academy
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -131,30 +132,30 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
     
       <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9h-1.9M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69m-9.15 3.96h2.3L12 9l-1.15 3.65Z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
       </label>
     
   
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="academy-light" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
     
       <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
       </label>
     
   
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="blue"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="academy-dark" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
     
       <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12c0-2.42-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
       </label>
     
   
@@ -162,35 +163,37 @@
       
     
     
-      <script>var media,input,key,value,palette=__md_get("__palette");if(palette&&palette.color){"(prefers-color-scheme)"===palette.color.media&&(media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']"),palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent"));for([key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
     
     
     
-      <label class="md-header__button md-icon" for="__search">
-        
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
-      </label>
-      <div class="md-search" data-md-component="search" role="dialog">
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
   <label class="md-search__overlay" for="__search"></label>
   <div class="md-search__inner" role="search">
     <form class="md-search__form" name="search">
       <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
       <label class="md-search__icon md-icon" for="__search">
         
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
         
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
       </label>
       <nav class="md-search__options" aria-label="Search">
         
           <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
             
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
           </a>
         
         <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
           
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </button>
       </nav>
       
@@ -209,16 +212,17 @@
     </div>
   </div>
 </div>
+      
     
     
       <div class="md-header__source">
-        <a href="https://github.com/gpauloski/python-template" title="Go to repository" class="md-source" data-md-component="source">
+        <a href="https://github.com/proxystore/academy" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
   </div>
   <div class="md-source__repository">
-    gpauloski/python-template
+    proxystore/academy
   </div>
 </a>
       </div>
@@ -240,6 +244,7 @@
         
   
   
+  
     
   
   
@@ -248,6 +253,7 @@
       <li class="md-tabs__item md-tabs__item--active">
         <a href="." class="md-tabs__link">
           
+  
   
   Home
 
@@ -261,9 +267,11 @@
   
   
   
+  
     <li class="md-tabs__item">
       <a href="guides/" class="md-tabs__link">
         
+  
   
     
   
@@ -278,11 +286,20 @@
   
   
   
+  
+    
+    
+      
+  
+  
+  
+  
     
     
       <li class="md-tabs__item">
         <a href="api/" class="md-tabs__link">
           
+  
   
   API Reference
 
@@ -291,8 +308,12 @@
     
   
 
+    
+  
+
       
         
+  
   
   
   
@@ -300,9 +321,29 @@
       <a href="contributing/" class="md-tabs__link">
         
   
+  
     
   
   Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="publications/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Publications
 
       </a>
     </li>
@@ -331,23 +372,22 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="Python Template" class="md-nav__button md-logo" aria-label="Python Template" data-md-component="logo">
+    <a href="." title="Academy" class="md-nav__button md-logo" aria-label="Academy" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+  <img src="static/favicon.png" alt="logo">
 
     </a>
-    Python Template
+    Academy
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/gpauloski/python-template" title="Go to repository" class="md-source" data-md-component="source">
+      <a href="https://github.com/proxystore/academy" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
   </div>
   <div class="md-source__repository">
-    gpauloski/python-template
+    proxystore/academy
   </div>
 </a>
     </div>
@@ -362,6 +402,7 @@
   
   
   
+    
     
     
     
@@ -384,8 +425,10 @@
           <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="">
             
   
+  
   <span class="md-ellipsis">
     Home
+    
   </span>
   
 
@@ -418,8 +461,10 @@
         <label class="md-nav__link md-nav__link--active" for="__toc">
           
   
+  
   <span class="md-ellipsis">
     Overview
+    
   </span>
   
 
@@ -429,8 +474,10 @@
       <a href="." class="md-nav__link md-nav__link--active">
         
   
+  
   <span class="md-ellipsis">
     Overview
+    
   </span>
   
 
@@ -452,30 +499,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#setup-instructions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Setup Instructions
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Setup Instructions">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#github-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      GitHub Configuration
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
       Installation
@@ -485,9 +508,27 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#additional-readme-sections" class="md-nav__link">
+  <a href="#example" class="md-nav__link">
     <span class="md-ellipsis">
-      Additional README Sections
+      Example
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-can-be-an-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      What can be an agent?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-academy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why Academy?
     </span>
   </a>
   
@@ -509,32 +550,13 @@
   
   
     <li class="md-nav__item">
-      <a href="installation/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Installation
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="get-started/" class="md-nav__link">
         
   
+  
   <span class="md-ellipsis">
     Get Started
+    
   </span>
   
 
@@ -551,11 +573,13 @@
   
   
     <li class="md-nav__item">
-      <a href="examples/" class="md-nav__link">
+      <a href="concepts/" class="md-nav__link">
         
+  
   
   <span class="md-ellipsis">
-    Examples
+    Concepts
+    
   </span>
   
 
@@ -572,11 +596,13 @@
   
   
     <li class="md-nav__item">
-      <a href="known-issues/" class="md-nav__link">
+      <a href="faq/" class="md-nav__link">
         
+  
   
   <span class="md-ellipsis">
-    Known Issues
+    FAQ
+    
   </span>
   
 
@@ -593,11 +619,36 @@
   
   
     <li class="md-nav__item">
-      <a href="https://github.com/gpauloski/python-template/releases" class="md-nav__link">
+      <a href="https://github.com/proxystore/academy/issues" class="md-nav__link">
         
+  
+  
+  <span class="md-ellipsis">
+    Issues (GitHub)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/proxystore/academy/releases" class="md-nav__link">
+        
+  
   
   <span class="md-ellipsis">
     Changelog (GitHub)
+    
   </span>
   
 
@@ -623,6 +674,7 @@
     
     
     
+    
       
       
         
@@ -636,13 +688,14 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
         
           
-          
           <div class="md-nav__link md-nav__container">
             <a href="guides/" class="md-nav__link ">
               
   
+  
   <span class="md-ellipsis">
     Guides
+    
   </span>
   
 
@@ -672,8 +725,10 @@
       <a href="guides/example/" class="md-nav__link">
         
   
+  
   <span class="md-ellipsis">
     Example
+    
   </span>
   
 
@@ -699,6 +754,7 @@
     
     
     
+    
       
       
         
@@ -715,8 +771,10 @@
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
+  
   <span class="md-ellipsis">
     API Reference
+    
   </span>
   
 
@@ -739,6 +797,7 @@
     
     
     
+    
       
       
         
@@ -752,29 +811,23 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
         
           
-          
-          <div class="md-nav__link md-nav__container">
-            <a href="api/" class="md-nav__link ">
-              
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="0">
+            
+  
   
   <span class="md-ellipsis">
-    foobar
+    Academy
+    
   </span>
   
 
-            </a>
-            
-              
-              <label class="md-nav__link " for="__nav_3_1" id="__nav_3_1_label" tabindex="0">
-                <span class="md-nav__icon md-icon"></span>
-              </label>
-            
-          </div>
+            <span class="md-nav__icon md-icon"></span>
+          </label>
         
         <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3_1">
             <span class="md-nav__icon md-icon"></span>
-            foobar
+            Academy
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
@@ -785,11 +838,612 @@
   
   
     <li class="md-nav__item">
-      <a href="api/foo/" class="md-nav__link">
+      <a href="api/" class="md-nav__link">
         
   
+  
   <span class="md-ellipsis">
-    foobar.foo
+    academy
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/behavior/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.behavior
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/event/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.event
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/exception/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.exception
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="api/exchange/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    academy.exchange
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_1_6" id="__nav_3_1_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_1_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1_6">
+            <span class="md-nav__icon md-icon"></span>
+            academy.exchange
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/exchange/http/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    http
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/exchange/hybrid/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    hybrid
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/exchange/proxystore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    proxystore
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/exchange/queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    queue
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/exchange/redis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    redis
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/exchange/thread/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    thread
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/handle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.handle
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/identifier/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.identifier
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="api/launcher/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    academy.launcher
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_1_9" id="__nav_3_1_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_1_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1_9">
+            <span class="md-nav__icon md-icon"></span>
+            academy.launcher
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/launcher/executor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    executor
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/launcher/thread/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    thread
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.logging
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.manager
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/message/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.message
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/multiplex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.multiplex
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/serialize/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.serialize
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/socket/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.socket
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    academy.state
+    
   </span>
   
 
@@ -823,6 +1477,7 @@
     
     
     
+    
       
       
         
@@ -836,13 +1491,14 @@
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          
           <div class="md-nav__link md-nav__container">
             <a href="contributing/" class="md-nav__link ">
               
   
+  
   <span class="md-ellipsis">
     Contributing
+    
   </span>
   
 
@@ -872,8 +1528,10 @@
       <a href="contributing/style-guide/" class="md-nav__link">
         
   
+  
   <span class="md-ellipsis">
     Style Guide
+    
   </span>
   
 
@@ -893,8 +1551,10 @@
       <a href="contributing/issues-pull-requests/" class="md-nav__link">
         
   
+  
   <span class="md-ellipsis">
     Issues and Pull Requests
+    
   </span>
   
 
@@ -914,8 +1574,10 @@
       <a href="contributing/releases/" class="md-nav__link">
         
   
+  
   <span class="md-ellipsis">
     Releases
+    
   </span>
   
 
@@ -928,6 +1590,28 @@
           </ul>
         </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="publications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Publications
+    
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -959,30 +1643,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#setup-instructions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Setup Instructions
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Setup Instructions">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#github-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      GitHub Configuration
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
       Installation
@@ -992,9 +1652,27 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#additional-readme-sections" class="md-nav__link">
+  <a href="#example" class="md-nav__link">
     <span class="md-ellipsis">
-      Additional README Sections
+      Example
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-can-be-an-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      What can be an agent?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-academy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why Academy?
     </span>
   </a>
   
@@ -1014,70 +1692,96 @@
                 
                   
 
+
   
   
 
 
-<h1 id="python-package-template-repo">Python Package Template Repo<a class="headerlink" href="#python-package-template-repo" title="Permanent link">&para;</a></h1>
-<p><a href="https://github.com/gpauloski/python-template/actions"><img alt="docs" src="https://github.com/gpauloski/python-template/actions/workflows/docs.yml/badge.svg" /></a>
-<a href="https://github.com/gpauloski/python-template/actions"><img alt="tests" src="https://github.com/gpauloski/python-template/actions/workflows/tests.yml/badge.svg" /></a>
-<a href="https://results.pre-commit.ci/latest/github/gpauloski/python-template/main"><img alt="pre-commit.ci status" src="https://results.pre-commit.ci/badge/github/gpauloski/python-template/main.svg" /></a></p>
-<p>Python package template repo that provides:
-- Package, examples, and testing layout.
-- GitHub PR and Issue templates.
-- Example docs with MKDocs and GitHub Pages.
-- CI framework with <code>pre-commit</code> and <code>tox</code>.
-- GitHub actions for running tests and publishing packages.</p>
-<p>This package setup was based on <a href="https://www.youtube.com/watch?v=q8DkatMZvUs&amp;list=PLWBKAf81pmOaP9naRiNAqug6EBnkPakvY">Anthony Sottile's project setup</a> but deviates in some places (e.g., <code>pyproject.toml</code> and <code>ruff</code>).</p>
-<h2 id="setup-instructions">Setup Instructions<a class="headerlink" href="#setup-instructions" title="Permanent link">&para;</a></h2>
-<ol>
-<li>Click the "Use this template" button at the top right of this page.</li>
-<li>Delete and directories you will not be using (commonly <code>docs/</code> if you do not want to use MKDocs or <code>examples/</code> if you will not have example code).</li>
-<li>Follow the instructions to create the new repo then clone your repo locally.</li>
-<li>The template uses "foobar" to indicate things that need to be changed.
-   Start by searching for all instances (<code>git grep foobar</code>) and changing them accordingly.</li>
-<li>Configure pre-commit:<ul>
-<li>Go to <a href="https://pre-commit.ci/">https://pre-commit.ci/</a> and enable pre-commit on your repo.</li>
-<li>Update the pre-commit badge URL in this README with your new badge URL.</li>
+<h1 id="academy-federated-actors-and-agents">Academy: Federated Actors and Agents<a class="headerlink" href="#academy-federated-actors-and-agents" title="Permanent link">&para;</a></h1>
+<p><img alt="PyPI - Version" src="https://img.shields.io/pypi/v/academy-py" />
+<a href="https://github.com/proxystore/academy/actions"><img alt="tests" src="https://github.com/proxystore/academy/actions/workflows/tests.yml/badge.svg" /></a>
+<a href="https://results.pre-commit.ci/latest/github/proxystore/academy/main"><img alt="pre-commit.ci status" src="https://results.pre-commit.ci/badge/github/proxystore/academy/main.svg" /></a></p>
+<p>Academy is a modular and extensible middleware for building and deploying stateful actors and autonomous agents across distributed systems and federated research infrastructure.
+In Academy, you can:</p>
+<ul>
+<li>⚙️  Express agent behavior and state in code</li>
+<li>📫 Manage inter-agent coordination and asynchronous communication</li>
+<li>🌐 Deploy agents across distributed, federated, and heterogeneous resources</li>
 </ul>
-</li>
-<li>Configure GitHub pages:<ul>
-<li>Go to the "Pages" section of your repository settings.</li>
-<li>Select "Deploy from a branch" and use the "gh-pages" branch.</li>
-</ul>
-</li>
-<li>Configure PyPI releases (if relevant):<ul>
-<li>Create a new API token for <a href="https://pypi.org/">https://pypi.org/</a>.</li>
-<li>Add the token as a GitHub actions secret (see the instructions <a href="https://github.com/pypa/gh-action-pypi-publish">here</a>).</li>
-</ul>
-</li>
-<li>Delete this boilerplate stuff in the README.</li>
-<li>Commit and push changes.</li>
-</ol>
-<h3 id="github-configuration">GitHub Configuration<a class="headerlink" href="#github-configuration" title="Permanent link">&para;</a></h3>
-<p>I recommend making a few other changes to the repo's setting on GitHub.
-- In "General"
-  - Select/deselect features you need/don't need.
-  - Select "Automatically delete head branches
-- In "Branches": enable branch protection on <code>main</code>.
-  - Check "Require a pull request before merging"
-  - Check "Require status checks to pass before merging"
-    - Check "Require branches to be up to date before merging"
-    - Set required checks (e.g., pre-commit.ci, tests, etc.)
-  - Check "Do not allow bypassing the above settings"</p>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
-<p>Install via pip:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>$ pip install foobar
-</span></code></pre></div></p>
-<p>For local development:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>$ tox --devenv venv -e py310
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>$ pre-commit install
+<p>Academy is available on <a href="https://pypi.org/project/academy-py/">PyPI</a>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>academy-py
 </span></code></pre></div>
-or
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>$ pip install -e .
-</span></code></pre></div></p>
-<h2 id="additional-readme-sections">Additional README Sections<a class="headerlink" href="#additional-readme-sections" title="Permanent link">&para;</a></h2>
-<p>...</p>
+<h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
+<p>Agents in Academy are defined by a <code>Behavior</code>, a class with methods decorated with <code>@action</code> can be invoked by peers and method decorated with <code>@loop</code> run autonomous control loops.</p>
+<p>The below sensor monitoring behavior periodically reads a sensor in the <code>monitor()</code> loop and processes the reading if a threshold is met.
+Clients or peers can invoke the <code>get_last_reading()</code> and <code>set_process_threshold()</code> actions remotely to interact with the monitor agent.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span><span class="o">,</span><span class="w"> </span><span class="nn">threading</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">academy.behavior</span><span class="w"> </span><span class="kn">import</span> <span class="n">Behavior</span><span class="p">,</span> <span class="n">action</span><span class="p">,</span> <span class="n">loop</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">SensorMonitorAgent</span><span class="p">(</span><span class="n">Behavior</span><span class="p">):</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_reading</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">process_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="nd">@action</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_last_reading</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_reading</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="nd">@action</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">set_process_threshold</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">process_threshold</span> <span class="o">=</span> <span class="n">value</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="nd">@loop</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">monitor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">shutdown</span><span class="p">:</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>        <span class="k">while</span> <span class="ow">not</span> <span class="n">shutdown</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>            <span class="n">value</span> <span class="o">=</span> <span class="n">read_sensor_data</span><span class="p">()</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">last_reading</span> <span class="o">=</span> <span class="n">value</span><span class="p">:</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>            <span class="k">if</span> <span class="n">value</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_threshold</span><span class="p">:</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>                <span class="n">process_reading</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Entities communicate asynchronously through <em>handles</em>, sending messages to and receiving messages from a mailbox managed by an <code>Exchange</code>.
+The <code>Launcher</code> abstracts the remote execution of an agent, and the <code>Manager</code> provides easy management of handles, launchers, and the exchange.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">academy.exchange.thread</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadExchange</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">academy.launcher.thread</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadLauncher</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">academy.manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">Manager</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">with</span> <span class="n">Manager</span><span class="p">(</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">exchange</span><span class="o">=</span><span class="n">ThreadExchange</span><span class="p">(),</span>  <span class="c1"># Replace with other implementations</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">launcher</span><span class="o">=</span><span class="n">ThreadLauncher</span><span class="p">(),</span>  <span class="c1"># for distributed deployments</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span> <span class="k">as</span> <span class="n">manager</span><span class="p">:</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">behavior</span> <span class="o">=</span> <span class="n">SensorMonitorAgent</span><span class="p">()</span>  <span class="c1"># From the above block</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">agent_handle</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">launch</span><span class="p">(</span><span class="n">behavior</span><span class="p">)</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">agent_handle</span><span class="o">.</span><span class="n">set_process_threshold</span><span class="p">(</span><span class="mf">2.0</span><span class="p">)</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="n">value</span> <span class="o">=</span> <span class="n">agent_handle</span><span class="o">.</span><span class="n">get_last_reading</span><span class="p">()</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="n">manager</span><span class="o">.</span><span class="n">shutdown</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span> <span class="n">blocking</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Learn more about Academy in <a href="https://academy.proxystore.dev/latest/get-started">Getting Started</a>.</p>
+<h2 id="what-can-be-an-agent">What can be an agent?<a class="headerlink" href="#what-can-be-an-agent" title="Permanent link">&para;</a></h2>
+<p>In Academy, an agent is a primitive entity that (1) has internal state, (2) performs actions, and (3) communicates with other agents.</p>
+<p>This allows for range of agent implementations—Academy agents are building blocks for constructing more complex agent-based systems.</p>
+<p>For example, Academy can be use to create the following:</p>
+<ul>
+<li><strong>Stateful Actors:</strong> Actors manage their own data and respond to requests in a distributed system.</li>
+<li><strong>LLM Agents:</strong> Integrate LLM-based reasoning and tool calling.</li>
+<li><strong>Embodied Agents:</strong> The "brain" controlling a robot or simulated entity where action are translated into motor commands or environment manipulations.</li>
+<li><strong>Computational Units:</strong> Encapsulate a specific computational task, like running a simulation, processing data, or training a machine learning model.</li>
+<li><strong>Orchestrators:</strong> Manage or coordinate the activities of other agents, distributing tasks and monitoring progress.</li>
+<li><strong>Data Interfaces:</strong> Interact with external data sources, such as databases, file systems, or sensors, providing a consistent interface for data access and manipulation.</li>
+</ul>
+<h2 id="why-academy">Why Academy?<a class="headerlink" href="#why-academy" title="Permanent link">&para;</a></h2>
+<p>Academy offers a powerful and flexible framework for building sophisticated, distributed agent-based systems, particularly well-suited for the complexities of scientific applications.
+Here's what makes Academy valuable:</p>
+<ul>
+<li><strong>Stateful Agents:</strong> Academy enables agents to maintain state, which is crucial for managing long-running processes, tracking context across steps, and implementing agents that need to "remember" information.</li>
+<li><strong>Agent Autonomy:</strong> Academy allows agents to have autonomous control loops, empowering them to make decisions, react to events, and execute tasks independently.</li>
+<li><strong>Flexible Deployment:</strong> Academy provides tools for managing agent deployment, communication, and coordination in complex environments such that applications can leverage heterogeneous, distributed, and federated resources.</li>
+<li><strong>Foundation for Sophisticated Applications:</strong> Academy primitives offer a strong foundation for building highly specialized and sophisticated agent-based systems that go beyond standard LLM use cases, allowing for fine-grained control and optimization tailored to specific scientific applications.</li>
+</ul>
 
 
 
@@ -1100,7 +1804,7 @@ or
         
           <button type="button" class="md-top md-icon" data-md-component="top" hidden>
   
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
   Back to top
 </button>
         
@@ -1113,7 +1817,7 @@ or
       <div class="md-copyright">
   
     <div class="md-copyright__highlight">
-      Copyright &copy; 2023—Present FooBar Authors
+      Copyright &copy; 2024—Present by <a target="_blank" href="https://gregpauloski.com">Greg Pauloski</a> and <a target="_blank" href="https://labs.globus.org">Globus Labs</a>
     </div>
   
   
@@ -1134,10 +1838,18 @@ or
     </div>
     
     
-    <script id="__config" type="application/json">{"base": ".", "features": ["content.code.annotate", "content.code.copy", "navigation.path", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+      
+      <script id="__config" type="application/json">{"base": ".", "features": ["content.code.annotate", "content.code.copy", "content.code.select", "navigation.path", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "assets/javascripts/workers/search.f8cc74c7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="assets/javascripts/bundle.471ce7a9.min.js"></script>
+      <script src="assets/javascripts/bundle.c8b220af.min.js"></script>
+      
+        <script src="javascripts/mathjax.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
     
   </body>

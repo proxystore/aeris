@@ -31,3 +31,8 @@ div.doc-contents:not(.first) {
 .doc-signature .kc {
   color: var(--md-code-hl-constant-color);
 }
+
+a.external:hover::after,
+a.autorefs-external:hover::after {
+  background-color: var(--md-accent-fg-color);
+}
