@@ -517,8 +517,8 @@ class RemoteHandle(Generic[BehaviorT], abc.ABC):
             dest=self.agent_id,
             label=self.handle_id,
             action=action,
-            args=args,
-            kwargs=kwargs,
+            pargs=args,
+            kargs=kwargs,
         )
         future: Future[R] = Future()
         self._futures[request.tag] = future

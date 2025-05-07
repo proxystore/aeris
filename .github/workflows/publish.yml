@@ -68,3 +68,9 @@ jobs:
         run: |
           git config --local user.name "GitHub Actions Bot"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Deploy docs for release version to gh-pages branch
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          pip install .[docs]
+          mike deploy --push --update-aliases "${{ env.PACKAGE_VERSION }}" latest

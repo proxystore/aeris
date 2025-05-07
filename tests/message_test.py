@@ -35,7 +35,7 @@ _dest: AgentId[Any] = AgentId.new()
 @pytest.mark.parametrize(
     'message',
     (
-        ActionRequest(src=_src, dest=_dest, action='foo', args=(b'bar',)),
+        ActionRequest(src=_src, dest=_dest, action='foo', pargs=(b'bar',)),
         ActionResponse(src=_src, dest=_dest, action='foo', result=b'bar'),
         ActionResponse(
             src=_src,
@@ -74,7 +74,7 @@ def test_deserialize_bad_type() -> None:
 @pytest.mark.parametrize(
     'request_',
     (
-        ActionRequest(src=_src, dest=_dest, action='foo', args=(b'bar',)),
+        ActionRequest(src=_src, dest=_dest, action='foo', pargs=(b'bar',)),
         PingRequest(src=_src, dest=_dest),
         ShutdownRequest(src=_src, dest=_dest),
     ),

@@ -76,7 +76,7 @@ class HttpExchange(ExchangeMixin):
     """Http exchange client.
 
     Args:
-        hostname: Host name of the exchange server.
+        host: Host name of the exchange server.
         port: Port of the exchange server.
     """
 

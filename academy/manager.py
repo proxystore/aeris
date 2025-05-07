@@ -52,7 +52,7 @@ class Manager(NoPickleMixin):
 
     Args:
         exchange: Exchange that agents and clients will use for communication.
-        launchers: A mapping of names to launchers used to execute agents
+        launcher: A mapping of names to launchers used to execute agents
             remotely. If a single launcher is provided directly, it is
             set as the default with name `'default'`, overriding any value
             of `default_launcher`.
