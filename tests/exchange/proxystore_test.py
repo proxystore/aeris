@@ -12,7 +12,7 @@ from proxystore.store import Store
 from proxystore.store.executor import ProxyAlways
 from proxystore.store.executor import ProxyNever
 
-from academy.exchange.http import HttpExchange
+from academy.exchange.cloud.client import HttpExchange
 from academy.exchange.proxystore import ProxyStoreExchange
 from academy.exchange.thread import ThreadExchange
 from academy.message import ActionRequest

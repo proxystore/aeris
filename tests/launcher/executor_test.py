@@ -13,7 +13,7 @@ from academy.behavior import Behavior
 from academy.behavior import loop
 from academy.exception import BadEntityIdError
 from academy.exchange import Exchange
-from academy.exchange.http import HttpExchange
+from academy.exchange.cloud.client import HttpExchange
 from academy.identifier import AgentId
 from academy.launcher import Launcher
 from academy.launcher.executor import ExecutorLauncher
