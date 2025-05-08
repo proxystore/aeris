@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import pathlib
+import uuid
 from collections.abc import AsyncGenerator
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -14,10 +16,14 @@ from aiohttp.web import Request
 from academy.exception import BadEntityIdError
 from academy.exception import MailboxClosedError
 from academy.exchange.cloud.config import ExchangeAuthConfig
+from academy.exchange.cloud.login import AcademyExchangeScopes
 from academy.exchange.cloud.server import _BAD_REQUEST_CODE
+from academy.exchange.cloud.server import _FORBIDDEN_CODE
 from academy.exchange.cloud.server import _MailboxManager
 from academy.exchange.cloud.server import _main
 from academy.exchange.cloud.server import _NOT_FOUND_CODE
+from academy.exchange.cloud.server import _OKAY_CODE
+from academy.exchange.cloud.server import _UNAUTHORIZED_CODE
 from academy.exchange.cloud.server import create_app
 from academy.identifier import ClientId
 from academy.message import PingRequest
@@ -171,3 +177,81 @@ async def test_null_auth_cli() -> None:
         )
         assert response.status == _NOT_FOUND_CODE
         assert await response.text() == 'Unknown mailbox ID'
+
+
+@pytest.mark.asyncio
+@mock.patch('globus_sdk.ConfidentialAppAuthClient.oauth2_token_introspect')
+async def test_globus_auth_cli(
+    mock_token_response,
+) -> None:
+    auth = ExchangeAuthConfig(
+        method='globus',
+        kwargs={'client_id': str(uuid.uuid4()), 'client_secret': ''},
+    )
+    token_meta: dict[str, Any] = {
+        'active': True,
+        'username': 'username',
+        'client_id': str(uuid.uuid4()),
+        'email': 'username@example.com',
+        'name': 'User Name',
+        'aud': [AcademyExchangeScopes.resource_server],
+    }
+    mock_token_response.return_value = token_meta
+    app = create_app(auth)
+    async with TestClient(TestServer(app)) as client:
+        response = await client.get(
+            '/discover',
+            json={'behavior': 'foo', 'allow_subclasses': False},
+            headers={'Authorization': 'Bearer token'},
+        )
+        assert response.status == _OKAY_CODE
+
+
+@pytest.mark.asyncio
+@mock.patch('globus_sdk.ConfidentialAppAuthClient.oauth2_token_introspect')
+async def test_globus_auth_cli_unauthorized(
+    mock_token_response,
+) -> None:
+    auth = ExchangeAuthConfig(
+        method='globus',
+        kwargs={'client_id': str(uuid.uuid4()), 'client_secret': ''},
+    )
+    token_meta: dict[str, Any] = {
+        'active': True,
+        'username': 'username',
+        'client_id': str(uuid.uuid4()),
+        'email': 'username@example.com',
+        'name': 'User Name',
+        'aud': [AcademyExchangeScopes.resource_server],
+    }
+    mock_token_response.return_value = token_meta
+    app = create_app(auth)
+    async with TestClient(TestServer(app)) as client:
+        response = await client.get(
+            '/discover',
+            json={'behavior': 'foo', 'allow_subclasses': False},
+        )
+        assert response.status == _UNAUTHORIZED_CODE
+
+
+@pytest.mark.asyncio
+@mock.patch('globus_sdk.ConfidentialAppAuthClient.oauth2_token_introspect')
+async def test_globus_auth_cli_forbidden(
+    mock_token_response,
+) -> None:
+    auth = ExchangeAuthConfig(
+        method='globus',
+        kwargs={'client_id': str(uuid.uuid4()), 'client_secret': ''},
+    )
+    token_meta: dict[str, Any] = {
+        'active': False,
+    }
+    mock_token_response.return_value = token_meta
+    app = create_app(auth)
+    async with TestClient(TestServer(app)) as client:
+        response = await client.get(
+            '/discover',
+            json={'behavior': 'foo', 'allow_subclasses': False},
+            headers={'Authorization': 'Bearer token'},
+        )
+        assert response.status == _FORBIDDEN_CODE
