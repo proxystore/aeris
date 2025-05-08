@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import multiprocessing
 import pathlib
+import time
 import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -15,7 +17,9 @@ from aiohttp.web import Request
 
 from academy.exception import BadEntityIdError
 from academy.exception import MailboxClosedError
+from academy.exchange.cloud.client import HttpExchange
 from academy.exchange.cloud.config import ExchangeAuthConfig
+from academy.exchange.cloud.config import ExchangeServingConfig
 from academy.exchange.cloud.login import AcademyExchangeScopes
 from academy.exchange.cloud.server import _BAD_REQUEST_CODE
 from academy.exchange.cloud.server import _FORBIDDEN_CODE
@@ -23,10 +27,13 @@ from academy.exchange.cloud.server import _MailboxManager
 from academy.exchange.cloud.server import _main
 from academy.exchange.cloud.server import _NOT_FOUND_CODE
 from academy.exchange.cloud.server import _OKAY_CODE
+from academy.exchange.cloud.server import _run
 from academy.exchange.cloud.server import _UNAUTHORIZED_CODE
 from academy.exchange.cloud.server import create_app
 from academy.identifier import ClientId
 from academy.message import PingRequest
+from academy.socket import open_port
+from testing.ssl import SSLContextFixture
 
 
 def test_server_cli(tmp_path: pathlib.Path) -> None:
@@ -49,6 +56,54 @@ client_id = "ABC"
 
     with mock.patch('academy.exchange.cloud.server._run'):
         assert _main(['--config', str(filepath)]) == 0
+
+
+def test_server_run() -> None:
+    config = ExchangeServingConfig(host='127.0.0.1', port=open_port())
+    context = multiprocessing.get_context('spawn')
+    process = context.Process(target=_run, args=(config,))
+    process.start()
+
+    while True:
+        try:
+            exchange = HttpExchange(config.host, config.port, scheme='http')
+            exchange.register_client()
+        except OSError:  # pragma: no cover
+            time.sleep(0.01)
+        else:
+            # Coverage doesn't detect the singular break but it does
+            # get executed to break from the loop
+            break  # pragma: no cover
+    process.terminate()
+    process.join()
+
+
+def test_server_run_ssl(ssl_context: SSLContextFixture) -> None:
+    config = ExchangeServingConfig(host='127.0.0.1', port=open_port())
+    config.certfile = ssl_context.certfile
+    config.keyfile = ssl_context.keyfile
+
+    context = multiprocessing.get_context('spawn')
+    process = context.Process(target=_run, args=(config,))
+    process.start()
+
+    while True:
+        try:
+            exchange = HttpExchange(
+                config.host,
+                config.port,
+                scheme='https',
+                ssl_verify=False,
+            )
+            exchange.register_client()
+        except OSError:  # pragma: no cover
+            time.sleep(0.01)
+        else:
+            # Coverage doesn't detect the singular break but it does
+            # get executed to break from the loop
+            break  # pragma: no cover
+    process.terminate()
+    process.join()
 
 
 @pytest.mark.asyncio

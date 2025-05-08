@@ -66,7 +66,7 @@ class ExchangeServingConfig(BaseModel):
             the relay server.
     """
 
-    host: Optional[str] = None  # noqa: UP007
+    host: str = 'localhost'
     port: int = 8700
     certfile: Optional[str] = None  # noqa: UP007
     keyfile: Optional[str] = None  # noqa: UP007

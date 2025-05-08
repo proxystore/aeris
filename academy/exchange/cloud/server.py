@@ -23,6 +23,7 @@ import argparse
 import asyncio
 import contextlib
 import logging
+import ssl
 import sys
 import uuid
 from collections.abc import AsyncGenerator
@@ -366,7 +367,19 @@ def _run(
         config.host,
         config.port,
     )
-    run_app(app, host=config.host, port=config.port, print=None)
+
+    ssl_context: ssl.SSLContext | None = None
+    if config.certfile is not None:
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_context.load_cert_chain(config.certfile, keyfile=config.keyfile)
+
+    run_app(
+        app,
+        host=config.host,
+        port=config.port,
+        print=None,
+        ssl_context=ssl_context,
+    )
     logger.info('Exchange closed!')
 
 

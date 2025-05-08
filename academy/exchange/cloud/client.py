@@ -38,6 +38,7 @@ class HttpExchange(ExchangeMixin):
         port: Port of the exchange server.
         additional_headers: Any other information necessary to communicate
             with the exchange. Used for passing the Globus bearer token
+        scheme: HTTP scheme, non-protected "http" by default.
     """
 
     def __init__(
@@ -45,16 +46,25 @@ class HttpExchange(ExchangeMixin):
         host: str,
         port: int,
         additional_headers: dict[str, str] | None = None,
+        scheme: str = 'http',
+        ssl_verify: str | bool | None = None,
     ) -> None:
         self.host = host
         self.port = port
+        self.scheme = scheme
 
         self._session = requests.Session()
         if additional_headers is not None:
             self._session.headers.update(additional_headers)
-        self._mailbox_url = f'http://{self.host}:{self.port}/mailbox'
-        self._message_url = f'http://{self.host}:{self.port}/message'
-        self._discover_url = f'http://{self.host}:{self.port}/discover'
+
+        if ssl_verify is not None:
+            self._session.verify = ssl_verify
+
+        self._mailbox_url = f'{self.scheme}://{self.host}:{self.port}/mailbox'
+        self._message_url = f'{self.scheme}://{self.host}:{self.port}/message'
+        self._discover_url = (
+            f'{self.scheme}://{self.host}:{self.port}/discover'
+        )
 
     def __reduce__(
         self,
