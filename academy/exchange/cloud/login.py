@@ -65,8 +65,7 @@ def get_token_storage(
 
     Args:
         filepath: Name of the database file. If not provided, defaults to a
-            file in the ProxyStore home directory
-            (see [`home_dir()`][proxystore.utils.environment.home_dir]).
+            file in the Academy home directory specified by ACADEMY_HOME.
         namespace: Optional namespace to use within the database for
             partitioning token data.
 
@@ -74,8 +73,14 @@ def get_token_storage(
         Token storage.
     """
     if filepath is None:
-        basepath = os.path.join(os.path.expanduser('~/local/share'), _APP_NAME)
+        default = os.path.join(
+            os.path.expanduser('~/local/share'),
+            _APP_NAME,
+        )
+        basepath = os.environ.get('ACADEMY_HOME', default=default)
         filepath = os.path.join(basepath, _TOKENS_FILE)
+
+    print(filepath)
     filepath = pathlib.Path(filepath)
     filepath.parent.mkdir(parents=True, exist_ok=True)
     return SQLiteTokenStorage(filepath, namespace=namespace)

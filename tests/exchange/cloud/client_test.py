@@ -121,3 +121,12 @@ def test_exchange_discover(http_exchange_server: tuple[str, int]) -> None:
         assert len(exchange.discover(A)) == 0
         assert exchange.discover(B, allow_subclasses=False) == (bid,)
         assert exchange.discover(B, allow_subclasses=True) == (bid, cid)
+
+
+def test_additional_headers() -> None:
+    with HttpExchange(
+        'localhost',
+        0,
+        {'Authorization': 'fake auth'},
+    ) as exchange:
+        assert 'Authorization' in exchange._session.headers
