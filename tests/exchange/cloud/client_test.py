@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from unittest import mock
 
 import pytest
@@ -9,8 +10,10 @@ from academy.behavior import Behavior
 from academy.exception import BadEntityIdError
 from academy.exception import MailboxClosedError
 from academy.exchange.cloud.client import HttpExchange
+from academy.exchange.cloud.client import spawn_http_exchange
 from academy.identifier import ClientId
 from academy.message import PingRequest
+from academy.socket import open_port
 from testing.behavior import EmptyBehavior
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_SLEEP
@@ -130,3 +133,13 @@ def test_additional_headers() -> None:
         {'Authorization': 'fake auth'},
     ) as exchange:
         assert 'Authorization' in exchange._session.headers
+
+
+def test_spawn_http_exchange() -> None:
+    with spawn_http_exchange(
+        'localhost',
+        open_port(),
+        level=logging.ERROR,
+        timeout=TEST_CONNECTION_TIMEOUT,
+    ) as exchange:
+        assert isinstance(exchange, HttpExchange)

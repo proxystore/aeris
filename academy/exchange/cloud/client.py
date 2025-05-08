@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import logging
+import multiprocessing
 import sys
 import uuid
+from collections.abc import Generator
 from typing import Any
 from typing import TypeVar
 
@@ -17,13 +20,16 @@ from academy.behavior import Behavior
 from academy.exception import BadEntityIdError
 from academy.exception import MailboxClosedError
 from academy.exchange import ExchangeMixin
+from academy.exchange.cloud.config import ExchangeServingConfig
 from academy.exchange.cloud.server import _FORBIDDEN_CODE
 from academy.exchange.cloud.server import _NOT_FOUND_CODE
+from academy.exchange.cloud.server import _run
 from academy.identifier import AgentId
 from academy.identifier import ClientId
 from academy.identifier import EntityId
 from academy.message import BaseMessage
 from academy.message import Message
+from academy.socket import wait_connection
 
 logger = logging.getLogger(__name__)
 
@@ -307,3 +313,65 @@ class HttpMailbox:
             self.mailbox_id,
         )
         return message
+
+
+@contextlib.contextmanager
+def spawn_http_exchange(
+    host: str = '0.0.0.0',
+    port: int = 5463,
+    *,
+    level: int | str = logging.WARNING,
+    timeout: float | None = None,
+) -> Generator[HttpExchange]:
+    """Context manager that spawns an HTTP exchange in a subprocess.
+
+    This function spawns a new process (rather than forking) and wait to
+    return until a connection with the exchange has been established.
+    When exiting the context manager, `SIGINT` will be sent to the exchange
+    process. If the process does not exit within 5 seconds, it will be
+    killed.
+
+    Note: The exclusion of authentication and ssl configuration is
+    intentional. This method should only be used for temporary exchanges
+    in trusted environments (i.e. the login node of a cluster).
+
+    Args:
+        host: Host the exchange should listen on.
+        port: Port the exchange should listen on.
+        level: Logging level.
+        timeout: Connection timeout when waiting for exchange to start.
+
+    Returns:
+        Exchange interface connected to the spawned exchange.
+    """
+    # Fork is not safe in multi-threaded context.
+    multiprocessing.set_start_method('spawn')
+
+    config = ExchangeServingConfig(host=host, port=port, log_level=level)
+    exchange_process = multiprocessing.Process(
+        target=_run,
+        args=(config,),
+    )
+    exchange_process.start()
+
+    logger.info('Starting exchange server...')
+    wait_connection(host, port, timeout=timeout)
+    logger.info('Started exchange server!')
+
+    try:
+        with HttpExchange(host, port) as exchange:
+            yield exchange
+    finally:
+        logger.info('Terminating exchange server...')
+        wait = 5
+        exchange_process.terminate()
+        exchange_process.join(timeout=wait)
+        if exchange_process.exitcode is None:  # pragma: no cover
+            logger.info(
+                'Killing exchange server after waiting %s seconds',
+                wait,
+            )
+            exchange_process.kill()
+        else:
+            logger.info('Terminated exchange server!')
+        exchange_process.close()
