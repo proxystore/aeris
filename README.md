@@ -101,3 +101,19 @@ Here's what makes Academy valuable:
 * **Agent Autonomy:** Academy allows agents to have autonomous control loops, empowering them to make decisions, react to events, and execute tasks independently.
 * **Flexible Deployment:** Academy provides tools for managing agent deployment, communication, and coordination in complex environments such that applications can leverage heterogeneous, distributed, and federated resources.
 * **Foundation for Sophisticated Applications:** Academy primitives offer a strong foundation for building highly specialized and sophisticated agent-based systems that go beyond standard LLM use cases, allowing for fine-grained control and optimization tailored to specific scientific applications.
+
+## Citation
+
+The Academy preprint is available on [arXiv](https://arxiv.org/abs/2505.05428).
+
+```bibtex
+@misc{pauloski2025academy,
+    title = {{E}mpowering {S}cientific {W}orkflows with {F}ederated {A}gents},
+    author = {J. Gregory Pauloski and Yadu Babuji and Ryan Chard and Mansi Sakarvadia and Kyle Chard and Ian Foster},
+    archivePrefix = {arXiv},
+    eprint = {2505.05428},
+    primaryClass = {cs.MA},
+    url = {https://arxiv.org/abs/2505.05428},
+    year = {2025},
+}
+```
