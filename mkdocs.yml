@@ -145,6 +145,7 @@ plugins:
             - https://redis-py.readthedocs.io/en/stable/objects.inv
             - https://parsl.readthedocs.io/en/stable/objects.inv
             - https://globus-compute.readthedocs.io/en/stable/objects.inv
+            - https://globus-sdk-python.readthedocs.io/en/stable/objects.inv
           options:
             annotations_path: brief
             docstring_section_style: list

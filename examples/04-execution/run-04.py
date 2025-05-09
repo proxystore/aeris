@@ -7,7 +7,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 from academy.behavior import action
 from academy.behavior import Behavior
-from academy.exchange.http import spawn_http_exchange
+from academy.exchange.cloud.client import spawn_http_exchange
 from academy.handle import Handle
 from academy.launcher.executor import ExecutorLauncher
 from academy.logging import init_logging

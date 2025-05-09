@@ -73,7 +73,7 @@ Closed indicates permanent termination of the entity and will cause [`MailboxClo
 Academy provides many exchange implementations for different scenarios, such as:
 
 * [`ThreadExchange`][academy.exchange.thread.ThreadExchange]: Uses thread-safe queues for single-process, multiple-agent scenarios. Useful for testing and development.
-* [`HttpExchange`][academy.exchange.http.HttpExchange]: Centralized service that maintains mailboxes and exposes a REST API. Lower performance but easy to extend with common authentication tools.
+* [`HttpExchange`][academy.exchange.cloud.client.HttpExchange]: Centralized service that maintains mailboxes and exposes a REST API. Lower performance but easy to extend with common authentication tools.
 * [`RedisExchange`][academy.exchange.redis.RedisExchange]: Stores state and mailboxes in a Redis server. Use of Redis enables optional replication and cloud-hosting for improved resilience and availability.
 * [`HybridExchange`][academy.exchange.hybrid.HybridExchange]: Entities host their mailbox locally and message each other directly over TCP when possible. Redis is used to map mailbox IDs to address and port pairs, and to store messages for offline entities or when two entities cannot directly communicate (such as when behind NATs).
 
