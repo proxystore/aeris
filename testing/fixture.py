@@ -6,8 +6,8 @@ from collections.abc import Generator
 
 import pytest
 
-from academy.exchange.http import create_app
-from academy.exchange.http import serve_app
+from academy.exchange.cloud.server import create_app
+from academy.exchange.cloud.server import serve_app
 from academy.exchange.thread import ThreadExchange
 from academy.launcher.thread import ThreadLauncher
 from academy.socket import open_port

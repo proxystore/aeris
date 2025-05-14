@@ -24,10 +24,13 @@ classifiers = [
 ]
 dependencies = [
     "aiohttp",
+    "click!=8.1.4",
+    "globus_sdk",
     "proxystore>=0.8.0",
     "pydantic>=2,<3",
     "redis",
     "requests",
+    "tomli ; python_version<'3.11'",
     "typing-extensions>=4.3.0 ; python_version<'3.11'",
 ]
 
