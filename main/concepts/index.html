@@ -1046,18 +1046,191 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1_6_1" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../api/exchange/cloud/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    cloud
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_1_6_1" id="__nav_3_1_6_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_3_1_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            cloud
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
-      <a href="../api/exchange/http/" class="md-nav__link">
+      <a href="../api/exchange/cloud/authenticate/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    http
+    authenticate
     
   </span>
   
 
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/exchange/cloud/client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    client
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/exchange/cloud/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    config
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/exchange/cloud/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    exceptions
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/exchange/cloud/login/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    login
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/exchange/cloud/server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    server
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -1844,7 +2017,7 @@ Closed indicates permanent termination of the entity and will cause <a class="au
 <p>Academy provides many exchange implementations for different scenarios, such as:</p>
 <ul>
 <li><a class="autorefs autorefs-internal" title="            ThreadExchange" href="../api/exchange/thread/#academy.exchange.thread.ThreadExchange"><code>ThreadExchange</code></a>: Uses thread-safe queues for single-process, multiple-agent scenarios. Useful for testing and development.</li>
-<li><a class="autorefs autorefs-internal" title="            HttpExchange" href="../api/exchange/http/#academy.exchange.http.HttpExchange"><code>HttpExchange</code></a>: Centralized service that maintains mailboxes and exposes a REST API. Lower performance but easy to extend with common authentication tools.</li>
+<li><a class="autorefs autorefs-internal" title="            HttpExchange" href="../api/exchange/cloud/client/#academy.exchange.cloud.client.HttpExchange"><code>HttpExchange</code></a>: Centralized service that maintains mailboxes and exposes a REST API. Lower performance but easy to extend with common authentication tools.</li>
 <li><a class="autorefs autorefs-internal" title="            RedisExchange" href="../api/exchange/redis/#academy.exchange.redis.RedisExchange"><code>RedisExchange</code></a>: Stores state and mailboxes in a Redis server. Use of Redis enables optional replication and cloud-hosting for improved resilience and availability.</li>
 <li><a class="autorefs autorefs-internal" title="            HybridExchange" href="../api/exchange/hybrid/#academy.exchange.hybrid.HybridExchange"><code>HybridExchange</code></a>: Entities host their mailbox locally and message each other directly over TCP when possible. Redis is used to map mailbox IDs to address and port pairs, and to store messages for offline entities or when two entities cannot directly communicate (such as when behind NATs).</li>
 </ul>
