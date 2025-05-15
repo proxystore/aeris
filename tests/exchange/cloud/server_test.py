@@ -20,6 +20,7 @@ from academy.exception import MailboxClosedError
 from academy.exchange.cloud.client import HttpExchange
 from academy.exchange.cloud.config import ExchangeAuthConfig
 from academy.exchange.cloud.config import ExchangeServingConfig
+from academy.exchange.cloud.exceptions import UnauthorizedError
 from academy.exchange.cloud.login import AcademyExchangeScopes
 from academy.exchange.cloud.server import _BAD_REQUEST_CODE
 from academy.exchange.cloud.server import _FORBIDDEN_CODE
@@ -109,28 +110,45 @@ def test_server_run_ssl(ssl_context: SSLContextFixture) -> None:
 @pytest.mark.asyncio
 async def test_mailbox_manager_create_close() -> None:
     manager = _MailboxManager()
+    user_id = str(uuid.uuid4())
     uid = ClientId.new()
     # Should do nothing since mailbox doesn't exist
-    await manager.terminate(uid)
-    assert not manager.check_mailbox(uid)
-    manager.create_mailbox(uid)
-    assert manager.check_mailbox(uid)
-    manager.create_mailbox(uid)  # Idempotent check
-    await manager.terminate(uid)
-    await manager.terminate(uid)  # Idempotent check
+    await manager.terminate(user_id, uid)
+    assert not manager.check_mailbox(user_id, uid)
+    manager.create_mailbox(user_id, uid)
+    assert manager.check_mailbox(user_id, uid)
+    manager.create_mailbox(user_id, uid)  # Idempotent check
+
+    bad_user = str(uuid.uuid4())  # Authentication check
+    with pytest.raises(UnauthorizedError):
+        manager.create_mailbox(bad_user, uid)
+    with pytest.raises(UnauthorizedError):
+        manager.check_mailbox(bad_user, uid)
+    with pytest.raises(UnauthorizedError):
+        await manager.terminate(bad_user, uid)
+
+    await manager.terminate(user_id, uid)
+    await manager.terminate(user_id, uid)  # Idempotent check
 
 
 @pytest.mark.asyncio
 async def test_mailbox_manager_send_recv() -> None:
     manager = _MailboxManager()
+    user_id = str(uuid.uuid4())
+    bad_user = str(uuid.uuid4())
     uid = ClientId.new()
-    manager.create_mailbox(uid)
+    manager.create_mailbox(user_id, uid)
 
     message = PingRequest(src=uid, dest=uid)
-    await manager.put(message)
-    assert await manager.get(uid) == message
+    with pytest.raises(UnauthorizedError):
+        await manager.put(bad_user, message)
+    await manager.put(user_id, message)
 
-    await manager.terminate(uid)
+    with pytest.raises(UnauthorizedError):
+        await manager.get(bad_user, uid)
+    assert await manager.get(user_id, uid) == message
+
+    await manager.terminate(user_id, uid)
 
 
 @pytest.mark.asyncio
@@ -140,25 +158,25 @@ async def test_mailbox_manager_bad_identifier() -> None:
     message = PingRequest(src=uid, dest=uid)
 
     with pytest.raises(BadEntityIdError):
-        await manager.get(uid)
+        await manager.get(None, uid)
 
     with pytest.raises(BadEntityIdError):
-        await manager.put(message)
+        await manager.put(None, message)
 
 
 @pytest.mark.asyncio
 async def test_mailbox_manager_mailbox_closed() -> None:
     manager = _MailboxManager()
     uid = ClientId.new()
-    manager.create_mailbox(uid)
-    await manager.terminate(uid)
+    manager.create_mailbox(None, uid)
+    await manager.terminate(None, uid)
     message = PingRequest(src=uid, dest=uid)
 
     with pytest.raises(MailboxClosedError):
-        await manager.get(uid)
+        await manager.get(None, uid)
 
     with pytest.raises(MailboxClosedError):
-        await manager.put(message)
+        await manager.put(None, message)
 
 
 @pytest_asyncio.fixture
