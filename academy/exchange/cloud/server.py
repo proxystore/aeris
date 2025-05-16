@@ -67,9 +67,9 @@ logger = logging.getLogger(__name__)
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 _OKAY_CODE = 200
 _BAD_REQUEST_CODE = 400
+_UNAUTHORIZED_CODE = 401
 _FORBIDDEN_CODE = 403
 _NOT_FOUND_CODE = 404
-_UNAUTHORIZED_CODE = 405
 
 
 class _MailboxManager:
@@ -87,7 +87,7 @@ class _MailboxManager:
 
     def check_mailbox(self, client: str | None, uid: EntityId) -> bool:
         if not self.has_permissions(client, uid):
-            raise UnauthorizedError(
+            raise ForbiddenError(
                 'Client does not have correct permissions.',
             )
 
@@ -100,7 +100,7 @@ class _MailboxManager:
         behavior: tuple[str, ...] | None = None,
     ) -> None:
         if not self.has_permissions(client, uid):
-            raise UnauthorizedError(
+            raise ForbiddenError(
                 'Client does not have correct permissions.',
             )
 
@@ -113,7 +113,7 @@ class _MailboxManager:
 
     async def terminate(self, client: str | None, uid: EntityId) -> None:
         if not self.has_permissions(client, uid):
-            raise UnauthorizedError(
+            raise ForbiddenError(
                 'Client does not have correct permissions.',
             )
 
@@ -142,7 +142,7 @@ class _MailboxManager:
 
     async def get(self, client: str | None, uid: EntityId) -> Message:
         if not self.has_permissions(client, uid):
-            raise UnauthorizedError(
+            raise ForbiddenError(
                 'Client does not have correct permissions.',
             )
 
@@ -155,7 +155,7 @@ class _MailboxManager:
 
     async def put(self, client: str | None, message: Message) -> None:
         if not self.has_permissions(client, message.dest):
-            raise UnauthorizedError(
+            raise ForbiddenError(
                 'Client does not have correct permissions.',
             )
 
@@ -192,9 +192,9 @@ async def _create_mailbox_route(request: Request) -> Response:
     client_id = request.headers.get('client_id', None)
     try:
         manager.create_mailbox(client_id, mailbox_id, behavior)
-    except UnauthorizedError:
+    except ForbiddenError:
         return Response(
-            status=_UNAUTHORIZED_CODE,
+            status=_FORBIDDEN_CODE,
             text='Incorrect permissions',
         )
     return Response(status=_OKAY_CODE)
@@ -218,9 +218,9 @@ async def _terminate_route(request: Request) -> Response:
     client_id = request.headers.get('client_id', None)
     try:
         await manager.terminate(client_id, mailbox_id)
-    except UnauthorizedError:
+    except ForbiddenError:
         return Response(
-            status=_UNAUTHORIZED_CODE,
+            status=_FORBIDDEN_CODE,
             text='Incorrect permissions',
         )
     return Response(status=_OKAY_CODE)
@@ -269,9 +269,9 @@ async def _check_mailbox_route(request: Request) -> Response:
     client_id = request.headers.get('client_id', None)
     try:
         exists = manager.check_mailbox(client_id, mailbox_id)
-    except UnauthorizedError:
+    except ForbiddenError:
         return Response(
-            status=_UNAUTHORIZED_CODE,
+            status=_FORBIDDEN_CODE,
             text='Incorrect permissions',
         )
     return json_response({'exists': exists})
@@ -297,9 +297,9 @@ async def _send_message_route(request: Request) -> Response:
         return Response(status=_NOT_FOUND_CODE, text='Unknown mailbox ID')
     except MailboxClosedError:
         return Response(status=_FORBIDDEN_CODE, text='Mailbox was closed')
-    except UnauthorizedError:
+    except ForbiddenError:
         return Response(
-            status=_UNAUTHORIZED_CODE,
+            status=_FORBIDDEN_CODE,
             text='Incorrect permissions',
         )
     else:
@@ -328,9 +328,9 @@ async def _recv_message_route(request: Request) -> Response:
         return Response(status=_NOT_FOUND_CODE, text='Unknown mailbox ID')
     except MailboxClosedError:
         return Response(status=_FORBIDDEN_CODE, text='Mailbox was closed')
-    except UnauthorizedError:
+    except ForbiddenError:
         return Response(
-            status=_UNAUTHORIZED_CODE,
+            status=_FORBIDDEN_CODE,
             text='Incorrect permissions',
         )
     else:

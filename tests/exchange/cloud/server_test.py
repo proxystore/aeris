@@ -20,7 +20,7 @@ from academy.exception import MailboxClosedError
 from academy.exchange.cloud.client import HttpExchange
 from academy.exchange.cloud.config import ExchangeAuthConfig
 from academy.exchange.cloud.config import ExchangeServingConfig
-from academy.exchange.cloud.exceptions import UnauthorizedError
+from academy.exchange.cloud.exceptions import ForbiddenError
 from academy.exchange.cloud.login import AcademyExchangeScopes
 from academy.exchange.cloud.server import _BAD_REQUEST_CODE
 from academy.exchange.cloud.server import _FORBIDDEN_CODE
@@ -121,11 +121,11 @@ async def test_mailbox_manager_create_close() -> None:
     manager.create_mailbox(user_id, uid)  # Idempotent check
 
     bad_user = str(uuid.uuid4())  # Authentication check
-    with pytest.raises(UnauthorizedError):
+    with pytest.raises(ForbiddenError):
         manager.create_mailbox(bad_user, uid)
-    with pytest.raises(UnauthorizedError):
+    with pytest.raises(ForbiddenError):
         manager.check_mailbox(bad_user, uid)
-    with pytest.raises(UnauthorizedError):
+    with pytest.raises(ForbiddenError):
         await manager.terminate(bad_user, uid)
 
     await manager.terminate(user_id, uid)
@@ -141,11 +141,11 @@ async def test_mailbox_manager_send_recv() -> None:
     manager.create_mailbox(user_id, uid)
 
     message = PingRequest(src=uid, dest=uid)
-    with pytest.raises(UnauthorizedError):
+    with pytest.raises(ForbiddenError):
         await manager.put(bad_user, message)
     await manager.put(user_id, message)
 
-    with pytest.raises(UnauthorizedError):
+    with pytest.raises(ForbiddenError):
         await manager.get(bad_user, uid)
     assert await manager.get(user_id, uid) == message
 
@@ -237,7 +237,7 @@ async def test_recv_mailbox_validation_error(cli) -> None:
 
 
 @pytest.mark.asyncio
-async def test_null_auth_cli() -> None:
+async def test_null_auth_client() -> None:
     auth = ExchangeAuthConfig()
     app = create_app(auth)
     async with TestClient(TestServer(app)) as client:
@@ -254,7 +254,7 @@ async def test_null_auth_cli() -> None:
 
 
 @pytest_asyncio.fixture
-async def auth_cli() -> AsyncGenerator[TestClient[Request, Application]]:
+async def auth_client() -> AsyncGenerator[TestClient[Request, Application]]:
     auth = ExchangeAuthConfig(
         method='globus',
         kwargs={'client_id': str(uuid.uuid4()), 'client_secret': ''},
@@ -299,26 +299,26 @@ async def auth_cli() -> AsyncGenerator[TestClient[Request, Application]]:
 
 
 @pytest.mark.asyncio
-async def test_globus_auth_cli_create_discover_close(auth_cli) -> None:
+async def test_globus_auth_client_create_discover_close(auth_client) -> None:
     aid = AgentId.new(name='test').model_dump_json()
 
     # Create agent
-    response = await auth_cli.post(
+    response = await auth_client.post(
         '/mailbox',
         json={'mailbox': aid, 'behavior': 'foo'},
         headers={'Authorization': 'Bearer user_1'},
     )
     assert response.status == _OKAY_CODE
 
-    response = await auth_cli.post(
+    response = await auth_client.post(
         '/mailbox',
         json={'mailbox': aid, 'behavior': 'foo'},
         headers={'Authorization': 'Bearer user_2'},
     )
-    assert response.status == _UNAUTHORIZED_CODE
+    assert response.status == _FORBIDDEN_CODE
 
     # Discover
-    response = await auth_cli.get(
+    response = await auth_client.get(
         '/discover',
         json={'behavior': 'foo', 'allow_subclasses': False},
         headers={'Authorization': 'Bearer user_1'},
@@ -330,7 +330,7 @@ async def test_globus_auth_cli_create_discover_close(auth_cli) -> None:
     assert len(agent_ids) == 1
     assert response.status == _OKAY_CODE
 
-    response = await auth_cli.get(
+    response = await auth_client.get(
         '/discover',
         json={'behavior': 'foo', 'allow_subclasses': False},
         headers={'Authorization': 'Bearer user_2'},
@@ -343,29 +343,29 @@ async def test_globus_auth_cli_create_discover_close(auth_cli) -> None:
     assert response.status == _OKAY_CODE
 
     # Check mailbox
-    response = await auth_cli.get(
+    response = await auth_client.get(
         '/mailbox',
         json={'mailbox': aid},
         headers={'Authorization': 'Bearer user_1'},
     )
     assert response.status == _OKAY_CODE
 
-    response = await auth_cli.get(
+    response = await auth_client.get(
         '/mailbox',
         json={'mailbox': aid},
         headers={'Authorization': 'Bearer user_2'},
     )
-    assert response.status == _UNAUTHORIZED_CODE
+    assert response.status == _FORBIDDEN_CODE
 
     # Delete mailbox
-    response = await auth_cli.delete(
+    response = await auth_client.delete(
         '/mailbox',
         json={'mailbox': aid},
         headers={'Authorization': 'Bearer user_2'},
     )
-    assert response.status == _UNAUTHORIZED_CODE
+    assert response.status == _FORBIDDEN_CODE
 
-    response = await auth_cli.delete(
+    response = await auth_client.delete(
         '/mailbox',
         json={'mailbox': aid},
         headers={'Authorization': 'Bearer user_1'},
@@ -374,13 +374,13 @@ async def test_globus_auth_cli_create_discover_close(auth_cli) -> None:
 
 
 @pytest.mark.asyncio
-async def test_globus_auth_cli_message(auth_cli) -> None:
+async def test_globus_auth_client_message(auth_client) -> None:
     aid: AgentId[Any] = AgentId.new(name='test')
     cid = ClientId.new()
     message = PingRequest(src=cid, dest=aid)
 
     # Create agent
-    response = await auth_cli.post(
+    response = await auth_client.post(
         '/mailbox',
         json={'mailbox': aid.model_dump_json(), 'behavior': 'foo'},
         headers={'Authorization': 'Bearer user_1'},
@@ -388,7 +388,7 @@ async def test_globus_auth_cli_message(auth_cli) -> None:
     assert response.status == _OKAY_CODE
 
     # Create client
-    response = await auth_cli.post(
+    response = await auth_client.post(
         '/mailbox',
         json={'mailbox': cid.model_dump_json()},
         headers={'Authorization': 'Bearer user_1'},
@@ -396,7 +396,7 @@ async def test_globus_auth_cli_message(auth_cli) -> None:
     assert response.status == _OKAY_CODE
 
     # Send valid message
-    response = await auth_cli.put(
+    response = await auth_client.put(
         '/message',
         json={'message': message.model_dump_json()},
         headers={'Authorization': 'Bearer user_1'},
@@ -404,31 +404,31 @@ async def test_globus_auth_cli_message(auth_cli) -> None:
     assert response.status == _OKAY_CODE
 
     # Send unauthorized message
-    response = await auth_cli.put(
+    response = await auth_client.put(
         '/message',
         json={'message': message.model_dump_json()},
         headers={'Authorization': 'Bearer user_2'},
     )
-    assert response.status == _UNAUTHORIZED_CODE
+    assert response.status == _FORBIDDEN_CODE
 
-    response = await auth_cli.get(
+    response = await auth_client.get(
         '/message',
         json={'mailbox': aid.model_dump_json()},
         headers={'Authorization': 'Bearer user_1'},
     )
     assert response.status == _OKAY_CODE
 
-    response = await auth_cli.get(
+    response = await auth_client.get(
         '/message',
         json={'mailbox': aid.model_dump_json()},
         headers={'Authorization': 'Bearer user_2'},
     )
-    assert response.status == _UNAUTHORIZED_CODE
+    assert response.status == _FORBIDDEN_CODE
 
 
 @pytest.mark.asyncio
-async def test_globus_auth_cli_missing_auth(auth_cli) -> None:
-    response = await auth_cli.get(
+async def test_globus_auth_client_missing_auth(auth_client) -> None:
+    response = await auth_client.get(
         '/discover',
         json={'behavior': 'foo', 'allow_subclasses': False},
     )
@@ -436,8 +436,8 @@ async def test_globus_auth_cli_missing_auth(auth_cli) -> None:
 
 
 @pytest.mark.asyncio
-async def test_globus_auth_cli_forbidden(auth_cli) -> None:
-    response = await auth_cli.get(
+async def test_globus_auth_client_forbidden(auth_client) -> None:
+    response = await auth_client.get(
         '/discover',
         json={'behavior': 'foo', 'allow_subclasses': False},
         headers={'Authorization': 'Bearer user_3'},
