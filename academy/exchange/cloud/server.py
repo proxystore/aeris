@@ -67,31 +67,56 @@ logger = logging.getLogger(__name__)
 BehaviorT = TypeVar('BehaviorT', bound=Behavior)
 _OKAY_CODE = 200
 _BAD_REQUEST_CODE = 400
+_UNAUTHORIZED_CODE = 401
 _FORBIDDEN_CODE = 403
 _NOT_FOUND_CODE = 404
-_UNAUTHORIZED_CODE = 405
 
 
 class _MailboxManager:
     def __init__(self) -> None:
+        self._owners: dict[EntityId, str | None] = {}
         self._mailboxes: dict[EntityId, AsyncQueue[Message]] = {}
         self._behaviors: dict[AgentId[Any], tuple[str, ...]] = {}
 
-    def check_mailbox(self, uid: EntityId) -> bool:
+    def has_permissions(
+        self,
+        client: str | None,
+        entity: EntityId,
+    ) -> bool:
+        return entity not in self._owners or self._owners[entity] == client
+
+    def check_mailbox(self, client: str | None, uid: EntityId) -> bool:
+        if not self.has_permissions(client, uid):
+            raise ForbiddenError(
+                'Client does not have correct permissions.',
+            )
+
         return uid in self._mailboxes
 
     def create_mailbox(
         self,
+        client: str | None,
         uid: EntityId,
         behavior: tuple[str, ...] | None = None,
     ) -> None:
+        if not self.has_permissions(client, uid):
+            raise ForbiddenError(
+                'Client does not have correct permissions.',
+            )
+
         if uid not in self._mailboxes or self._mailboxes[uid].closed():
             self._mailboxes[uid] = AsyncQueue()
+            self._owners[uid] = client
             if behavior is not None and isinstance(uid, AgentId):
                 self._behaviors[uid] = behavior
             logger.info('Created mailbox for %s', uid)
 
-    async def terminate(self, uid: EntityId) -> None:
+    async def terminate(self, client: str | None, uid: EntityId) -> None:
+        if not self.has_permissions(client, uid):
+            raise ForbiddenError(
+                'Client does not have correct permissions.',
+            )
+
         mailbox = self._mailboxes.get(uid, None)
         if mailbox is not None:
             await mailbox.close()
@@ -99,11 +124,14 @@ class _MailboxManager:
 
     async def discover(
         self,
+        client: str | None,
         behavior: str,
         allow_subclasses: bool,
     ) -> list[AgentId[Any]]:
         found: list[AgentId[Any]] = []
         for aid, behaviors in self._behaviors.items():
+            if not self.has_permissions(client, aid):
+                continue
             if self._mailboxes[aid].closed():
                 continue
             if behavior == behaviors[0] or (
@@ -112,7 +140,12 @@ class _MailboxManager:
                 found.append(aid)
         return found
 
-    async def get(self, uid: EntityId) -> Message:
+    async def get(self, client: str | None, uid: EntityId) -> Message:
+        if not self.has_permissions(client, uid):
+            raise ForbiddenError(
+                'Client does not have correct permissions.',
+            )
+
         try:
             return await self._mailboxes[uid].get()
         except KeyError as e:
@@ -120,7 +153,12 @@ class _MailboxManager:
         except QueueClosedError as e:
             raise MailboxClosedError(uid) from e
 
-    async def put(self, message: Message) -> None:
+    async def put(self, client: str | None, message: Message) -> None:
+        if not self.has_permissions(client, message.dest):
+            raise ForbiddenError(
+                'Client does not have correct permissions.',
+            )
+
         try:
             await self._mailboxes[message.dest].put(message)
         except KeyError as e:
@@ -151,7 +189,14 @@ async def _create_mailbox_route(request: Request) -> Response:
             text='Missing or invalid mailbox ID',
         )
 
-    manager.create_mailbox(mailbox_id, behavior)
+    client_id = request.headers.get('client_id', None)
+    try:
+        manager.create_mailbox(client_id, mailbox_id, behavior)
+    except ForbiddenError:
+        return Response(
+            status=_FORBIDDEN_CODE,
+            text='Incorrect permissions',
+        )
     return Response(status=_OKAY_CODE)
 
 
@@ -170,7 +215,14 @@ async def _terminate_route(request: Request) -> Response:
             text='Missing or invalid mailbox ID',
         )
 
-    await manager.terminate(mailbox_id)
+    client_id = request.headers.get('client_id', None)
+    try:
+        await manager.terminate(client_id, mailbox_id)
+    except ForbiddenError:
+        return Response(
+            status=_FORBIDDEN_CODE,
+            text='Incorrect permissions',
+        )
     return Response(status=_OKAY_CODE)
 
 
@@ -187,7 +239,13 @@ async def _discover_route(request: Request) -> Response:
             text='Missing or invalid arguments',
         )
 
-    agent_ids = await manager.discover(behavior, allow_subclasses)
+    client_id = request.headers.get('client_id', None)
+    agent_ids = await manager.discover(
+        client_id,
+        behavior,
+        allow_subclasses,
+    )
+
     return json_response(
         {'agent_ids': ','.join(str(aid.uid) for aid in agent_ids)},
     )
@@ -208,7 +266,14 @@ async def _check_mailbox_route(request: Request) -> Response:
             text='Missing or invalid mailbox ID',
         )
 
-    exists = manager.check_mailbox(mailbox_id)
+    client_id = request.headers.get('client_id', None)
+    try:
+        exists = manager.check_mailbox(client_id, mailbox_id)
+    except ForbiddenError:
+        return Response(
+            status=_FORBIDDEN_CODE,
+            text='Incorrect permissions',
+        )
     return json_response({'exists': exists})
 
 
@@ -225,12 +290,18 @@ async def _send_message_route(request: Request) -> Response:
             text='Missing or invalid message',
         )
 
+    client_id = request.headers.get('client_id', None)
     try:
-        await manager.put(message)
+        await manager.put(client_id, message)
     except BadEntityIdError:
         return Response(status=_NOT_FOUND_CODE, text='Unknown mailbox ID')
     except MailboxClosedError:
         return Response(status=_FORBIDDEN_CODE, text='Mailbox was closed')
+    except ForbiddenError:
+        return Response(
+            status=_FORBIDDEN_CODE,
+            text='Incorrect permissions',
+        )
     else:
         return Response(status=_OKAY_CODE)
 
@@ -251,11 +322,17 @@ async def _recv_message_route(request: Request) -> Response:
         )
 
     try:
-        message = await manager.get(mailbox_id)
+        client_id = request.headers.get('client_id', None)
+        message = await manager.get(client_id, mailbox_id)
     except BadEntityIdError:
         return Response(status=_NOT_FOUND_CODE, text='Unknown mailbox ID')
     except MailboxClosedError:
         return Response(status=_FORBIDDEN_CODE, text='Mailbox was closed')
+    except ForbiddenError:
+        return Response(
+            status=_FORBIDDEN_CODE,
+            text='Incorrect permissions',
+        )
     else:
         return json_response({'message': message.model_dump_json()})
 
@@ -297,7 +374,9 @@ def authenticate_factory(
                 text='Missing required headers.',
             )
 
-        request['client_id'] = str(client_uuid)
+        headers = request.headers.copy()
+        headers['client_id'] = str(client_uuid)
+        request = request.clone(headers=headers)
         return await handler(request)
 
     return authenticate
