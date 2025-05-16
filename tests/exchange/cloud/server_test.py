@@ -31,6 +31,7 @@ from academy.exchange.cloud.server import _OKAY_CODE
 from academy.exchange.cloud.server import _run
 from academy.exchange.cloud.server import _UNAUTHORIZED_CODE
 from academy.exchange.cloud.server import create_app
+from academy.identifier import AgentId
 from academy.identifier import ClientId
 from academy.message import PingRequest
 from academy.socket import open_port
@@ -252,16 +253,13 @@ async def test_null_auth_cli() -> None:
         assert await response.text() == 'Unknown mailbox ID'
 
 
-@pytest.mark.asyncio
-@mock.patch('globus_sdk.ConfidentialAppAuthClient.oauth2_token_introspect')
-async def test_globus_auth_cli(
-    mock_token_response,
-) -> None:
+@pytest_asyncio.fixture
+async def auth_cli() -> AsyncGenerator[TestClient[Request, Application]]:
     auth = ExchangeAuthConfig(
         method='globus',
         kwargs={'client_id': str(uuid.uuid4()), 'client_secret': ''},
     )
-    token_meta: dict[str, Any] = {
+    user_1: dict[str, Any] = {
         'active': True,
         'username': 'username',
         'client_id': str(uuid.uuid4()),
@@ -269,27 +267,8 @@ async def test_globus_auth_cli(
         'name': 'User Name',
         'aud': [AcademyExchangeScopes.resource_server],
     }
-    mock_token_response.return_value = token_meta
-    app = create_app(auth)
-    async with TestClient(TestServer(app)) as client:
-        response = await client.get(
-            '/discover',
-            json={'behavior': 'foo', 'allow_subclasses': False},
-            headers={'Authorization': 'Bearer token'},
-        )
-        assert response.status == _OKAY_CODE
 
-
-@pytest.mark.asyncio
-@mock.patch('globus_sdk.ConfidentialAppAuthClient.oauth2_token_introspect')
-async def test_globus_auth_cli_unauthorized(
-    mock_token_response,
-) -> None:
-    auth = ExchangeAuthConfig(
-        method='globus',
-        kwargs={'client_id': str(uuid.uuid4()), 'client_secret': ''},
-    )
-    token_meta: dict[str, Any] = {
+    user_2: dict[str, Any] = {
         'active': True,
         'username': 'username',
         'client_id': str(uuid.uuid4()),
@@ -297,34 +276,170 @@ async def test_globus_auth_cli_unauthorized(
         'name': 'User Name',
         'aud': [AcademyExchangeScopes.resource_server],
     }
-    mock_token_response.return_value = token_meta
-    app = create_app(auth)
-    async with TestClient(TestServer(app)) as client:
-        response = await client.get(
-            '/discover',
-            json={'behavior': 'foo', 'allow_subclasses': False},
-        )
-        assert response.status == _UNAUTHORIZED_CODE
 
-
-@pytest.mark.asyncio
-@mock.patch('globus_sdk.ConfidentialAppAuthClient.oauth2_token_introspect')
-async def test_globus_auth_cli_forbidden(
-    mock_token_response,
-) -> None:
-    auth = ExchangeAuthConfig(
-        method='globus',
-        kwargs={'client_id': str(uuid.uuid4()), 'client_secret': ''},
-    )
-    token_meta: dict[str, Any] = {
+    inactive: dict[str, Any] = {
         'active': False,
     }
-    mock_token_response.return_value = token_meta
-    app = create_app(auth)
-    async with TestClient(TestServer(app)) as client:
-        response = await client.get(
-            '/discover',
-            json={'behavior': 'foo', 'allow_subclasses': False},
-            headers={'Authorization': 'Bearer token'},
-        )
-        assert response.status == _FORBIDDEN_CODE
+
+    def authorize(token):
+        if token == 'user_1':
+            return user_1
+        if token == 'user_2':
+            return user_2
+        else:
+            return inactive
+
+    with mock.patch(
+        'globus_sdk.ConfidentialAppAuthClient.oauth2_token_introspect',
+    ) as mock_token_response:
+        mock_token_response.side_effect = authorize
+        app = create_app(auth)
+        async with TestClient(TestServer(app)) as client:
+            yield client
+
+
+@pytest.mark.asyncio
+async def test_globus_auth_cli_create_discover_close(auth_cli) -> None:
+    aid = AgentId.new(name='test').model_dump_json()
+
+    # Create agent
+    response = await auth_cli.post(
+        '/mailbox',
+        json={'mailbox': aid, 'behavior': 'foo'},
+        headers={'Authorization': 'Bearer user_1'},
+    )
+    assert response.status == _OKAY_CODE
+
+    response = await auth_cli.post(
+        '/mailbox',
+        json={'mailbox': aid, 'behavior': 'foo'},
+        headers={'Authorization': 'Bearer user_2'},
+    )
+    assert response.status == _UNAUTHORIZED_CODE
+
+    # Discover
+    response = await auth_cli.get(
+        '/discover',
+        json={'behavior': 'foo', 'allow_subclasses': False},
+        headers={'Authorization': 'Bearer user_1'},
+    )
+    response_json = await response.json()
+    agent_ids = [
+        aid for aid in response_json['agent_ids'].split(',') if len(aid) > 0
+    ]
+    assert len(agent_ids) == 1
+    assert response.status == _OKAY_CODE
+
+    response = await auth_cli.get(
+        '/discover',
+        json={'behavior': 'foo', 'allow_subclasses': False},
+        headers={'Authorization': 'Bearer user_2'},
+    )
+    response_json = await response.json()
+    agent_ids = [
+        aid for aid in response_json['agent_ids'].split(',') if len(aid) > 0
+    ]
+    assert len(agent_ids) == 0
+    assert response.status == _OKAY_CODE
+
+    # Check mailbox
+    response = await auth_cli.get(
+        '/mailbox',
+        json={'mailbox': aid},
+        headers={'Authorization': 'Bearer user_1'},
+    )
+    assert response.status == _OKAY_CODE
+
+    response = await auth_cli.get(
+        '/mailbox',
+        json={'mailbox': aid},
+        headers={'Authorization': 'Bearer user_2'},
+    )
+    assert response.status == _UNAUTHORIZED_CODE
+
+    # Delete mailbox
+    response = await auth_cli.delete(
+        '/mailbox',
+        json={'mailbox': aid},
+        headers={'Authorization': 'Bearer user_2'},
+    )
+    assert response.status == _UNAUTHORIZED_CODE
+
+    response = await auth_cli.delete(
+        '/mailbox',
+        json={'mailbox': aid},
+        headers={'Authorization': 'Bearer user_1'},
+    )
+    assert response.status == _OKAY_CODE
+
+
+@pytest.mark.asyncio
+async def test_globus_auth_cli_message(auth_cli) -> None:
+    aid: AgentId[Any] = AgentId.new(name='test')
+    cid = ClientId.new()
+    message = PingRequest(src=cid, dest=aid)
+
+    # Create agent
+    response = await auth_cli.post(
+        '/mailbox',
+        json={'mailbox': aid.model_dump_json(), 'behavior': 'foo'},
+        headers={'Authorization': 'Bearer user_1'},
+    )
+    assert response.status == _OKAY_CODE
+
+    # Create client
+    response = await auth_cli.post(
+        '/mailbox',
+        json={'mailbox': cid.model_dump_json()},
+        headers={'Authorization': 'Bearer user_1'},
+    )
+    assert response.status == _OKAY_CODE
+
+    # Send valid message
+    response = await auth_cli.put(
+        '/message',
+        json={'message': message.model_dump_json()},
+        headers={'Authorization': 'Bearer user_1'},
+    )
+    assert response.status == _OKAY_CODE
+
+    # Send unauthorized message
+    response = await auth_cli.put(
+        '/message',
+        json={'message': message.model_dump_json()},
+        headers={'Authorization': 'Bearer user_2'},
+    )
+    assert response.status == _UNAUTHORIZED_CODE
+
+    response = await auth_cli.get(
+        '/message',
+        json={'mailbox': aid.model_dump_json()},
+        headers={'Authorization': 'Bearer user_1'},
+    )
+    assert response.status == _OKAY_CODE
+
+    response = await auth_cli.get(
+        '/message',
+        json={'mailbox': aid.model_dump_json()},
+        headers={'Authorization': 'Bearer user_2'},
+    )
+    assert response.status == _UNAUTHORIZED_CODE
+
+
+@pytest.mark.asyncio
+async def test_globus_auth_cli_missing_auth(auth_cli) -> None:
+    response = await auth_cli.get(
+        '/discover',
+        json={'behavior': 'foo', 'allow_subclasses': False},
+    )
+    assert response.status == _UNAUTHORIZED_CODE
+
+
+@pytest.mark.asyncio
+async def test_globus_auth_cli_forbidden(auth_cli) -> None:
+    response = await auth_cli.get(
+        '/discover',
+        json={'behavior': 'foo', 'allow_subclasses': False},
+        headers={'Authorization': 'Bearer user_3'},
+    )
+    assert response.status == _FORBIDDEN_CODE

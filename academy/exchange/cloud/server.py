@@ -240,17 +240,12 @@ async def _discover_route(request: Request) -> Response:
         )
 
     client_id = request.headers.get('client_id', None)
-    try:
-        agent_ids = await manager.discover(
-            client_id,
-            behavior,
-            allow_subclasses,
-        )
-    except UnauthorizedError:
-        return Response(
-            status=_UNAUTHORIZED_CODE,
-            text='Incorrect permissions',
-        )
+    agent_ids = await manager.discover(
+        client_id,
+        behavior,
+        allow_subclasses,
+    )
+
     return json_response(
         {'agent_ids': ','.join(str(aid.uid) for aid in agent_ids)},
     )
