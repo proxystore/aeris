@@ -114,7 +114,13 @@ class Launcher:
             acb.done.set()
 
     def close(self) -> None:
-        """Close the launcher and shutdown agents."""
+        """Close the launcher.
+
+        Warning:
+            This will not return until all agents have exited. It is the
+            caller's responsibility to shutdown agents prior to closing
+            the launcher.
+        """
         logger.debug('Waiting for agents to shutdown...')
         for acb in self._acbs.values():
             if acb.done.is_set() and acb.future is not None:
@@ -255,11 +261,24 @@ class Launcher:
 class ThreadLauncher(Launcher):
     """Launcher that wraps a default [`concurrent.futures.ThreadPoolExecutor`][concurrent.futures.ThreadPoolExecutor].
 
-    For more control use [`academy.launcher.Launcher`][academy.launcher.Launcher]. Unlike the super class, this launcher
-    will invoke the shutdown method on agents when closing.
-
+    Args:
+        max_workers: The maximum number of threads (i.e., agents) in the pool.
+        max_restarts: Maximum times to restart an agent if it exits with
+            an error.
     """  # noqa: E501
 
-    def __init__(self) -> None:
-        executor = ThreadPoolExecutor()
-        super().__init__(executor, close_exchange=False)
+    def __init__(
+        self,
+        max_workers: int | None = None,
+        *,
+        max_restarts: int = 0,
+    ) -> None:
+        executor = ThreadPoolExecutor(
+            max_workers=max_workers,
+            thread_name_prefix='launcher',
+        )
+        super().__init__(
+            executor,
+            close_exchange=False,
+            max_restarts=max_restarts,
+        )
