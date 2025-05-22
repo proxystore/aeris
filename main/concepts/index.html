@@ -607,9 +607,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#launchers" class="md-nav__link">
+  <a href="#launcher" class="md-nav__link">
     <span class="md-ellipsis">
-      Launchers
+      Launcher
     </span>
   </a>
   
@@ -1411,26 +1411,9 @@
   
   
   
-    
-    
-    
-    
-      
-      
+    <li class="md-nav__item">
+      <a href="../api/launcher/" class="md-nav__link">
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1_9" >
-        
-          
-          <div class="md-nav__link md-nav__container">
-            <a href="../api/launcher/" class="md-nav__link ">
-              
   
   
   <span class="md-ellipsis">
@@ -1439,71 +1422,7 @@
   </span>
   
 
-            </a>
-            
-              
-              <label class="md-nav__link " for="__nav_3_1_9" id="__nav_3_1_9_label" tabindex="0">
-                <span class="md-nav__icon md-icon"></span>
-              </label>
-            
-          </div>
-        
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_1_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_1_9">
-            <span class="md-nav__icon md-icon"></span>
-            academy.launcher
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../api/launcher/executor/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    executor
-    
-  </span>
-  
-
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../api/launcher/thread/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    thread
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -1920,9 +1839,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#launchers" class="md-nav__link">
+  <a href="#launcher" class="md-nav__link">
     <span class="md-ellipsis">
-      Launchers
+      Launcher
     </span>
   </a>
   
@@ -2021,14 +1940,10 @@ Closed indicates permanent termination of the entity and will cause <a class="au
 <li><a class="autorefs autorefs-internal" title="            RedisExchange" href="../api/exchange/redis/#academy.exchange.redis.RedisExchange"><code>RedisExchange</code></a>: Stores state and mailboxes in a Redis server. Use of Redis enables optional replication and cloud-hosting for improved resilience and availability.</li>
 <li><a class="autorefs autorefs-internal" title="            HybridExchange" href="../api/exchange/hybrid/#academy.exchange.hybrid.HybridExchange"><code>HybridExchange</code></a>: Entities host their mailbox locally and message each other directly over TCP when possible. Redis is used to map mailbox IDs to address and port pairs, and to store messages for offline entities or when two entities cannot directly communicate (such as when behind NATs).</li>
 </ul>
-<h2 id="launchers">Launchers<a class="headerlink" href="#launchers" title="Permanent link">&para;</a></h2>
-<p>An agent can be run manually, but the intended method of execution is via a launcher, which manages the initialization and execution of agents on remote resources.
-The <a class="autorefs autorefs-internal" title="            Launcher" href="../api/launcher/#academy.launcher.Launcher"><code>Launcher</code></a> protocol defines a <a class="autorefs autorefs-internal" title="            launch" href="../api/launcher/#academy.launcher.Launcher.launch"><code>launch()</code></a> method with parameters for the behavior, exchange, and agent ID and returns a handle to the launched agent.</p>
-<p>Available launchers include:</p>
-<ul>
-<li><a class="autorefs autorefs-internal" title="            ThreadLauncher" href="../api/launcher/thread/#academy.launcher.thread.ThreadLauncher"><code>ThreadLauncher</code></a>: Runs agents in separate threads of the same process. Useful for local development and testing or for light-weight or I/O bound agents.</li>
-<li><a class="autorefs autorefs-internal" title="            ExecutorLauncher" href="../api/launcher/executor/#academy.launcher.executor.ExecutorLauncher"><code>ExecutorLauncher</code></a>: Runs agents in any <a class="autorefs autorefs-external" href="https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.Executor"><code>concurrent.futures.Executor</code></a> compatible executor, such as a <a class="autorefs autorefs-external" href="https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ProcessPoolExecutor"><code>ProcessPoolExecutor</code></a>, <a href="https://parsl.readthedocs.io/en/stable/userguide/workflows/workflow.html#parallel-workflows-with-loops" target="_blank">Parsl</a>, or <a href="https://globus-compute.readthedocs.io/en/latest/index.html" target="_blank">Globus Compute</a>.</li>
-</ul>
+<h2 id="launcher">Launcher<a class="headerlink" href="#launcher" title="Permanent link">&para;</a></h2>
+<p>An agent can be run manually, but the intended method of execution is via the launcher, which manages the initialization and execution of agents on remote resources.
+The <a class="autorefs autorefs-internal" title="            Launcher" href="../api/launcher/#academy.launcher.Launcher"><code>Launcher</code></a> defines a <a class="autorefs autorefs-internal" title="            launch" href="../api/launcher/#academy.launcher.Launcher.launch"><code>launch()</code></a> method with parameters for the behavior, exchange, and agent ID and returns a handle to the launched agent.
+It runs agents in any <a class="autorefs autorefs-external" href="https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.Executor"><code>concurrent.futures.Executor</code></a> compatible executor, such as a <a class="autorefs autorefs-external" href="https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ProcessPoolExecutor"><code>ProcessPoolExecutor</code></a>, <a href="https://parsl.readthedocs.io/en/stable/userguide/workflows/workflow.html#parallel-workflows-with-loops" target="_blank">Parsl</a>, or <a href="https://globus-compute.readthedocs.io/en/latest/index.html" target="_blank">Globus Compute</a>.</p>
 <h2 id="managers">Managers<a class="headerlink" href="#managers" title="Permanent link">&para;</a></h2>
 <p>A <a class="autorefs autorefs-internal" title="            Manager" href="../api/manager/#academy.manager.Manager"><code>Manager</code></a> combines an exchange and one or more launchers to provide a single interface for launching, using, and managing agents.
 Each manager has a single mailbox in the exchange and multiplexes that mailbox across handles to all of the agents that it manages.

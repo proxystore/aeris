@@ -1376,26 +1376,9 @@
   
   
   
-    
-    
-    
-    
-      
-      
+    <li class="md-nav__item">
+      <a href="api/launcher/" class="md-nav__link">
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1_9" >
-        
-          
-          <div class="md-nav__link md-nav__container">
-            <a href="api/launcher/" class="md-nav__link ">
-              
   
   
   <span class="md-ellipsis">
@@ -1404,71 +1387,7 @@
   </span>
   
 
-            </a>
-            
-              
-              <label class="md-nav__link " for="__nav_3_1_9" id="__nav_3_1_9_label" tabindex="0">
-                <span class="md-nav__icon md-icon"></span>
-              </label>
-            
-          </div>
-        
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_1_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_1_9">
-            <span class="md-nav__icon md-icon"></span>
-            academy.launcher
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="api/launcher/executor/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    executor
-    
-  </span>
-  
-
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="api/launcher/thread/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    thread
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -1935,7 +1854,7 @@ Clients or peers can invoke the <code>get_last_reading()</code> and <code>set_pr
 <p>Entities communicate asynchronously through <em>handles</em>, sending messages to and receiving messages from a mailbox managed by an <code>Exchange</code>.
 The <code>Launcher</code> abstracts the remote execution of an agent, and the <code>Manager</code> provides easy management of handles, launchers, and the exchange.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">academy.exchange.thread</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadExchange</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">academy.launcher.thread</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadLauncher</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">academy.launcher</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadLauncher</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">academy.manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">Manager</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">with</span> <span class="n">Manager</span><span class="p">(</span>
