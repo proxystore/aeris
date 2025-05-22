@@ -58,7 +58,7 @@ The `Launcher` abstracts the remote execution of an agent, and the `Manager` pro
 
 ```python
 from academy.exchange.thread import ThreadExchange
-from academy.launcher.thread import ThreadLauncher
+from academy.launcher import ThreadLauncher
 from academy.manager import Manager
 
 with Manager(

@@ -9,7 +9,7 @@ from academy.behavior import action
 from academy.behavior import Behavior
 from academy.exchange.cloud.client import spawn_http_exchange
 from academy.handle import Handle
-from academy.launcher.executor import ExecutorLauncher
+from academy.launcher import Launcher
 from academy.logging import init_logging
 from academy.manager import Manager
 
@@ -53,10 +53,10 @@ def main() -> int:
         executor = ProcessPoolExecutor(max_workers=3, mp_context=mp_context)
         with Manager(
             exchange=exchange,
-            # Agents are launched using a Launcher. The ExecutorLauncher can
+            # Agents are launched using a Launcher. The Launcher can
             # use any concurrent.futures.Executor (here, a ProcessPoolExecutor)
             # to execute agents.
-            launcher=ExecutorLauncher(executor),
+            launcher=Launcher(executor),
         ) as manager:
             # Initialize and launch each of the three agents. The returned
             # type is a handle to that agent used to invoke actions.

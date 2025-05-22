@@ -16,24 +16,21 @@ from academy.exchange import Exchange
 from academy.exchange.cloud.client import HttpExchange
 from academy.identifier import AgentId
 from academy.launcher import Launcher
-from academy.launcher.executor import ExecutorLauncher
 from testing.behavior import SleepBehavior
 from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_LOOP_SLEEP
 
 
-def test_protocol() -> None:
-    executor = ThreadPoolExecutor(max_workers=1)
-    with ExecutorLauncher(executor) as launcher:
-        assert isinstance(launcher, Launcher)
-        assert isinstance(repr(launcher), str)
-        assert isinstance(str(launcher), str)
+def test_create_launcher() -> None:
+    executor = ThreadPoolExecutor(max_workers=2)
+    launcher = Launcher(executor, close_exchange=False)
+    assert 'ThreadPoolExecutor' in str(launcher)
 
 
 def test_launch_agents_threads(exchange: Exchange) -> None:
     behavior = SleepBehavior(TEST_LOOP_SLEEP)
     executor = ThreadPoolExecutor(max_workers=2)
-    with ExecutorLauncher(executor, close_exchange=False) as launcher:
+    with Launcher(executor, close_exchange=False) as launcher:
         handle1 = launcher.launch(behavior, exchange).bind_as_client()
         handle2 = launcher.launch(behavior, exchange).bind_as_client()
 
@@ -62,7 +59,7 @@ def test_launch_agents_processes(
     host, port = http_exchange_server
 
     with HttpExchange(host, port) as exchange:
-        with ExecutorLauncher(executor) as launcher:
+        with Launcher(executor) as launcher:
             handle1 = launcher.launch(behavior, exchange).bind_as_client()
             handle2 = launcher.launch(behavior, exchange).bind_as_client()
 
@@ -78,7 +75,7 @@ def test_launch_agents_processes(
 
 def test_wait_bad_identifier(exchange: Exchange) -> None:
     executor = ThreadPoolExecutor(max_workers=1)
-    with ExecutorLauncher(executor) as launcher:
+    with Launcher(executor) as launcher:
         agent_id: AgentId[Any] = AgentId.new()
 
         with pytest.raises(BadEntityIdError):
@@ -88,7 +85,7 @@ def test_wait_bad_identifier(exchange: Exchange) -> None:
 def test_wait_timeout(exchange: Exchange) -> None:
     behavior = SleepBehavior(TEST_LOOP_SLEEP)
     executor = ThreadPoolExecutor(max_workers=1)
-    with ExecutorLauncher(executor) as launcher:
+    with Launcher(executor) as launcher:
         handle = launcher.launch(behavior, exchange).bind_as_client()
 
         with pytest.raises(TimeoutError):
@@ -118,7 +115,7 @@ def test_restart_on_error(exchange: Exchange) -> None:
     # This test only works because we are using a ThreadPoolExecutor so
     # the state inside FailOnStartupBehavior is shared.
     executor = ThreadPoolExecutor(max_workers=1)
-    with ExecutorLauncher(
+    with Launcher(
         executor,
         close_exchange=False,
         max_restarts=3,
@@ -136,7 +133,7 @@ def test_wait_ignore_agent_errors(
 ) -> None:
     behavior = FailOnStartupBehavior()
     executor = ThreadPoolExecutor(max_workers=1)
-    launcher = ExecutorLauncher(executor, close_exchange=False)
+    launcher = Launcher(executor, close_exchange=False)
 
     handle = launcher.launch(behavior, exchange).bind_as_client()
     if ignore_error:

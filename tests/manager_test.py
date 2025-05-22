@@ -6,7 +6,7 @@ import pytest
 
 from academy.exception import BadEntityIdError
 from academy.exchange.thread import ThreadExchange
-from academy.launcher.thread import ThreadLauncher
+from academy.launcher import ThreadLauncher
 from academy.manager import Manager
 from academy.message import PingRequest
 from academy.message import PingResponse

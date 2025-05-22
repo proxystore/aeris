@@ -9,7 +9,7 @@ from academy.behavior import action
 from academy.behavior import Behavior
 from academy.behavior import loop
 from academy.exchange.thread import ThreadExchange
-from academy.launcher.thread import ThreadLauncher
+from academy.launcher import ThreadLauncher
 from academy.logging import init_logging
 from academy.manager import Manager
 

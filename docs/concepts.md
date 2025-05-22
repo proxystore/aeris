@@ -77,15 +77,11 @@ Academy provides many exchange implementations for different scenarios, such as:
 * [`RedisExchange`][academy.exchange.redis.RedisExchange]: Stores state and mailboxes in a Redis server. Use of Redis enables optional replication and cloud-hosting for improved resilience and availability.
 * [`HybridExchange`][academy.exchange.hybrid.HybridExchange]: Entities host their mailbox locally and message each other directly over TCP when possible. Redis is used to map mailbox IDs to address and port pairs, and to store messages for offline entities or when two entities cannot directly communicate (such as when behind NATs).
 
-## Launchers
+## Launcher
 
-An agent can be run manually, but the intended method of execution is via a launcher, which manages the initialization and execution of agents on remote resources.
-The [`Launcher`][academy.launcher.Launcher] protocol defines a [`launch()`][academy.launcher.Launcher.launch] method with parameters for the behavior, exchange, and agent ID and returns a handle to the launched agent.
-
-Available launchers include:
-
-* [`ThreadLauncher`][academy.launcher.thread.ThreadLauncher]: Runs agents in separate threads of the same process. Useful for local development and testing or for light-weight or I/O bound agents.
-* [`ExecutorLauncher`][academy.launcher.executor.ExecutorLauncher]: Runs agents in any [`concurrent.futures.Executor`][concurrent.futures.Executor] compatible executor, such as a [`ProcessPoolExecutor`][concurrent.futures.ProcessPoolExecutor], [Parsl](https://parsl.readthedocs.io/en/stable/userguide/workflows/workflow.html#parallel-workflows-with-loops){target=_blank}, or [Globus Compute](https://globus-compute.readthedocs.io/en/latest/index.html){target=_blank}.
+An agent can be run manually, but the intended method of execution is via the launcher, which manages the initialization and execution of agents on remote resources.
+The [`Launcher`][academy.launcher.Launcher] defines a [`launch()`][academy.launcher.Launcher.launch] method with parameters for the behavior, exchange, and agent ID and returns a handle to the launched agent.
+It runs agents in any [`concurrent.futures.Executor`][concurrent.futures.Executor] compatible executor, such as a [`ProcessPoolExecutor`][concurrent.futures.ProcessPoolExecutor], [Parsl](https://parsl.readthedocs.io/en/stable/userguide/workflows/workflow.html#parallel-workflows-with-loops){target=_blank}, or [Globus Compute](https://globus-compute.readthedocs.io/en/latest/index.html){target=_blank}.
 
 ## Managers
 

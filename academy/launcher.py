@@ -7,6 +7,7 @@ import threading
 from concurrent.futures import CancelledError
 from concurrent.futures import Executor
 from concurrent.futures import Future
+from concurrent.futures import ThreadPoolExecutor
 from types import TracebackType
 from typing import Any
 from typing import Generic
@@ -49,7 +50,7 @@ class _ACB(Generic[BehaviorT]):
     launch_count: int = 0
 
 
-class ExecutorLauncher:
+class Launcher:
     """Launcher that wraps a [`concurrent.futures.Executor`][concurrent.futures.Executor].
 
     Args:
@@ -113,7 +114,13 @@ class ExecutorLauncher:
             acb.done.set()
 
     def close(self) -> None:
-        """Close the launcher and shutdown agents."""
+        """Close the launcher.
+
+        Warning:
+            This will not return until all agents have exited. It is the
+            caller's responsibility to shutdown agents prior to closing
+            the launcher.
+        """
         logger.debug('Waiting for agents to shutdown...')
         for acb in self._acbs.values():
             if acb.done.is_set() and acb.future is not None:
@@ -249,3 +256,29 @@ class ExecutorLauncher:
             exc = acb.future.exception()
             if exc is not None:
                 raise exc
+
+
+class ThreadLauncher(Launcher):
+    """Launcher that wraps a default [`concurrent.futures.ThreadPoolExecutor`][concurrent.futures.ThreadPoolExecutor].
+
+    Args:
+        max_workers: The maximum number of threads (i.e., agents) in the pool.
+        max_restarts: Maximum times to restart an agent if it exits with
+            an error.
+    """  # noqa: E501
+
+    def __init__(
+        self,
+        max_workers: int | None = None,
+        *,
+        max_restarts: int = 0,
+    ) -> None:
+        executor = ThreadPoolExecutor(
+            max_workers=max_workers,
+            thread_name_prefix='launcher',
+        )
+        super().__init__(
+            executor,
+            close_exchange=False,
+            max_restarts=max_restarts,
+        )
