@@ -21,6 +21,12 @@ from testing.constant import TEST_CONNECTION_TIMEOUT
 from testing.constant import TEST_LOOP_SLEEP
 
 
+def test_create_launcher() -> None:
+    executor = ThreadPoolExecutor(max_workers=2)
+    launcher = Launcher(executor, close_exchange=False)
+    assert 'ThreadPoolExecutor' in str(launcher)
+
+
 def test_launch_agents_threads(exchange: Exchange) -> None:
     behavior = SleepBehavior(TEST_LOOP_SLEEP)
     executor = ThreadPoolExecutor(max_workers=2)

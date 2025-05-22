@@ -167,7 +167,7 @@ if __name__ == '__main__':
 
 The prior examples have launched agent in threads of the main process, but in practice agents are launched in different processes, possibly on the same node or remote nodes.
 The prior example can be executed in a distributed fashion by changing the launcher and exchange to implementations which support distributed execution.
-Below, a [Redis server](https://redis.io/){target=_blank} server (via the [`RedisExchange`][academy.exchange.redis.RedisExchange]) is used to support messaging between distributed agents executed with a [`ProcessPoolExecutor`][concurrent.futures.ProcessPoolExecutor] (via the [`Launcher`][academy.launcher.executor.Launcher]).
+Below, a [Redis server](https://redis.io/){target=_blank} server (via the [`RedisExchange`][academy.exchange.redis.RedisExchange]) is used to support messaging between distributed agents executed with a [`ProcessPoolExecutor`][concurrent.futures.ProcessPoolExecutor] (via the [`Launcher`][academy.launcher.Launcher]).
 
 ```python
 from concurrent.futures import ProcessPoolExecutor
@@ -183,4 +183,4 @@ def main() -> None:
         ...
 ```
 
-The [`Launcher`][academy.launcher.executor.Launcher] is compatible with any [`concurrent.futures.Executor`][concurrent.futures.Executor].
+The [`Launcher`][academy.launcher.Launcher] is compatible with any [`concurrent.futures.Executor`][concurrent.futures.Executor].
