@@ -9,7 +9,7 @@ import pytest
 from academy.exchange.cloud.server import create_app
 from academy.exchange.cloud.server import serve_app
 from academy.exchange.thread import ThreadExchange
-from academy.launcher.thread import ThreadLauncher
+from academy.launcher import ThreadLauncher
 from academy.socket import open_port
 from testing.constant import TEST_CONNECTION_TIMEOUT
 

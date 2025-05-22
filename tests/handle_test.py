@@ -18,7 +18,7 @@ from academy.handle import ProxyHandle
 from academy.handle import UnboundRemoteHandle
 from academy.identifier import AgentId
 from academy.identifier import ClientId
-from academy.launcher.thread import ThreadLauncher
+from academy.launcher import ThreadLauncher
 from academy.message import PingRequest
 from testing.behavior import CounterBehavior
 from testing.behavior import EmptyBehavior
@@ -219,6 +219,8 @@ def test_client_remote_handle_log_bad_response(
         )
         assert client.ping() > 0
 
+        client.shutdown()
+
 
 @pytest.mark.filterwarnings(
     'ignore:.*:pytest.PytestUnhandledThreadExceptionWarning',
@@ -269,17 +271,24 @@ def test_client_remote_handle_errors(
         with pytest.raises(AttributeError, match='null'):
             handle.action('null').result()
 
+        handle.shutdown()
+
 
 def test_client_remote_handle_wait_futures(
     exchange: ThreadExchange,
     launcher: ThreadLauncher,
 ) -> None:
     behavior = SleepBehavior()
-    handle = launcher.launch(behavior, exchange).bind_as_client()
+    unbound_handle = launcher.launch(behavior, exchange)
+    handle = unbound_handle.bind_as_client()
 
     future: Future[None] = handle.action('sleep', TEST_SLEEP)
     handle.close(wait_futures=True)
     future.result(timeout=0)
+
+    # Still need to shutdown agent to exit properly
+    handle = unbound_handle.bind_as_client()
+    handle.shutdown()
 
 
 def test_client_remote_handle_cancel_futures(
@@ -287,8 +296,13 @@ def test_client_remote_handle_cancel_futures(
     launcher: ThreadLauncher,
 ) -> None:
     behavior = SleepBehavior()
-    handle = launcher.launch(behavior, exchange).bind_as_client()
+    unbound_handle = launcher.launch(behavior, exchange)
+    handle = unbound_handle.bind_as_client()
 
     future: Future[None] = handle.action('sleep', TEST_SLEEP)
     handle.close(wait_futures=False)
     assert future.cancelled()
+
+    # Still need to shutdown agent to exit properly
+    handle = unbound_handle.bind_as_client()
+    handle.shutdown()

@@ -7,6 +7,7 @@ import threading
 from concurrent.futures import CancelledError
 from concurrent.futures import Executor
 from concurrent.futures import Future
+from concurrent.futures import ThreadPoolExecutor
 from types import TracebackType
 from typing import Any
 from typing import Generic
@@ -49,7 +50,7 @@ class _ACB(Generic[BehaviorT]):
     launch_count: int = 0
 
 
-class ExecutorLauncher:
+class Launcher:
     """Launcher that wraps a [`concurrent.futures.Executor`][concurrent.futures.Executor].
 
     Args:
@@ -249,3 +250,16 @@ class ExecutorLauncher:
             exc = acb.future.exception()
             if exc is not None:
                 raise exc
+
+
+class ThreadLauncher(Launcher):
+    """Launcher that wraps a default [`concurrent.futures.ThreadPoolExecutor`][concurrent.futures.ThreadPoolExecutor].
+
+    For more control use [`academy.launcher.Launcher`][academy.launcher.Launcher]. Unlike the super class, this launcher
+    will invoke the shutdown method on agents when closing.
+
+    """  # noqa: E501
+
+    def __init__(self) -> None:
+        executor = ThreadPoolExecutor()
+        super().__init__(executor, close_exchange=False)
